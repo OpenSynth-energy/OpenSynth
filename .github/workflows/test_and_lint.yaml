@@ -1,0 +1,34 @@
+name: Test and lint
+on: [push]
+env:
+  PYTHONPATH: .
+
+jobs:
+  test_and_lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-python@v2
+        id: setup-python
+        with:
+          python-version: "3.12"
+
+      - name: Install Pipenv
+        run: |
+          pip install pipenv
+
+      - name: Cache virtualenvs
+        uses: actions/cache@v2
+        with:
+          path: ~/.local/share/virtualenvs/
+          key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pipenv-${{ hashFiles('Pipfile.lock') }}
+
+      - name: Setup Virutual Environment
+        run: pipenv sync --dev
+
+      - name: Run pytest
+        run: pipenv run pytest
+
+      - name: Run precommit
+        run: pipenv run pre-commit run --all-files
