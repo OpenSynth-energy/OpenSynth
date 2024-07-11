@@ -1,5 +1,6 @@
 import logging
 import os
+import subprocess
 from os import path
 
 import wget
@@ -23,7 +24,7 @@ def check_redownload(file_path: str) -> bool:
     return True
 
 
-def download_data(url: str, filename: str):
+def download_data(url: str, filename: str, unzip: bool = False):
     """
     Download data from a URL and save it to a file.
     Function will check if file already exists,
@@ -36,6 +37,13 @@ def download_data(url: str, filename: str):
     if check_redownload(filename):
         if os.path.exists(filename):
             os.remove(filename)
+        logging.info(f"Downloading data from: {url}")
         wget.download(url, filename)
     else:
         logging.info("Skipping download")
+
+    if unzip:
+        # Note: LCL dataset needs to be unzipped in command line with unzip
+        # It's compressed using algorithms that Python's
+        # zipfile module can't handle
+        subprocess.run(["unzip", filename, "-d", "data/raw"])

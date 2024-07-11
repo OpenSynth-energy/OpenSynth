@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 wget = "*"
+pandas = "*"
 
 [dev-packages]
 pytest = "*"
@@ -13,6 +14,7 @@ flake8 = "*"
 isort = "*"
 mypy = "*"
 pre-commit = "*"
+ipython = "*"
 
 [requires]
 python_version = "3.12"
