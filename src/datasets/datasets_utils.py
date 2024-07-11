@@ -1,3 +1,4 @@
+import logging
 import os
 from os import path
 
@@ -18,8 +19,8 @@ def check_redownload(file_path: str) -> bool:
     """
     if path.exists(file_path):
         prompt = f"{file_path} already exists. Redownload? (y/n): "
-        download_again = True if input(prompt) == "y" else False
-    return download_again
+        return True if input(prompt) == "y" else False
+    return True
 
 
 def download_data(url: str, filename: str):
@@ -37,4 +38,4 @@ def download_data(url: str, filename: str):
             os.remove(filename)
         wget.download(url, filename)
     else:
-        print("Skipping download")
+        logging.info("Skipping download")
