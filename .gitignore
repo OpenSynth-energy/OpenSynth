@@ -2,3 +2,5 @@
 /.vscode
 .env
 /tests/__pycache__
+*.zip
+*.pyc

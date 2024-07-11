@@ -4,6 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+wget = "*"
 
 [dev-packages]
 pytest = "*"
@@ -12,7 +13,6 @@ flake8 = "*"
 isort = "*"
 mypy = "*"
 pre-commit = "*"
-
 
 [requires]
 python_version = "3.12"
