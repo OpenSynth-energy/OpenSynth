@@ -16,4 +16,8 @@ def get_lcl_data(download: bool, split: bool, preprocess: bool):
 
 
 if __name__ == "__main__":
-    get_lcl_data(download=False, split=True, preprocess=False)
+    get_lcl_data(
+        download=False,
+        split=True,
+        preprocess=False,
+    )

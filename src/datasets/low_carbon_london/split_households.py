@@ -10,7 +10,9 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def split_household_ids(
-    df: pd.DataFrame, id_col: str, sample_size: int
+    df: pd.DataFrame,
+    id_col: str,
+    sample_size: int,
 ) -> Tuple[List[str], List[str]]:
     """
     Split LCL id into training vs holdout households.
@@ -83,7 +85,9 @@ def split_lcl_data(csv_filename: str, sample_size: int = 2000):
 
     logging.debug("🖖 Spliting households into train and holdout")
     train_ids, holdout_ids = split_household_ids(
-        df, id_col="LCLid", sample_size=sample_size
+        df,
+        id_col="LCLid",
+        sample_size=sample_size,
     )
     logging.debug(f"Train len: {len(train_ids)}")
     logging.debug(f"Holdout len: {len(holdout_ids)}")
@@ -103,8 +107,14 @@ def split_lcl_data(csv_filename: str, sample_size: int = 2000):
     future_path = "data/processed/future"
     os.makedirs(historical_path, exist_ok=True)
     os.makedirs(future_path, exist_ok=True)
-    df_historical_train.to_csv(f"{historical_path}/train.csv", index=False)
-    df_historical_holdout.to_csv(f"{historical_path}/holdout.csv", index=False)
+    df_historical_train.to_csv(
+        f"{historical_path}/train.csv",
+        index=False,
+    )
+    df_historical_holdout.to_csv(
+        f"{historical_path}/holdout.csv",
+        index=False,
+    )
     df_future_train.to_csv(f"{future_path}/train.csv", index=False)
     df_future_holdout.to_csv(f"{future_path}/holdout.csv", index=False)
 
