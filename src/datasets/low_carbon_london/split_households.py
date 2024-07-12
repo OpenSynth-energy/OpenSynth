@@ -5,14 +5,8 @@ from typing import List, Tuple
 
 import pandas as pd
 
-from src.datasets import datasets_utils
-
 random.seed(42)
 logging.basicConfig(level=logging.DEBUG)
-
-LCL_URL = "https://data.london.gov.uk/download/smartmeter-energy-use-data-in-london-households/3527bf39-d93e-4071-8451-df2ade1ea4f2/LCL-FullData.zip"  # noqa
-FILE_NAME = "data/raw/lcl_full_data.zip"  # noqa
-CSV_FILE_NAME = "data/raw/CC_LCL-FullData.csv"
 
 
 def split_household_ids(
@@ -69,7 +63,7 @@ def split_historical_future_periods(
     return df_historical, df_future
 
 
-def split_lcl_data(sample_size: int = 2000):
+def split_lcl_data(csv_filename: str, sample_size: int = 2000):
     """
     Split LCL dataset 4 ways:
     1) Historical Train household data
@@ -84,8 +78,8 @@ def split_lcl_data(sample_size: int = 2000):
         sample_size (int, optional): _description_. Defaults to 2000.
     """
 
-    logging.debug(f"👀 Reading LCL data from: {FILE_NAME}")
-    df = pd.read_csv(CSV_FILE_NAME)
+    logging.debug(f"👀 Reading LCL data from: {csv_filename}")
+    df = pd.read_csv(csv_filename)
 
     logging.debug("🖖 Spliting households into train and holdout")
     train_ids, holdout_ids = split_household_ids(
@@ -115,16 +109,3 @@ def split_lcl_data(sample_size: int = 2000):
     df_future_holdout.to_csv(f"{future_path}/holdout.csv", index=False)
 
     logging.debug("👍 Done!")
-
-
-def get_lcl_data(download: bool, split: bool, preprocess: bool):
-    if download:
-        datasets_utils.download_data(LCL_URL, FILE_NAME)
-    if split:
-        split_lcl_data(sample_size=2000)
-    if preprocess:
-        pass
-
-
-if __name__ == "__main__":
-    get_lcl_data(download=False, split=True, preprocess=False)
