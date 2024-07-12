@@ -218,7 +218,7 @@ def preprocess_pipeline(file_path: str, out_path: str):
         w.writerow(mean_std_dict)
 
 
-if __name__ == "__main__":
+def preprocess_lcl_data():
 
     SOURCE_DIR = "data/raw"
     OUT_DIR = "data/processed"
@@ -238,3 +238,7 @@ if __name__ == "__main__":
         file_path=f"{SOURCE_DIR}/future/holdout.csv",
         out_path=f"{OUT_DIR}/future/holdout",
     )
+
+
+if __name__ == "__main__":
+    preprocess_lcl_data()

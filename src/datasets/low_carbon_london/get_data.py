@@ -1,5 +1,5 @@
 from src.datasets import datasets_utils
-from src.datasets.low_carbon_london import split_households
+from src.datasets.low_carbon_london import preprocess_lcl, split_households
 
 LCL_URL = "https://data.london.gov.uk/download/smartmeter-energy-use-data-in-london-households/3527bf39-d93e-4071-8451-df2ade1ea4f2/LCL-FullData.zip"  # noqa
 FILE_NAME = "data/raw/lcl_full_data.zip"  # noqa
@@ -12,12 +12,13 @@ def get_lcl_data(download: bool, split: bool, preprocess: bool):
     if split:
         split_households.split_lcl_data(CSV_FILE_NAME, 2000)
     if preprocess:
-        pass
+        preprocess_lcl.preprocess_lcl_data()
 
 
 if __name__ == "__main__":
+    # TODO: Make this a command line script
     get_lcl_data(
-        download=False,
+        download=True,
         split=True,
-        preprocess=False,
+        preprocess=True,
     )
