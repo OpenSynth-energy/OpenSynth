@@ -1,6 +1,7 @@
 import glob
 import logging
 
+import numpy as np
 import pandas as pd
 import tqdm
 
@@ -113,8 +114,32 @@ def parse_settlement_period(
     return df_out
 
 
+def drop_dupes_and_replace_nulls(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Function to drop duplicated readings and replace missing readings with 0.0
+
+    Args:
+        df (pd.DataFrame): Input dataframe
+
+    Returns:
+        pd.DataFrame: Output dataframe
+    """
+    print("🗑 Dropping dupes and filling nulls with 0")
+    df_out = df.copy()
+    df_out = df_out.sort_values(
+        by=["LCLid", "date", "settlement_period"], ascending=True
+    )
+    df_out = df_out.drop_duplicates(
+        subset=["LCLid", "date", "settlement_period"], keep="last"
+    )
+    df_out["kwh"] = df_out["kwh"].replace("Null", np.float64())
+    df_out["kwh"] = df_out["kwh"].astype(float)
+    return df_out
+
+
 def preprocess_pipeline(folder_path: str, out_path: str):
 
     df = load_data(folder_path)
     df = extract_date_features(df)
     df = parse_settlement_period(df)
+    df = drop_dupes_and_replace_nulls(df)
