@@ -104,9 +104,8 @@ class TestPreprocessLCL:
         ).all()
 
     def test_drop_dupes_and_replace_nulls(self):
-
-        assert len(self.df_drop_dupes) == 4
-        assert self.df_drop_dupes["kwh"].sum() == 0.1 + 0.2 + 0.3
+        assert len(self.df_drop_dupes) == 7
+        assert self.df_drop_dupes["kwh"].sum() == 2.1
 
     def test_filter_missing_kwh(self):
         # test_df is filled with only 1 kwh per date reading
