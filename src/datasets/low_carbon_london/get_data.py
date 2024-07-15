@@ -1,6 +1,4 @@
-import argparse
 import logging
-import sys
 
 from src.datasets import datasets_utils
 from src.datasets.low_carbon_london import preprocess_lcl, split_households
@@ -9,7 +7,7 @@ LCL_URL = "https://data.london.gov.uk/download/smartmeter-energy-use-data-in-lon
 FILE_NAME = "data/raw/lcl_full_data.zip"  # noqa
 CSV_FILE_NAME = "data/raw/CC_LCL-FullData.csv"
 
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def get_lcl_data(download: bool, split: bool, preprocess: bool):
@@ -31,63 +29,14 @@ def get_lcl_data(download: bool, split: bool, preprocess: bool):
         split (bool): True to split LCL households into training/ holdout sets.
         preprocess (bool): True to preprocess data.
     """
+    logger.info(
+        f"Running get_lcl_data with download={download}, "
+        f"split={split}, preprocess={preprocess}."
+    )
+
     if download:
         datasets_utils.download_data(LCL_URL, FILE_NAME)
     if split:
         split_households.split_lcl_data(CSV_FILE_NAME, 2000)
     if preprocess:
         preprocess_lcl.preprocess_lcl_data()
-
-
-def parse_args(argument):
-
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-
-    parser.add_argument(
-        "--download",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        required=False,
-        help="Download and decompress the Low Carbon London"
-        "dataset from data.london.gov.uk",
-    )
-
-    parser.add_argument(
-        "--split",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        required=False,
-        help="Split the LCL households into training and holdout sets",
-    )
-
-    parser.add_argument(
-        "--preprocess",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        required=False,
-        help="Preprocess the LCL data into daily load profiles",
-    )
-
-    return parser.parse_args(argument)
-
-
-if __name__ == "__main__":
-    args = parse_args(sys.argv[1:])
-
-    DOWNLOAD = args.download
-    SPLIT = args.split
-    PREPROCESS = args.preprocess
-
-    logging.info(
-        f"Running get_lcl_data with download={DOWNLOAD}, "
-        f"split={SPLIT}, preprocess={PREPROCESS}."
-    )
-
-    get_lcl_data(
-        download=DOWNLOAD,
-        split=SPLIT,
-        preprocess=PREPROCESS,
-    )

@@ -6,7 +6,8 @@ from typing import List, Tuple
 import pandas as pd
 
 random.seed(42)
-logging.basicConfig(level=logging.DEBUG)
+
+logger = logging.getLogger(__name__)
 
 
 def split_household_ids(
@@ -25,7 +26,7 @@ def split_household_ids(
     Returns:
         Tuple[List[str], List[str]]: List of training and holdout household ids
     """
-    logging.info("Splitting households into train and holdout households")
+    logger.info("Splitting households into train and holdout households")
     unique_ids = df[id_col].unique().tolist()
     random.shuffle(unique_ids)
 
@@ -80,29 +81,29 @@ def split_lcl_data(csv_filename: str, sample_size: int = 2000):
         sample_size (int, optional): _description_. Defaults to 2000.
     """
 
-    logging.debug(f"👀 Reading LCL data from: {csv_filename}")
+    logger.info(f"👀 Reading LCL data from: {csv_filename}")
     df = pd.read_csv(csv_filename)
 
-    logging.debug("🖖 Spliting households into train and holdout")
+    logger.info("🖖 Spliting households into train and holdout")
     train_ids, holdout_ids = split_household_ids(
         df,
         id_col="LCLid",
         sample_size=sample_size,
     )
-    logging.debug(f"Train len: {len(train_ids)}")
-    logging.debug(f"Holdout len: {len(holdout_ids)}")
+    logger.info(f"Train len: {len(train_ids)}")
+    logger.info(f"Holdout len: {len(holdout_ids)}")
 
-    logging.debug("📆 Splitting data into train and holdout period")
+    logger.info("📆 Splitting data into train and holdout period")
     df_history, df_future = split_historical_future_periods(df)
-    logging.debug(f"History len: {len(df_history)}")
-    logging.debug(f"Future len: {len(df_future)}")
+    logger.info(f"History len: {len(df_history)}")
+    logger.info(f"Future len: {len(df_future)}")
 
     df_historical_train = df_history[df_history["LCLid"].isin(train_ids)]
     df_future_train = df_future[df_future["LCLid"].isin(train_ids)]
     df_historical_holdout = df_history[df_history["LCLid"].isin(holdout_ids)]
     df_future_holdout = df_future[df_future["LCLid"].isin(holdout_ids)]
 
-    logging.debug("📦 Saving train and holdout data")
+    logger.info("📦 Saving train and holdout data")
     historical_path = "data/processed/historical"
     future_path = "data/processed/future"
     os.makedirs(historical_path, exist_ok=True)
@@ -118,4 +119,4 @@ def split_lcl_data(csv_filename: str, sample_size: int = 2000):
     df_future_train.to_csv(f"{future_path}/train.csv", index=False)
     df_future_holdout.to_csv(f"{future_path}/holdout.csv", index=False)
 
-    logging.debug("👍 Done!")
+    logger.info("👍 Done!")

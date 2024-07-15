@@ -8,6 +8,7 @@ wget = "*"
 pandas = "*"
 tqdm = "*"
 numpy = "*"
+typer = "*"
 
 [dev-packages]
 pytest = "*"

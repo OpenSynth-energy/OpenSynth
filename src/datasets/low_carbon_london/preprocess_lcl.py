@@ -6,7 +6,7 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 
-logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 def get_current_month_end(df: pd.DataFrame, date_col="dt"):
@@ -48,7 +48,7 @@ def load_data(file_path: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: LCL dataset
     """
-    logging.info(f"🚛 Loading data from {file_path}")
+    logger.info(f"🚛 Loading data from {file_path}")
     df = pd.read_csv(file_path)
     df = df.rename(columns={"KWH/hh (per half hour) ": "kwh"})
     return df
@@ -66,7 +66,7 @@ def extract_date_features(
     Returns:
         pd.DataFrame: Output dataframe with date features
     """
-    logging.info("📅 Extracting date features")
+    logger.info("📅 Extracting date features")
     df["dt"] = pd.to_datetime(df["DateTime"])
     df["date"] = df["dt"].dt.date.astype(str)
     df["month"] = df["dt"].dt.month.astype(int)
@@ -92,7 +92,7 @@ def parse_settlement_period(
     Returns:
         pd.DataFrame: Output dataframe with settlement period column
     """
-    logging.info("🕰 Parsing Settlement Period")
+    logger.info("🕰 Parsing Settlement Period")
 
     def _get_settlement_offset(minute_value):
         if minute_value >= 30:
@@ -121,7 +121,7 @@ def drop_dupes_and_replace_nulls(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Output dataframe
     """
-    logging.info("🗑 Dropping dupes and filling nulls with 0")
+    logger.info("🗑 Dropping dupes and filling nulls with 0")
     df_out = df.copy()
     df_out = df_out.sort_values(
         by=["LCLid", "date", "settlement_period"], ascending=True
@@ -145,7 +145,7 @@ def filter_missing_kwh(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: _description_
     """
-    logging.info("🔍 Filtering missing kwh readings")
+    logger.info("🔍 Filtering missing kwh readings")
     id_col = ["LCLid"]
     merge_cols = id_col + ["date"]
     df_group = df.groupby(merge_cols)[["kwh"]].count().reset_index()
@@ -166,7 +166,7 @@ def pack_smart_meter_data_into_arrays(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Output dataframe
     """
-    logging.info("👝 Packing time series into arrays")
+    logger.info("👝 Packing time series into arrays")
     df_out = df.copy()
     df_out = df_out.sort_values(
         by=["LCLid", "date", "settlement_period"], ascending=True
