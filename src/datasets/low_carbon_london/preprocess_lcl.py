@@ -158,7 +158,9 @@ def filter_missing_kwh(df: pd.DataFrame) -> pd.DataFrame:
 
 def pack_smart_meter_data_into_arrays(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Pack smart meter data into 48-dimensional arrays
+    Pack smart meter data into 48-dimensional arrays.
+    Note: LCL dataset are all given in UTC. We should expect
+    48-readings per day.
 
     Args:
         df (pd.DataFrame): Input dataframe

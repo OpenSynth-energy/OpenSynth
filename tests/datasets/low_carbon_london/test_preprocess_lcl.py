@@ -113,7 +113,7 @@ class TestPreprocessLCL:
         # and drop dates with < 48 readings
         assert len(self.df_drop_missing) == 0
 
-    def test_pacpack_smart_meter_data_into_arrays(self):
+    def test_pack_smart_meter_data_into_arrays(self):
         df_packed = preprocess_lcl.pack_smart_meter_data_into_arrays(
             self.df_drop_dupes
         )

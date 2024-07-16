@@ -25,3 +25,8 @@ Precommit Tools:
 - Note: LCL data was compressed with compression algorithm that doesn't work with Python's `zipfile`. You'll need to manually unzip it via command line with `unzip` on Linux systems, or other equivalent on Windows machine.
 - You can also download the low carbon london dataset using the typer app command `pipenv run python app/app.py --download`. This will use the subprocess module to unzip the file (for linux machines).
 - If you're on windows, you'll need to manually download and unzip to the folder: `data/raw`
+
+### ℹ️ About Low Carbon London Dataset
+- Low Carbon London dataset was from a trial conducted by UK Power Networks on a representative sample of London households from 2011 to 2014.
+- The dataset contains half-hourly smart meter readings of 5,567 households.
+- All timestamps are given in UTC so there's no time-zone conversation needed (i.e. 48 half-hourly data a day per household)
