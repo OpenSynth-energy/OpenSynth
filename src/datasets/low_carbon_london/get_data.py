@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 import logging
 
 from src.datasets import datasets_utils
