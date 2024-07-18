@@ -2,3 +2,8 @@
 /.vscode
 .env
 /tests/__pycache__
+*.zip
+*.pyc
+*.csv
+data/.DS_Store
+.DS_Store

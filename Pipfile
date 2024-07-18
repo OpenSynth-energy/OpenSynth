@@ -4,6 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+wget = "*"
+pandas = "*"
+tqdm = "*"
+numpy = "*"
+typer = "*"
 
 [dev-packages]
 pytest = "*"
@@ -12,7 +17,7 @@ flake8 = "*"
 isort = "*"
 mypy = "*"
 pre-commit = "*"
-
+ipython = "*"
 
 [requires]
-python_version = "3.12"
+python_version = "3.11"
