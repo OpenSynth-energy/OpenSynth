@@ -21,17 +21,31 @@ class LCLData(Dataset):
     def __init__(
         self,
         data_path: Path,
-        feature_mean: float,
-        feature_std: float,
+        stats_path: Path,
         n_samples: int,
     ):
-        self.df = pd.read_csv(data_path)
+        """
+        Args:
+            data_path (Path): Data path
+            stats_path (Path): Stats path. Note when loading
+            evaluation dataset, the stats path point to the
+            stats of training data, rather than evaluation data
+            to avoid data leakage!
+            n_samples (int): Number of samples to load
+        """
+        self.df = pd.read_csv(f"{data_path}/lcl_data.csv")
+        self.df_stats = pd.read_csv(f"{stats_path}/mean_std.csv")
+
+        # Parse stats
+        self.feature_mean = self.df_stats["mean"].values[0]
+        self.feature_std = self.df_stats["std"].values[0]
+
+        # Resample Dataset
         self.n_samples = n_samples
         self.df = self.df.sample(
             self.n_samples, random_state=RANDOM_STATE
         ).reset_index(drop=True)
-        self.feature_mean = feature_mean
-        self.feature_std = feature_std
+
         self.kwh = self.df["kwh"].apply(ast.literal_eval)
         self.kwh = torch.from_numpy(np.array(self.kwh.tolist())).float()
         self.month = self.df["month"]
@@ -83,12 +97,14 @@ class LCLDataModule(pl.LightningDataModule):
         batch_size: int,
         feature_mean: float,
         feature_std: float,
+        n_samples: int,
     ):
         super().__init__()
         self.data_path = data_path
         self.batch_size = batch_size
         self.feature_mean = feature_mean
         self.feature_std = feature_std
+        self.n_samples = n_samples
 
     def prepare_data(self):
         pass
@@ -98,6 +114,7 @@ class LCLDataModule(pl.LightningDataModule):
             data_path=self.data_path,
             feature_mean=self.feature_mean,
             feature_std=self.feature_std,
+            n_samples=self.n_samples,
         )
 
     def train_dataloader(self):
