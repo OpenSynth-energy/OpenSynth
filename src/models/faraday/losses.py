@@ -23,7 +23,7 @@ def MMDLoss(y: torch.tensor, x: torch.tensor) -> torch.tensor:
     ry = yy.diag().unsqueeze(0).expand_as(yy)
 
     dxx = rx.t() + rx - 2.0 * xx
-    dyy = rx.t() + ry - 2.0 * yy
+    dyy = ry.t() + ry - 2.0 * yy
     dxy = rx.t() + ry - 2.0 * zz
 
     XX, YY, XY = (
