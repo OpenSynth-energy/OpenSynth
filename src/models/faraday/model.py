@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 from dataclasses import dataclass
 
 import pytorch_lightning as pl
