@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: MIT
 
 import logging
+from pathlib import Path
 
 from src.datasets import datasets_utils
 from src.datasets.low_carbon_london import preprocess_lcl, split_households
 
 LCL_URL = "https://data.london.gov.uk/download/smartmeter-energy-use-data-in-london-households/3527bf39-d93e-4071-8451-df2ade1ea4f2/LCL-FullData.zip"  # noqa
-FILE_NAME = "data/raw/lcl_full_data.zip"  # noqa
-CSV_FILE_NAME = "data/raw/CC_LCL-FullData.csv"
+FILE_NAME = Path("data/raw/lcl_full_data.zip")  # noqa
+CSV_FILE_NAME = Path("data/raw/CC_LCL-FullData.csv")  # noqa
 
 logger = logging.getLogger(__name__)
 

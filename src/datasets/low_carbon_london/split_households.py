@@ -3,6 +3,7 @@
 import logging
 import os
 import random
+from pathlib import Path
 from typing import List, Tuple
 
 import pandas as pd
@@ -68,7 +69,7 @@ def split_historical_future_periods(
     return df_historical, df_future
 
 
-def split_lcl_data(csv_filename: str, sample_size: int = 2000):
+def split_lcl_data(csv_filename: Path, sample_size: int = 2000):
     """
     Split LCL dataset 4 ways:
     1) Historical Train household data
@@ -106,8 +107,8 @@ def split_lcl_data(csv_filename: str, sample_size: int = 2000):
     df_future_holdout = df_future[df_future["LCLid"].isin(holdout_ids)]
 
     logger.info("📦 Saving train and holdout data")
-    historical_path = "data/processed/historical"
-    future_path = "data/processed/future"
+    historical_path = Path("data/processed/historical")
+    future_path = Path("data/processed/future")
     os.makedirs(historical_path, exist_ok=True)
     os.makedirs(future_path, exist_ok=True)
     df_historical_train.to_csv(

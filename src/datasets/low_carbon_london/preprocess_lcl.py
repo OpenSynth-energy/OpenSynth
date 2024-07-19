@@ -3,6 +3,7 @@
 import csv
 import logging
 import os
+from pathlib import Path
 from typing import Tuple
 
 import numpy as np
@@ -40,7 +41,7 @@ def get_current_month_end(df: pd.DataFrame, date_col="dt"):
     return df
 
 
-def load_data(file_path: str) -> pd.DataFrame:
+def load_data(file_path: Path) -> pd.DataFrame:
     """
     Load LCL data from csv
 
@@ -201,7 +202,7 @@ def get_mean_and_std(df: pd.DataFrame) -> Tuple[float, float]:
     return mean, std
 
 
-def preprocess_pipeline(file_path: str, out_path: str):
+def preprocess_pipeline(file_path: Path, out_path: Path):
 
     df = load_data(file_path)
     df = extract_date_features(df)
