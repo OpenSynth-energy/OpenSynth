@@ -89,21 +89,23 @@ class FaradayVAE(pl.LightningModule):
     def __init__(
         self,
         class_dim: int,
+        learning_rate: float = 1e-3,
         latent_dim: int = 16,
         input_dim: int = 48,
         tmax: int = 5000,
         mse_weight: float = 2.0,
-        quantile_upper_weight: float = 1.0,
-        quantile_lower_weight: float = 1.0,
-        quantile_median_weight: float = 1.0,
+        quantile_upper_weight: float = 4,
+        quantile_lower_weight: float = 0.5,
+        quantile_median_weight: float = 4,
         lower_quantile: float = 0.05,
-        upper_quantile: float = 0.95,
+        upper_quantile: float = 0.975,
     ):
         super().__init__()
         self.class_dim = class_dim
         self.latent_dim = latent_dim
         self.input_dim = input_dim
         self.tmax = tmax
+        self.learning_rate = learning_rate
         self.mse_weight = mse_weight
         self.quantile_upper_weight = quantile_upper_weight
         self.quantile_lower_weight = quantile_lower_weight
@@ -119,7 +121,7 @@ class FaradayVAE(pl.LightningModule):
         self.decoder = Decoder(self.class_dim, self.latent_dim, self.input_dim)
         self.reparametriser = ReparametrisationModule(self.latent_dim)
 
-    def encode(self, input_tensor: torch.tensor, return_params: bool = False):
+    def encode(self, input_tensor: torch.tensor):
         encoded_x = self.encoder(input_tensor)
         encoded_x, _, _ = self.reparametriser(encoded_x)
         return encoded_x
@@ -137,7 +139,7 @@ class FaradayVAE(pl.LightningModule):
         dow_label = input_data.dow.reshape(len(kwh), 1)
 
         encoder_inputs = torch.cat([kwh, month, dow_label], dim=1)
-        encoder_outputs = self.encoder(encoder_inputs, return_params=True)
+        encoder_outputs = self.encoder(encoder_inputs)
         decoder_inputs = torch.cat([encoder_outputs, month, dow_label], dim=1)
         decoder_outputs = self.decoder(decoder_inputs)
 
@@ -194,3 +196,5 @@ class FaradayVAE(pl.LightningModule):
             prog_bar=True,
             sync_dist=True,
         )
+
+        return total_loss

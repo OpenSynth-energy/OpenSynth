@@ -38,7 +38,7 @@ class LCLData(Dataset):
 
         # Parse stats
         self.feature_mean = self.df_stats["mean"].values[0]
-        self.feature_std = self.df_stats["std"].values[0]
+        self.feature_std = self.df_stats["stdev"].values[0]
 
         # Resample Dataset
         self.n_samples = n_samples
@@ -94,16 +94,14 @@ class LCLDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data_path: Path,
+        stats_path: Path,
         batch_size: int,
-        feature_mean: float,
-        feature_std: float,
         n_samples: int,
     ):
         super().__init__()
         self.data_path = data_path
+        self.stats_path = stats_path
         self.batch_size = batch_size
-        self.feature_mean = feature_mean
-        self.feature_std = feature_std
         self.n_samples = n_samples
 
     def prepare_data(self):
@@ -112,8 +110,7 @@ class LCLDataModule(pl.LightningDataModule):
     def setup(self, stage=""):
         self.dataset = LCLData(
             data_path=self.data_path,
-            feature_mean=self.feature_mean,
-            feature_std=self.feature_std,
+            stats_path=self.stats_path,
             n_samples=self.n_samples,
         )
 
