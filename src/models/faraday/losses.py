@@ -1,5 +1,3 @@
-# SPDX-License-Identifier: MIT
-
 from typing import Tuple
 
 import torch
@@ -9,8 +7,6 @@ import torch.nn.functional as F
 def MMDLoss(y: torch.tensor, x: torch.tensor) -> torch.tensor:
     """
     Calculate MMD Loss
-
-    #TODO: TEST THIS FUNCTION
 
     Args:
         y (torch.tensor): Tensor Y
@@ -25,7 +21,7 @@ def MMDLoss(y: torch.tensor, x: torch.tensor) -> torch.tensor:
     ry = yy.diag().unsqueeze(0).expand_as(yy)
 
     dxx = rx.t() + rx - 2.0 * xx
-    dyy = ry.t() + ry - 2.0 * yy
+    dyy = rx.t() + ry - 2.0 * yy
     dxy = rx.t() + ry - 2.0 * zz
 
     XX, YY, XY = (
@@ -46,20 +42,7 @@ def MMDLoss(y: torch.tensor, x: torch.tensor) -> torch.tensor:
     return torch.mean(XX + YY - 2.0 * XY)
 
 
-def quantile_loss(
-    y_pred: torch.tensor, y_real: torch.tensor, quantile: float
-) -> torch.tensor:
-    """
-    Calculate quantile loss
-    #TODO: Test this function
-    Args:
-        y_pred (torch.tensor): Predicted quantile
-        y_real (torch.tensor): Actual quantile
-        quantile (float): Quantile value
-
-    Returns:
-        torch.tensor: Quantile loss
-    """
+def quantile_loss(y_pred: torch.tensor, y_real: torch.tensor, quantile: float):
     return torch.mean(
         torch.max(
             quantile * (y_real - y_pred), (quantile - 1) * (y_real - y_pred)
