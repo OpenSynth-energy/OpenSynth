@@ -9,6 +9,8 @@ pandas = "*"
 tqdm = "*"
 numpy = "*"
 typer = "*"
+torch = "*"
+pytorch-lightning = "*"
 
 [dev-packages]
 pytest = "*"
