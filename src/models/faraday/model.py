@@ -1,12 +1,21 @@
 # SPDX-License-Identifier: MIT
 
+import logging
 from dataclasses import dataclass
+from typing import Tuple
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
+from sklearn.mixture import GaussianMixture
+from torch.optim import lr_scheduler
+from tqdm import tqdm
 
+from src.data_modules.lcl_data_module import LCLDataModule
 from src.models.faraday.losses import calculate_training_loss
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,7 +43,9 @@ class Encoder(nn.Module):
             nn.GELU(),
             nn.Linear(128, 64),
             nn.GELU(),
-            nn.Linear(64, self.latent_dim),
+            nn.Linear(64, 32),
+            nn.GELU(),
+            nn.Linear(32, self.latent_dim),
         )
 
     def forward(self, x):
@@ -55,7 +66,9 @@ class Decoder(nn.Module):
 
         # Decoder layers
         self.decoder_layers = nn.Sequential(
-            nn.Linear(self.latent_dim, 64),
+            nn.Linear(self.latent_dim, 32),
+            nn.GELU(),
+            nn.Linear(32, 64),
             nn.GELU(),
             nn.Linear(64, 128),
             nn.GELU(),
@@ -79,11 +92,13 @@ class ReparametrisationModule(nn.Module):
         self.latent_dim = latent_dim
         self.mean = nn.Linear(self.latent_dim, self.latent_dim)
         self.logvar = nn.Linear(self.latent_dim, self.latent_dim)
+        self.norm_dist = torch.distributions.Normal(0, 1)
 
     def forward(self, encoded_x):
         mu = self.mean(encoded_x)
         sigma = self.logvar(encoded_x)
-        eps = torch.randn_like(mu)
+        eps = self.norm_dist.sample(mu.shape)
+        eps = eps.to(encoded_x)
         return mu + eps * sigma, mu, sigma
 
 
@@ -97,10 +112,10 @@ class FaradayVAE(pl.LightningModule):
         tmax: int = 5000,
         mse_weight: float = 2.0,
         quantile_upper_weight: float = 4,
-        quantile_lower_weight: float = 0.5,
+        quantile_lower_weight: float = 1,
         quantile_median_weight: float = 4,
         lower_quantile: float = 0.05,
-        upper_quantile: float = 0.975,
+        upper_quantile: float = 0.95,
     ):
         super().__init__()
         self.class_dim = class_dim
@@ -133,17 +148,20 @@ class FaradayVAE(pl.LightningModule):
 
     def configure_optimizers(self):
         optim = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        return optim
+        lr_schedule = lr_scheduler.CosineAnnealingLR(
+            optim, T_max=self.tmax, eta_min=self.learning_rate / 5
+        )
+        return [optim], [lr_schedule]
 
     def forward(self, input_data: TrainingData):
         kwh = input_data.kwh
         month = input_data.month.reshape(len(kwh), 1)
-        dow_label = input_data.dow.reshape(len(kwh), 1)
+        dow = input_data.dow.reshape(len(kwh), 1)
 
-        encoder_inputs = torch.cat([kwh, month, dow_label], dim=1)
-        encoder_outputs = self.encoder(encoder_inputs)
-        decoder_inputs = torch.cat([encoder_outputs, month, dow_label], dim=1)
-        decoder_outputs = self.decoder(decoder_inputs)
+        encoder_inputs = torch.cat([kwh, month, dow], dim=1)
+        encoder_outputs = self.encode(encoder_inputs)
+        decoder_inputs = torch.cat([encoder_outputs, month, dow], dim=1)
+        decoder_outputs = self.decode(decoder_inputs)
 
         return decoder_outputs
 
@@ -200,3 +218,105 @@ class FaradayVAE(pl.LightningModule):
         )
 
         return total_loss
+
+
+class FaradayModel:
+    def __init__(
+        self,
+        vae_module: FaradayVAE,
+        n_components: int,
+        max_iter: int = 1000,
+        covariance_type: str = "full",
+        tol: float = 1e-3,
+    ):
+        """
+        Faraday Model
+
+        Args:
+            vae_module (FaradayVAE): Trained VAE component
+            n_components (int): GMM clusteres
+            max_iter (int, optional): Max iteration for GMM. Defaults to 1000.
+            covariance_type (str, optional): scikit-learn gmm covariance types.
+                Defaults to "full".
+            tol (float, optional): Tolerance for GMM. Defaults to 1e-3.
+        """
+        self.n_components = n_components
+        self.max_iter = max_iter
+        self.covariance_type = covariance_type
+        self.vae_module = vae_module
+        self.tol = tol
+
+        self.gmm = GaussianMixture(
+            n_components=n_components,
+            max_iter=max_iter,
+            covariance_type=covariance_type,
+            warm_start=True,
+            tol=tol,
+        )
+
+    def train_gmm(self, dm: LCLDataModule):
+        """
+        Train Gaussian Mixture Module
+
+        Args:
+            dm (LCLDataModule): Training data
+        """
+        dl = dm.train_dataloader()
+        for batch_num, batch_data in tqdm(enumerate(dl)):
+            kwh = batch_data[0]
+            mth = batch_data[1].reshape(len(kwh), 1)
+            dow = batch_data[2].reshape(len(kwh), 1)
+            vae_input = torch.cat([kwh, mth, dow], dim=1)
+            vae_output = self.vae_module.encode(vae_input)
+            gmm_input = torch.cat([vae_output, mth, dow], dim=1)
+            self.gmm.fit(gmm_input.detach().numpy())
+            logger.info(f"⏳ Batch {batch_num} completed")
+
+        self.max_mth = mth.max().item()
+        self.min_mth = mth.min().item()
+        self.max_dow = dow.max().item()
+        self.min_dow = dow.min().item()
+        logger.info(
+            f"Labels Min max: Max month: {self.max_mth},"
+            "Min month: {self.min_mth}"
+            ", Max dow: {self.max_dow}, Min dow: {self.min_dow}"
+        )
+        logger.info("🎉 GMM Training Completed")
+
+    def sample_gmm(
+        self, n_samples: int
+    ) -> Tuple[torch.tensor, torch.tensor, torch.tensor]:
+        """
+        Samples latent codes from GMM and decode with decoder.
+
+        Args:
+            n_samples (int): Number of samples to generate.
+
+        Returns:
+            Tuple[torch.tensor, torch.tensor, torch.tensor]:
+              Decoder output (KWH), month label, dow label
+        """
+        gmm_samples = self.gmm.sample(n_samples)[0]
+        gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
+        gmm_mth = np.round(gmm_samples[:, -2], decimals=0).astype(int)
+        gmm_dow = np.round(gmm_samples[:, -1], decimals=0).astype(int)
+
+        # Filter invalid (out of distribution) samples
+        label_mask = (
+            (gmm_mth >= self.min_mth)
+            & (gmm_mth <= self.max_mth)
+            & (gmm_dow >= self.min_dow)
+            & (gmm_dow <= self.max_dow)
+        )
+        gmm_kwh = gmm_kwh[label_mask]
+        gmm_mth = gmm_mth[label_mask]
+        gmm_dow = gmm_dow[label_mask]
+
+        latent_tensor = torch.from_numpy(gmm_kwh)
+        mth_tensor = torch.from_numpy(gmm_mth).reshape(len(latent_tensor), 1)
+        dow_tensor = torch.from_numpy(gmm_dow).reshape(len(latent_tensor), 1)
+        decoder_input = torch.cat(
+            [latent_tensor, mth_tensor, dow_tensor], dim=1
+        ).float()
+        decoder_output = self.vae_module.decode(decoder_input)
+        return decoder_output, mth_tensor, dow_tensor

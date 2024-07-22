@@ -10,8 +10,6 @@ def MMDLoss(y: torch.tensor, x: torch.tensor) -> torch.tensor:
     """
     Calculate MMD Loss
 
-    #TODO: TEST THIS FUNCTION
-
     Args:
         y (torch.tensor): Tensor Y
         x (torch.tensor): Tensor X
@@ -62,7 +60,7 @@ def quantile_loss(
     """
     return torch.mean(
         torch.max(
-            quantile * (y_real - y_pred), (quantile - 1) * (y_real - y_pred)
+            quantile * (y_real - y_pred), (1 - quantile) * (y_pred - y_real)
         )
     )
 
