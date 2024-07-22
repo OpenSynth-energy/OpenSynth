@@ -1,12 +1,15 @@
+# SPDX-License-Identifier: MIT
+
 import logging
 import os
 import subprocess
 from os import path
+from pathlib import Path
 
 import wget
 
 
-def check_redownload(file_path: str) -> bool:
+def check_redownload(file_path: Path) -> bool:
     """
     Check if file already exists.
     If it does, ask user if they want to download it again.
@@ -24,7 +27,7 @@ def check_redownload(file_path: str) -> bool:
     return True
 
 
-def download_data(url: str, filename: str, unzip: bool = False):
+def download_data(url: str, filename: Path, unzip: bool = False):
     """
     Download data from a URL and save it to a file.
     Function will check if file already exists,
@@ -35,7 +38,7 @@ def download_data(url: str, filename: str, unzip: bool = False):
         filename (str): File path to save the downloaded data
     """
     if check_redownload(filename):
-        if os.path.exists(filename):
+        if filename.exists():
             os.remove(filename)
         logging.info(f"Downloading data from: {url}")
         wget.download(url, filename)

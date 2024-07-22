@@ -25,7 +25,11 @@ jobs:
           key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pipenv-${{ hashFiles('Pipfile.lock') }}
 
       - name: Setup Virutual Environment
-        run: pipenv sync --dev
+        run: |
+          pipenv sync --dev
+          # Need to uninstall and reinstall torch to avoid CUDA error
+          pipenv uninstall torch
+          pipenv install torch
 
       - name: Run pytest
         run: pipenv run pytest
