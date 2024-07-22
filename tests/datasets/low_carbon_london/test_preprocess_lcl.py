@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from src.datasets.low_carbon_london import preprocess_lcl
+from opensynth.datasets.low_carbon_london import preprocess_lcl
 
 
 def df_test() -> pd.DataFrame:

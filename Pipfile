@@ -4,11 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+opensynth-energy = {editable = true, path = "."}
 wget = "*"
 pandas = "*"
 tqdm = "*"
 numpy = "*"
-typer = "*"
 torch = "*"
 pytorch-lightning = "*"
 scikit-learn = "*"
@@ -24,6 +24,7 @@ mypy = "*"
 pre-commit = "*"
 ipython = "*"
 jupyterlab = "*"
+typer = "*"
 
 [requires]
 python_version = "3.11"
