@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import pytorch_lightning as pl
@@ -116,6 +116,8 @@ class FaradayVAE(pl.LightningModule):
         quantile_median_weight: float = 4,
         lower_quantile: float = 0.05,
         upper_quantile: float = 0.95,
+        custom_encoder: Optional[Encoder] = None,
+        custom_decoder: Optional[Decoder] = None,
     ):
         super().__init__()
         self.class_dim = class_dim
@@ -131,11 +133,18 @@ class FaradayVAE(pl.LightningModule):
         self.upper_quantile = upper_quantile
 
         # Save hyperparameters
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["custom_encoder", "custom_decoder"])
 
-        # Layers
-        self.encoder = Encoder(self.latent_dim, self.input_dim, self.class_dim)
-        self.decoder = Decoder(self.class_dim, self.latent_dim, self.input_dim)
+        self.encoder = (
+            custom_encoder
+            if custom_encoder is not None
+            else Encoder(self.latent_dim, self.input_dim, self.class_dim)
+        )
+        self.decoder = (
+            custom_decoder
+            if custom_decoder is not None
+            else Decoder(self.class_dim, self.latent_dim, self.input_dim)
+        )
         self.reparametriser = ReparametrisationModule(self.latent_dim)
 
     def encode(self, input_tensor: torch.tensor):
