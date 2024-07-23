@@ -12,6 +12,7 @@ typer = "*"
 torch = "*"
 pytorch-lightning = "*"
 scikit-learn = "*"
+matplotlib = "*"
 
 [dev-packages]
 pytest = "*"
