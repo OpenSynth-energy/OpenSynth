@@ -10,3 +10,7 @@ setup:
 .PHONY: precommit
 precommit:
 	pipenv run pre-commit run --all-files
+
+.PHONY: build
+build:
+	pipenv run python setup.py sdist bdist_wheel
