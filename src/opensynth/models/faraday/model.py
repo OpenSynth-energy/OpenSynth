@@ -150,7 +150,7 @@ class FaradayVAE(pl.LightningModule):
             logger.info(
                 "🔒 Note: to satisfy definition of"
                 "differential privacy, Delta: {delta}"
-                "must be 1 < N where N is the size of"
+                "must be < 1/N where N is the size of"
                 "the training dataset"
             )
             self.differential_privacy = differential_privacy
