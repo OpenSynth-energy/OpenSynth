@@ -139,14 +139,25 @@ class FaradayVAE(pl.LightningModule):
         self.upper_quantile = upper_quantile
 
         if differential_privacy:
-            # TODO: Find out how to assert delta must be <= 1/N
-            # TODO: Assert max_grad_norm <= 1
+
+            if max_grad_norm is None:
+                raise ValueError("Max grad norm must be set for DP training")
+            elif max_grad_norm > 1 or max_grad_norm < 0:
+                raise ValueError("Max grad norm must be between 0 and 1")
+
             logger.info("🔒 Differential Privacy Enabled")
             logger.info("🔒 Epsilon: {epsilon}, Delta: {delta}")
+            logger.info(
+                "🔒 Note: to satisfy definition of"
+                "differential privacy, Delta: {delta}"
+                "must be 1 < N where N is the size of"
+                "the training dataset"
+            )
             self.differential_privacy = differential_privacy
             self.max_grad_norm = max_grad_norm
             self.epsilon = epsilon
             self.delta = delta
+
             self.privacy_engine = PrivacyEngine(secure_mode=False)
             # Check that everything is valid for DP training
             assert ModuleValidator.validate(self, strict=True) == []
