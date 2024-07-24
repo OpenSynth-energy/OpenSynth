@@ -139,11 +139,15 @@ class FaradayVAE(pl.LightningModule):
         self.upper_quantile = upper_quantile
 
         if differential_privacy:
+            # TODO: Find out how to assert delta must be <= 1/N
+            # TODO: Assert max_grad_norm <= 1
+            logger.info("🔒 Differential Privacy Enabled")
+            logger.info("🔒 Epsilon: {epsilon}, Delta: {delta}")
             self.differential_privacy = differential_privacy
             self.max_grad_norm = max_grad_norm
             self.epsilon = epsilon
             self.delta = delta
-            self.privacy_engine = PrivacyEngine()
+            self.privacy_engine = PrivacyEngine(secure_mode=False)
             # Check that everything is valid for DP training
             assert ModuleValidator.validate(self, strict=True) == []
 
@@ -171,16 +175,10 @@ class FaradayVAE(pl.LightningModule):
         return self.decoder(latent_tensor)
 
     def configure_optimizers(self):
+
         optim = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        lr_schedule = lr_scheduler.CosineAnnealingLR(
-            optim, T_max=self.tmax, eta_min=self.learning_rate / 5
-        )
 
         if self.differential_privacy:
-            # TODO: Find out how to assert delta must be <= 1/N
-            # TODO: Assert max_grad_norm <= 1
-            logger.info("🔒 Differential Privacy Enabled")
-            logger.info("🔒 Epsilon: {epsilon}, Delta: {delta}")
             self.trainer.fit_loop.setup_data()
             dataloader = self.trainer.train_dataloader
             epochs = self.trainer.max_epochs
@@ -195,7 +193,15 @@ class FaradayVAE(pl.LightningModule):
             )
             self.dp = {"model": model, "optim": optim, "dataloader": dl}
 
-        return [optim], [lr_schedule]
+            return optim
+
+        else:
+            # Learning Rate schedulers are not compatible with
+            # Opacus and Pytorch Lightning
+            lr_schedule = lr_scheduler.CosineAnnealingLR(
+                optim, T_max=self.tmax, eta_min=self.learning_rate / 5
+            )
+            return [optim], [lr_schedule]
 
     def forward(self, input_data: TrainingData):
         kwh = input_data.kwh
@@ -260,8 +266,21 @@ class FaradayVAE(pl.LightningModule):
             prog_bar=True,
             sync_dist=True,
         )
-
         return total_loss
+
+    def on_train_epoch_end(self):
+        if self.differential_privacy:
+            # Note: Need to convert to float32 because MPS
+            # device does not support float64. Will error if you don't convert
+            eps = np.float32(self.privacy_engine.get_epsilon(self.delta))
+            self.log(
+                "epsilon",
+                eps,
+                on_epoch=True,
+                on_step=False,
+                prog_bar=True,
+                sync_dist=False,
+            )
 
 
 class FaradayModel:
