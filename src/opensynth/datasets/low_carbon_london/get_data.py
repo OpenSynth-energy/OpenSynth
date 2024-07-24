@@ -1,4 +1,5 @@
-# SPDX-License-Identifier: MIT
+# Copyright Contributors to the Opensynth-energy Project.
+# SPDX-License-Identifier: Apache-2.0
 
 import logging
 from pathlib import Path
