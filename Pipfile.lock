@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "321c7e230eca3c6d10d9328a71821cc1006bb1222d9317fb5334ea508cbd76b3"
+            "sha256": "a721ff0bc770b37fd26d238d6f010ad1687eb4f65039ea607072e511235bfe14"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -465,11 +465,11 @@
         },
         "lightning-utilities": {
             "hashes": [
-                "sha256:a96bee6d8b3df18b7c1a8dec83b2adb03dca6ca0ce3ae9fd355eb0922c4e5e07",
-                "sha256:ab2117cc926a9e3757919e25a0da574badb1c0f04fc931849235731b78016a8d"
+                "sha256:79fc27ef8ec8b8d55a537920f2c7610270c0c9e037fa6efc78f1aa34ec8cdf04",
+                "sha256:ecd9953c316cbaf56ad820fbe7bd062187b9973c4a23d47b076cd59dc080a310"
             ],
             "markers": "python_version >= '3.8'",
-            "version": "==0.11.5"
+            "version": "==0.11.6"
         },
         "markdown-it-py": {
             "hashes": [
@@ -751,6 +751,23 @@
             "index": "pypi",
             "markers": "python_version >= '3.9'",
             "version": "==2.0.1"
+        },
+        "opacus": {
+            "hashes": [
+                "sha256:8c46aff596bbbc6025ce9d169b49d5b3112cb958e3d74f8b77274134e7590890",
+                "sha256:e1d453c29bc8457ad7c530f5c56074c913dfebb0fb14d7524677cf03a217cff4"
+            ],
+            "index": "pypi",
+            "markers": "python_full_version >= '3.7.5'",
+            "version": "==1.4.1"
+        },
+        "opt-einsum": {
+            "hashes": [
+                "sha256:2455e59e3947d3c275477df7f5205b30635e266fe6dc300e3d9f9646bfcea147",
+                "sha256:59f6475f77bbc37dcf7cd748519c0ec60722e91e63ca114e68821c0c54a46549"
+            ],
+            "markers": "python_version >= '3.5'",
+            "version": "==3.3.0"
         },
         "packaging": {
             "hashes": [
