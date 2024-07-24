@@ -23,6 +23,7 @@ install_requires = (
     "scikit-learn>=1.5.1",
     "pytorch-lightning>=2.3.3",
     "matplotlib>=3.9.1",
+    "opacus>=1.4.1",
 )
 
 setup(
@@ -34,7 +35,7 @@ setup(
     long_description=README,
     long_description_content_type="text/markdown",
     author="Opensynth",
-    author_email="research@centrefornetzero.org",
+    author_email="pypi@opensynth.energy",
     license="Apache 2.0",
     package_dir={"": "src"},
     packages=find_packages("src"),
