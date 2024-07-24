@@ -13,6 +13,7 @@ torch = "*"
 pytorch-lightning = "*"
 scikit-learn = "*"
 matplotlib = "*"
+opacus = "*"
 
 [dev-packages]
 pytest = "*"

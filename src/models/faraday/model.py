@@ -8,6 +8,8 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
+from opacus import PrivacyEngine
+from opacus.validators import ModuleValidator
 from sklearn.mixture import GaussianMixture
 from torch.optim import lr_scheduler
 from tqdm import tqdm
@@ -116,6 +118,10 @@ class FaradayVAE(pl.LightningModule):
         quantile_median_weight: float = 4,
         lower_quantile: float = 0.05,
         upper_quantile: float = 0.95,
+        differential_privacy: bool = False,
+        epsilon: Optional[float] = 1.0,
+        delta: Optional[float] = 1e-5,
+        max_grad_norm: Optional[float] = 1.0,
         custom_encoder: Optional[Encoder] = None,
         custom_decoder: Optional[Decoder] = None,
     ):
@@ -131,6 +137,30 @@ class FaradayVAE(pl.LightningModule):
         self.quantile_median_weight = quantile_median_weight
         self.lower_quantile = lower_quantile
         self.upper_quantile = upper_quantile
+
+        if differential_privacy:
+
+            if max_grad_norm is None:
+                raise ValueError("Max grad norm must be set for DP training")
+            elif max_grad_norm > 1 or max_grad_norm < 0:
+                raise ValueError("Max grad norm must be between 0 and 1")
+
+            logger.info("🔒 Differential Privacy Enabled")
+            logger.info("🔒 Epsilon: {epsilon}, Delta: {delta}")
+            logger.info(
+                "🔒 Note: to satisfy definition of"
+                "differential privacy, Delta: {delta}"
+                "must be 1 < N where N is the size of"
+                "the training dataset"
+            )
+            self.differential_privacy = differential_privacy
+            self.max_grad_norm = max_grad_norm
+            self.epsilon = epsilon
+            self.delta = delta
+
+            self.privacy_engine = PrivacyEngine(secure_mode=False)
+            # Check that everything is valid for DP training
+            assert ModuleValidator.validate(self, strict=True) == []
 
         # Save hyperparameters
         self.save_hyperparameters(ignore=["custom_encoder", "custom_decoder"])
@@ -156,11 +186,33 @@ class FaradayVAE(pl.LightningModule):
         return self.decoder(latent_tensor)
 
     def configure_optimizers(self):
+
         optim = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        lr_schedule = lr_scheduler.CosineAnnealingLR(
-            optim, T_max=self.tmax, eta_min=self.learning_rate / 5
-        )
-        return [optim], [lr_schedule]
+
+        if self.differential_privacy:
+            self.trainer.fit_loop.setup_data()
+            dataloader = self.trainer.train_dataloader
+            epochs = self.trainer.max_epochs
+            model, optim, dl = self.privacy_engine.make_private_with_epsilon(
+                module=self,
+                optimizer=optim,
+                data_loader=dataloader,
+                epochs=epochs,
+                target_epsilon=self.epsilon,
+                target_delta=self.delta,
+                max_grad_norm=self.max_grad_norm,
+            )
+            self.dp = {"model": model, "optim": optim, "dataloader": dl}
+
+            return optim
+
+        else:
+            # Learning Rate schedulers are not compatible with
+            # Opacus and Pytorch Lightning
+            lr_schedule = lr_scheduler.CosineAnnealingLR(
+                optim, T_max=self.tmax, eta_min=self.learning_rate / 5
+            )
+            return [optim], [lr_schedule]
 
     def forward(self, input_data: TrainingData):
         kwh = input_data.kwh
@@ -225,8 +277,21 @@ class FaradayVAE(pl.LightningModule):
             prog_bar=True,
             sync_dist=True,
         )
-
         return total_loss
+
+    def on_train_epoch_end(self):
+        if self.differential_privacy:
+            # Note: Need to convert to float32 because MPS
+            # device does not support float64. Will error if you don't convert
+            eps = np.float32(self.privacy_engine.get_epsilon(self.delta))
+            self.log(
+                "epsilon",
+                eps,
+                on_epoch=True,
+                on_step=False,
+                prog_bar=True,
+                sync_dist=False,
+            )
 
 
 class FaradayModel:
