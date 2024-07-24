@@ -9,6 +9,11 @@ pandas = "*"
 tqdm = "*"
 numpy = "*"
 typer = "*"
+torch = "*"
+pytorch-lightning = "*"
+scikit-learn = "*"
+matplotlib = "*"
+opacus = "*"
 
 [dev-packages]
 pytest = "*"
@@ -18,6 +23,7 @@ isort = "*"
 mypy = "*"
 pre-commit = "*"
 ipython = "*"
+jupyterlab = "*"
 
 [requires]
 python_version = "3.11"
