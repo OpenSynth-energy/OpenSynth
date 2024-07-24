@@ -14,8 +14,8 @@ from sklearn.mixture import GaussianMixture
 from torch.optim import lr_scheduler
 from tqdm import tqdm
 
-from src.data_modules.lcl_data_module import LCLDataModule
-from src.models.faraday.losses import calculate_training_loss
+from opensynth.data_modules.lcl_data_module import LCLDataModule
+from opensynth.models.faraday.losses import calculate_training_loss
 
 logger = logging.getLogger(__name__)
 

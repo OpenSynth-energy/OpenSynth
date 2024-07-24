@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch.distributions.normal import Normal
 
-from src.models.faraday import losses
+from opensynth.models.faraday import losses
 
 
 class TestFaradayLosses:
