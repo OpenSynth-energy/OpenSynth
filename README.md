@@ -17,7 +17,7 @@ Precommit Tools:
 * [black](https://github.com/psf/black) for formatting
 
 # Available CLI apps:
-- pipenv run python app/app.py for a list of Typer app commands
+- `pipenv run python app/app.py` for a list of Typer app commands
 - `get-lcl-data`: Downloads, Split, Preprocesses LCL dataset.
 
 # 💽 Downloading Low Carbon London dataset [[1]](https://data.london.gov.uk/dataset/smartmeter-energy-use-data-in-london-households)
