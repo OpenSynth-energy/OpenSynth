@@ -1,10 +1,11 @@
-# SPDX-License-Identifier: MIT
+# Copyright Contributors to the Opensynth-energy Project.
+# SPDX-License-Identifier: Apache-2.0
 
 import logging
 from pathlib import Path
 
-from src.datasets import datasets_utils
-from src.datasets.low_carbon_london import preprocess_lcl, split_households
+from opensynth.datasets import datasets_utils
+from opensynth.datasets import low_carbon_london as lcl
 
 LCL_URL = "https://data.london.gov.uk/download/smartmeter-energy-use-data-in-london-households/3527bf39-d93e-4071-8451-df2ade1ea4f2/LCL-FullData.zip"  # noqa
 FILE_NAME = Path("data/raw/lcl_full_data.zip")  # noqa
@@ -40,6 +41,6 @@ def get_lcl_data(download: bool, split: bool, preprocess: bool):
     if download:
         datasets_utils.download_data(LCL_URL, FILE_NAME)
     if split:
-        split_households.split_lcl_data(CSV_FILE_NAME, 2000)
+        lcl.split_households.split_lcl_data(CSV_FILE_NAME, 2000)
     if preprocess:
-        preprocess_lcl.preprocess_lcl_data()
+        lcl.preprocess_lcl.preprocess_lcl_data()

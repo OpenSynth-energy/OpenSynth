@@ -1,4 +1,5 @@
-# SPDX-License-Identifier: MIT
+# Copyright Contributors to the Opensynth-energy Project.
+# SPDX-License-Identifier: Apache-2.0
 
 import logging
 from dataclasses import dataclass
@@ -14,8 +15,8 @@ from sklearn.mixture import GaussianMixture
 from torch.optim import lr_scheduler
 from tqdm import tqdm
 
-from src.data_modules.lcl_data_module import LCLDataModule
-from src.models.faraday.losses import calculate_training_loss
+from opensynth.data_modules.lcl_data_module import LCLDataModule
+from opensynth.models.faraday.losses import calculate_training_loss
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +151,7 @@ class FaradayVAE(pl.LightningModule):
             logger.info(
                 "🔒 Note: to satisfy definition of"
                 "differential privacy, Delta: {delta}"
-                "must be 1 < N where N is the size of"
+                "must be < 1/N where N is the size of"
                 "the training dataset"
             )
             self.differential_privacy = differential_privacy
