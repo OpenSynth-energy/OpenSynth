@@ -1,4 +1,4 @@
-name: Deploy Package
+name: Test and Lint code
 on: [push]
 env:
   PYTHONPATH: .
