@@ -1,24 +1,24 @@
-# name: Release Branch Deploy Package
-# on:
-#   push:
-#     branches:
-#       - 'releases/**'
-# env:
-#   PYTHONPATH: .
-# jobs:
-#   deploy-to-testpypi:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout
-#         uses: actions/checkout@v4
-#         with:
-#           fetch-depth: 0
-#       - name: Build package
-#         run: python3 -m pip install --upgrade build && python3 -m build
-#       - name: Install twine
-#         run: python3 -m pip install twine
-#       - name: Publish to TestPyPI
-#         uses: pypa/gh-action-pypi-publish@release/v1
-#         with:
-#           repository-url: https://test.pypi.org/legacy/
-#           password: ${{ secrets.TESTPYPI_API_TOKEN }}
+name: Release Branch Deploy Package
+on:
+  push:
+    branches:
+      - 'release/**'
+env:
+  PYTHONPATH: .
+jobs:
+  deploy-to-testpypi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build package
+        run: python3 -m pip install --upgrade build && python3 -m build
+      - name: Install twine
+        run: python3 -m pip install twine
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TESTPYPI_API_TOKEN }}
