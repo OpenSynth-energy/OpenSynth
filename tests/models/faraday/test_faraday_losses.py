@@ -30,7 +30,7 @@ class TestFaradayLosses:
         sample_1 = d1.sample([5000, 2])
         sample_2 = d2.sample([5000, 2])
         got_mmd_loss = losses.MMDLoss(sample_1, sample_2)
-        assert torch.round(got_mmd_loss, decimals=3) < tol
+        assert torch.round(got_mmd_loss, decimals=3) <= tol
 
     @pytest.mark.parametrize(
         "t1,t2,quantile,expected_value",

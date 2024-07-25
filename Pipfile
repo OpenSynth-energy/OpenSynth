@@ -26,6 +26,5 @@ ipython = "*"
 jupyterlab = "*"
 typer = "*"
 
-
 [requires]
 python_version = "3.11"
