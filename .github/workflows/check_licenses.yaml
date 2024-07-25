@@ -1,4 +1,4 @@
-name: Check licenses
+name: Deploy Package
 on: [push]
 env:
   PYTHONPATH: .
@@ -7,12 +7,12 @@ jobs:
   check_licenses:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v2
         id: setup-python
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install Pipenv
         run: |
@@ -54,3 +54,7 @@ jobs:
         run: |
           echo "GPL license found! Failing the job."
           exit 1
+
+      - name: Check all files contain necessary license headers
+        run: |
+          ./scripts/check_license_headers.sh

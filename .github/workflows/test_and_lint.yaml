@@ -1,4 +1,4 @@
-name: Test and lint
+name: Test and Lint code
 on: [push]
 env:
   PYTHONPATH: .
@@ -7,12 +7,12 @@ jobs:
   test_and_lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v2
         id: setup-python
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install Pipenv
         run: |
@@ -25,7 +25,11 @@ jobs:
           key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pipenv-${{ hashFiles('Pipfile.lock') }}
 
       - name: Setup Virutual Environment
-        run: pipenv sync --dev
+        run: |
+          pipenv sync --dev
+          # Need to uninstall and reinstall torch to avoid CUDA error
+          pipenv uninstall torch
+          pipenv install torch
 
       - name: Run pytest
         run: pipenv run pytest

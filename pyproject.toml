@@ -1,0 +1,29 @@
+[tool.isort]
+profile = "black"
+
+
+[tool.black]
+line-length = 79
+target-version = ["py311"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | \.ipynb
+    | _build
+    | buck-out
+    | build
+    | dist
+    # The following are specific to Black, you probably don't want those.
+    | blib2to3
+    | tests/data
+)/
+'''
+
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
