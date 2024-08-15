@@ -138,8 +138,9 @@ class FaradayVAE(pl.LightningModule):
         self.quantile_median_weight = quantile_median_weight
         self.lower_quantile = lower_quantile
         self.upper_quantile = upper_quantile
+        self.differential_privacy = differential_privacy
 
-        if differential_privacy:
+        if self.differential_privacy:
 
             if max_grad_norm is None:
                 raise ValueError("Max grad norm must be set for DP training")
@@ -154,7 +155,6 @@ class FaradayVAE(pl.LightningModule):
                 "must be < 1/N where N is the size of"
                 "the training dataset"
             )
-            self.differential_privacy = differential_privacy
             self.max_grad_norm = max_grad_norm
             self.epsilon = epsilon
             self.delta = delta
