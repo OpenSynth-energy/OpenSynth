@@ -1,5 +1,6 @@
-# OpenSynth
+# [OpenSynth](https://lfenergy.org/projects/opensynth/)
 OpenSynth Model Repository.
+
 
 # 💻 Development Set up
 
@@ -16,9 +17,11 @@ Precommit Tools:
 * [isort](https://github.com/PyCQA/isort) for sorting imports
 * [black](https://github.com/psf/black) for formatting
 
+
 # Available CLI apps:
-- pipenv run python app/app.py for a list of Typer app commands
+- `pipenv run python app/app.py` for a list of Typer app commands
 - `get-lcl-data`: Downloads, Split, Preprocesses LCL dataset.
+
 
 # 💽 Downloading Low Carbon London dataset [[1]](https://data.london.gov.uk/dataset/smartmeter-energy-use-data-in-london-households)
 - The compressed version of the data from data.london.gov.uk is ~ 700Mb. The full decompressed data is about 8Gb.
@@ -30,3 +33,7 @@ Precommit Tools:
 - Low Carbon London dataset was from a trial conducted by UK Power Networks on a representative sample of London households from 2011 to 2014.
 - The dataset contains half-hourly smart meter readings of 5,567 households.
 - All timestamps are given in UTC so there's no time-zone conversation needed (i.e. 48 half-hourly data a day per household)
+
+
+# 📕 Tutorials
+For tutorials on algorithms in this repository, please refer to notebooks in the `notebooks` folder.
