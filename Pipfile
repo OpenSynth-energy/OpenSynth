@@ -9,11 +9,11 @@ wget = "*"
 pandas = "*"
 tqdm = "*"
 numpy = "*"
-torch = "*"
 pytorch-lightning = "*"
 scikit-learn = "*"
 matplotlib = "*"
 opacus = "*"
+torch = "*"
 
 [dev-packages]
 pytest = "*"
