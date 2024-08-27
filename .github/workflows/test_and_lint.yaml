@@ -18,18 +18,11 @@ jobs:
         run: |
           pip install pipenv
 
-      # - name: Cache virtualenvs
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: ~/.local/share/virtualenvs/
-      #     key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pipenv-${{ hashFiles('Pipfile.lock') }}
-
-      - name: Setup Virutual Environment
+      - name: Setup Virtual Environment
         run: |
+          # Install torch first before installing rest of the dependencies to avoid CUDA error
+          pipenv install torch==2.4.0
           pipenv sync --dev
-          # Need to uninstall and reinstall torch to avoid CUDA error
-          pipenv uninstall torch
-          pipenv install torch
 
       - name: Run pytest
         run: pipenv run pytest
