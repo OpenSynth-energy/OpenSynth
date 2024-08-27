@@ -233,7 +233,7 @@ def create_outliers(df: pd.DataFrame, mean: float) -> pd.DataFrame:
         mean=mean,
         scale=1.0,
         mean_factor=20,
-        size=(50, 80),
+        size=(50, 48),
     )
     logger.info("🎲 Generating outliers")
     df_gaussian_noise = gaussian_generator.inject_noise(df)
