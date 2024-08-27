@@ -3,6 +3,7 @@
 
 import ast
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -25,18 +26,21 @@ class LCLData(Dataset):
         data_path: Path,
         stats_path: Path,
         n_samples: int,
+        outlier_path: Optional[Path] = None,
     ):
         """
         Args:
             data_path (Path): Data path
-            stats_path (Path): Stats path. Note when loading
-            evaluation dataset, the stats path point to the
-            stats of training data, rather than evaluation data
-            to avoid data leakage!
+            stats_path (Path): Stats path. Note when loading evaluation
+            dataset, the stats path point to the stats of training data,
+            rather than evaluation data to avoid data leakage!
             n_samples (int): Number of samples to load
+            outlier_path (Path, optional): Path to outlier data.
+            Defaults to None.
         """
         self.df = pd.read_csv(f"{data_path}/lcl_data.csv")
         self.df_stats = pd.read_csv(f"{stats_path}/mean_std.csv")
+        self.outlier = True if outlier_path else False
 
         # Parse stats
         self.feature_mean = self.df_stats["mean"].values[0]
@@ -48,10 +52,22 @@ class LCLData(Dataset):
             self.n_samples, random_state=RANDOM_STATE
         ).reset_index(drop=True)
 
+        # Combine with outliers:
+        if self.outlier:
+            self.df_outliers = pd.read_csv(f"{outlier_path}/outliers.csv")
+            self.df = pd.concat([self.df, self.df_outliers])
+            self.df = self.df.sample(
+                frac=1, random_state=RANDOM_STATE
+            ).reset_index(drop=True)
+
+        # Parse columns
         self.kwh = self.df["kwh"].apply(ast.literal_eval)
         self.kwh = torch.from_numpy(np.array(self.kwh.tolist())).float()
         self.month = self.df["month"]
         self.dayofweek = self.df["dayofweek"]
+
+        # if self.outlier:
+        #     self.outlier_label = self.df["segment"]
 
     def standardise(self, x: torch.tensor) -> torch.tensor:
         """
@@ -99,12 +115,14 @@ class LCLDataModule(pl.LightningDataModule):
         stats_path: Path,
         batch_size: int,
         n_samples: int,
+        outlier_path: Optional[Path] = None,
     ):
         super().__init__()
         self.data_path = data_path
         self.stats_path = stats_path
         self.batch_size = batch_size
         self.n_samples = n_samples
+        self.outlier_path = outlier_path
 
     def prepare_data(self):
         pass
@@ -114,6 +132,7 @@ class LCLDataModule(pl.LightningDataModule):
             data_path=self.data_path,
             stats_path=self.stats_path,
             n_samples=self.n_samples,
+            outlier_path=self.outlier_path,
         )
 
     def train_dataloader(self):
