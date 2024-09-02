@@ -18,12 +18,6 @@ jobs:
         run: |
           pip install pipenv
 
-      - name: Cache virtualenvs
-        uses: actions/cache@v2
-        with:
-          path: ~/.local/share/virtualenvs/
-          key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pipenv-${{ hashFiles('Pipfile.lock') }}
-
       - name: Install Dependencies and Check for GPL and GNU licenses
         run: |
           pipenv sync --dev

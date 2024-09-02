@@ -10,6 +10,8 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 
+from opensynth.datasets.datasets_utils import NoiseFactory, NoiseType
+
 logger = logging.getLogger(__name__)
 
 
@@ -198,9 +200,47 @@ def get_mean_and_std(df: pd.DataFrame) -> Tuple[float, float]:
     Returns:
         Tuple[float, float]: Mean and standard deviation
     """
+    logger.info("📊 Calculating mean and std")
     mean = np.mean(df["kwh"])
     std = np.std(df["kwh"])
     return mean, std
+
+
+def create_outliers(df: pd.DataFrame, mean: float) -> pd.DataFrame:
+    """
+    Function to generate outliers based on gaussian and gamma distribution.
+    Noise is generated based on a mean of 20 times population mean
+    as descibed in the "Defining Good" paper.
+
+    Args:
+        df (pd.DataFrame): Input dataframe to sample rows from
+        mean (float): Dataset population mean
+
+    Returns:
+        pd.DataFrame: Dataframe consisting of noisy outliers
+    """
+
+    gaussian_generator = NoiseFactory(
+        noise_type=NoiseType.GAUSSIAN,
+        mean=mean,
+        scale=1.0,
+        mean_factor=20,
+        size=(50, 48),
+    )
+
+    gamma_generator = NoiseFactory(
+        noise_type=NoiseType.GAMMA,
+        mean=mean,
+        scale=1.0,
+        mean_factor=20,
+        size=(50, 48),
+    )
+    logger.info("🎲 Generating outliers")
+    df_gaussian_noise = gaussian_generator.inject_noise(df)
+    df_gamma_noise = gamma_generator.inject_noise(df)
+
+    df_noise = pd.concat([df_gaussian_noise, df_gamma_noise])
+    return df_noise
 
 
 def preprocess_pipeline(file_path: Path, out_path: Path):
@@ -214,8 +254,11 @@ def preprocess_pipeline(file_path: Path, out_path: Path):
     mean, stdev = get_mean_and_std(df)
     df = pack_smart_meter_data_into_arrays(df)
 
+    df_noise = create_outliers(df, mean)
+
     os.makedirs(out_path, exist_ok=True)
     df.to_csv(f"{out_path}/lcl_data.csv", index=False)
+    df_noise.to_csv(f"{out_path}/outliers.csv", index=False)
 
     mean_std_dict = {"mean": mean, "stdev": stdev}
     with open(f"{out_path}/mean_std.csv", "w") as f:

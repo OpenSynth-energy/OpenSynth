@@ -10,7 +10,8 @@ REQUIRED_HEADING=$(printf "# Copyright Contributors to the Opensynth-energy Proj
 missing_files=()
 
 # Loop through all .py files in the src directory
-for file in "$SRC_DIR"/*.py; do
+while IFS= read -r file; do
+  echo "Collecting file: $file"
   # Read the first two lines of the file
   first_two_lines=$(head -n 2 "$file")
 
@@ -18,7 +19,7 @@ for file in "$SRC_DIR"/*.py; do
   if [[ "$first_two_lines" != "$REQUIRED_HEADING" ]]; then
     missing_files+=("$file")
   fi
-done
+done < <(find "$SRC_DIR" -name '*.py')
 
 # Check if any files were missing the heading
 if [ ${#missing_files[@]} -ne 0 ]; then
