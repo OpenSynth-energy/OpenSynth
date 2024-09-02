@@ -38,8 +38,8 @@ class LCLData(Dataset):
             outlier_path (Path, optional): Path to outlier data.
             Defaults to None.
         """
-        self.df = pd.read_csv(f"{data_path}/lcl_data.csv")
-        self.df_stats = pd.read_csv(f"{stats_path}/mean_std.csv")
+        self.df = pd.read_csv(data_path)
+        self.df_stats = pd.read_csv(stats_path)
         self.outlier = True if outlier_path else False
 
         # Parse stats
@@ -54,7 +54,7 @@ class LCLData(Dataset):
 
         # Combine with outliers:
         if self.outlier:
-            self.df_outliers = pd.read_csv(f"{outlier_path}/outliers.csv")
+            self.df_outliers = pd.read_csv(outlier_path)
             self.df = pd.concat([self.df, self.df_outliers])
             self.df = self.df.sample(
                 frac=1, random_state=RANDOM_STATE
@@ -65,9 +65,6 @@ class LCLData(Dataset):
         self.kwh = torch.from_numpy(np.array(self.kwh.tolist())).float()
         self.month = self.df["month"]
         self.dayofweek = self.df["dayofweek"]
-
-        # if self.outlier:
-        #     self.outlier_label = self.df["segment"]
 
     def standardise(self, x: torch.tensor) -> torch.tensor:
         """
@@ -123,11 +120,13 @@ class LCLDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.n_samples = n_samples
         self.outlier_path = outlier_path
+        self.outlier = True if outlier_path else False
 
     def prepare_data(self):
         pass
 
     def setup(self, stage=""):
+
         self.dataset = LCLData(
             data_path=self.data_path,
             stats_path=self.stats_path,
@@ -135,10 +134,26 @@ class LCLDataModule(pl.LightningDataModule):
             outlier_path=self.outlier_path,
         )
 
+        if self.outlier:
+            self.outlier_dataset = LCLData(
+                data_path=self.outlier_path,
+                stats_path=self.stats_path,
+                n_samples=100,  # Outlier size = 100
+            )
+
     def train_dataloader(self):
         return DataLoader(
             self.dataset,
             self.batch_size,
+            drop_last=True,
+            shuffle=False,
+            generator=g,
+        )
+
+    def outlier_dataloader(self):
+        return DataLoader(
+            self.outlier_dataset,
+            100,
             drop_last=True,
             shuffle=False,
             generator=g,
