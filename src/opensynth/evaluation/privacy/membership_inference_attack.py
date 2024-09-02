@@ -10,6 +10,9 @@ import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
+import torch.nn as nn
+import torchmetrics
+from sklearn.metrics import accuracy_score, f1_score, precision_score
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 
@@ -97,7 +100,7 @@ def _create_attack_samples(
     outlier_unseen_same_samples = _create_unseen_outliers(
         df_train, dm_train.dataset.feature_mean
     )
-    outlier_unseen_diff_samples = _create_unseen_outliers(df_train, mean=1)
+    outlier_unseen_diff_samples = _create_unseen_outliers(df_train, mean=0)
 
     return MembershipInferenceAttackSamples(
         synthetic_samples=synthetic_samples,
@@ -271,3 +274,152 @@ class MembershipInferenceDataModule(pl.LightningDataModule):
         return DataLoader(
             self.attack_dataset, batch_size, drop_last=True, shuffle=False
         )
+
+
+class MembershipInferenceModule(nn.Module):
+    def __init__(self, input_size):
+        super().__init__()
+        self.input_size = input_size
+        self.layers = nn.Sequential(
+            nn.Linear(self.input_size, 32),
+            nn.Dropout(0.5),
+            nn.GELU(),
+            nn.Linear(32, 16),
+            nn.GELU(),
+            nn.Linear(16, 4),
+            nn.GELU(),
+            nn.Linear(4, 1),
+            # nn.Sigmoid(), # using BCELosswithlogits - no sigmoid needed
+        )
+
+    def forward(self, x):
+        outputs = self.layers(x)
+        return outputs
+
+
+class MembershipInferenceModel(pl.LightningModule):
+    def __init__(self, learning_rate, input_size):
+        super().__init__()
+        self.learning_rate = learning_rate
+        self.loss_fn = nn.BCEWithLogitsLoss()
+        self.model = MembershipInferenceModule(input_size)
+        self.save_hyperparameters()
+
+    def configure_optimizers(self):
+        optim = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        return optim
+
+    def forward(self, kwh):
+        model_inputs = kwh
+        return self.model(model_inputs)
+
+    def predict(self, kwh, return_raw_prob=False):
+        logits = self.forward(kwh)
+        probs = torch.sigmoid(logits)
+
+        if return_raw_prob:
+            return probs
+        else:
+            return probs.round()
+
+    def calculate_accuracy(self, pred, label):
+        return torchmetrics.functional.classification.binary_accuracy(
+            pred, label
+        )
+
+    def training_step(self, batch_data):
+        tensors = batch_data[0]
+        label = batch_data[1]
+
+        logit = self.forward(tensors)
+        pred = self.predict(tensors)
+
+        loss = self.loss_fn(logit.squeeze(), label.squeeze().float())
+        accuracy = self.calculate_accuracy(pred.squeeze(), label.squeeze())
+
+        self.log(
+            "Train BCE Loss", loss, on_epoch=True, on_step=False, prog_bar=True
+        )
+        self.log(
+            "Train Accuracy",
+            accuracy,
+            on_epoch=True,
+            on_step=False,
+            prog_bar=True,
+        )
+        return loss
+
+    def validation_step(self, batch_data, batch_idx):
+        tensors = batch_data[0]
+        label = batch_data[1]
+
+        logit = self.forward(tensors)
+        pred = self.predict(tensors)
+
+        loss = self.loss_fn(logit.squeeze(), label.squeeze().float())
+        accuracy = self.calculate_accuracy(pred.squeeze(), label.squeeze())
+
+        self.log(
+            "Eval BCE Loss", loss, on_epoch=True, on_step=False, prog_bar=True
+        )
+        self.log(
+            "Eval Accuracy",
+            accuracy,
+            on_epoch=True,
+            on_step=False,
+            prog_bar=True,
+        )
+        return loss
+
+
+def get_mia_predictions(
+    model: MembershipInferenceModel, attack_dm: MembershipInferenceDataModule
+):
+    model.eval()
+    dl = attack_dm.attack_dataloader()
+    attack_kwh, attack_label = next(iter(dl))
+
+    # Get predictions - probability and label
+    pred_proba = model.predict(attack_kwh, return_raw_prob=True)
+    pred_label = model.predict(attack_kwh, return_raw_prob=False)
+
+    # Safe results to dataframe in corresponding records
+    df_results = attack_dm.attack_dataset.df.copy()
+    df_results["pred_proba"] = pred_proba.squeeze().detach().numpy()
+    df_results["pred_label"] = pred_label.squeeze().detach().numpy()
+    df_results["true_label"] = attack_label.detach().numpy()
+
+    # Rank predictions
+    df_results = df_results.sort_values("pred_proba", ascending=False)
+    ones = df_results["true_label"].sum() * [1]
+    zeros = (len(df_results) - len(ones)) * [0]
+    df_results["rank_pred"] = ones + zeros
+    df_results["pred_label"] = df_results["pred_label"].astype(int)
+    df_results["true_label"] = df_results["true_label"].astype(int)
+    df_results["rank_pred"] = df_results["rank_pred"].astype(int)
+
+    return df_results
+
+
+def print_mia_results(df: pd.DataFrame):
+    df["accuracy"] = df["true_label"] == df["rank_pred"]
+
+    precision = precision_score(df["true_label"], df["rank_pred"])
+    f1 = f1_score(df["true_label"], df["rank_pred"])
+    acc = accuracy_score(df["true_label"], df["rank_pred"])
+    true_positive = len(df.query("true_label==1 and rank_pred==1"))
+    false_positive = len(df.query("true_label==0 and rank_pred==1"))
+    total_n = len(df)
+    total_positive = df["true_label"].sum()
+
+    interval = 1.96 * np.sqrt((precision * (1 - precision)) / total_n)
+
+    print(
+        f"""Segment: Precision: {precision:.2f} +/- {interval:.2f},"""
+        f"""\nF1: {f1:.2f}, Acc: {acc:.2f},"""
+        f"""\nTrue Positives: {true_positive},"""
+        f"""\nFalse Positive: {false_positive},"""
+        f"""\nTotal N: {total_n},"""
+        f"""\nTotal Positive: {total_positive},"""
+        f"""\nRandom Precision : {total_positive/total_n:.2f},"""
+    )

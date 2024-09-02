@@ -15,6 +15,7 @@ matplotlib = "*"
 opacus = "*"
 torch = "*"
 seaborn = ">=0.13.2"
+torchmetrics = "*"
 
 [dev-packages]
 pytest = "*"
