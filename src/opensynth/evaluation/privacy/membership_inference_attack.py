@@ -94,17 +94,17 @@ def _create_attack_samples(
     df_train = dm_train.dataset.df[
         dm_train.dataset.df["segment"].isna()
     ].copy()
-    outlier_unseen_sample_samples = _create_unseen_outliers(
+    outlier_unseen_same_samples = _create_unseen_outliers(
         df_train, dm_train.dataset.feature_mean
     )
-    outlier_unseen_diff_samples = _create_unseen_outliers(df_train, 0)
+    outlier_unseen_diff_samples = _create_unseen_outliers(df_train, mean=1)
 
     return MembershipInferenceAttackSamples(
         synthetic_samples=synthetic_samples,
         train_samples=train_samples,
         holdout_samples=holdout_samples,
         outlier_seen_samples=outlier_samples,
-        outlier_unseen_same_samples=outlier_unseen_sample_samples,
+        outlier_unseen_same_samples=outlier_unseen_same_samples,
         outlier_unseen_diff_samples=outlier_unseen_diff_samples,
     )
 
@@ -165,8 +165,13 @@ def _create_mia_attack_dataset(
     unseen_same_target = [0] * len(unseen_same_data)
     unseen_diff_target = [0] * len(unseen_diff_data)
 
+    seen_type = ["seen"] * len(seen_data)
+    unseen_same_type = ["unseen_same"] * len(unseen_same_data)
+    unseen_diff_type = ["unseen_diff"] * len(unseen_diff_data)
+
     df["tensors"] = seen_data + unseen_same_data + unseen_diff_data
     df["target"] = seen_target + unseen_same_target + unseen_diff_target
+    df["type"] = seen_type + unseen_same_type + unseen_diff_type
     df = df.sample(frac=1).reset_index(drop=True)
 
     return df
