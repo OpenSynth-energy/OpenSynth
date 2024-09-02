@@ -1,4 +1,4 @@
-name: Deploy Package
+name: Check Licences
 on: [push]
 env:
   PYTHONPATH: .

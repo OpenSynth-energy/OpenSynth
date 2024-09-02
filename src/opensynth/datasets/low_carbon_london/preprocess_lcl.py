@@ -206,7 +206,9 @@ def get_mean_and_std(df: pd.DataFrame) -> Tuple[float, float]:
     return mean, std
 
 
-def create_outliers(df: pd.DataFrame, mean: float) -> pd.DataFrame:
+def create_outliers(
+    df: pd.DataFrame, mean: float, mean_factor: int = 20
+) -> pd.DataFrame:
     """
     Function to generate outliers based on gaussian and gamma distribution.
     Noise is generated based on a mean of 20 times population mean
@@ -224,7 +226,7 @@ def create_outliers(df: pd.DataFrame, mean: float) -> pd.DataFrame:
         noise_type=NoiseType.GAUSSIAN,
         mean=mean,
         scale=1.0,
-        mean_factor=20,
+        mean_factor=mean_factor,
         size=(50, 48),
     )
 
@@ -232,10 +234,13 @@ def create_outliers(df: pd.DataFrame, mean: float) -> pd.DataFrame:
         noise_type=NoiseType.GAMMA,
         mean=mean,
         scale=1.0,
-        mean_factor=20,
+        mean_factor=mean_factor,
         size=(50, 48),
     )
-    logger.info("🎲 Generating outliers")
+    logger.info(
+        "🎲 Generating unseen outliers with mean:"
+        f"{mean:.4f} and mean_factor: {mean_factor:.4f}"
+    )
     df_gaussian_noise = gaussian_generator.inject_noise(df)
     df_gamma_noise = gamma_generator.inject_noise(df)
 
