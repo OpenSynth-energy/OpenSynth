@@ -1,3 +1,6 @@
+# Copyright Contributors to the Opensynth-energy Project.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule
