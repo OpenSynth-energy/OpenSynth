@@ -8,7 +8,6 @@ opensynth-energy = {editable = true, path = "."}
 wget = "*"
 pandas = "*"
 tqdm = "*"
-numpy = "*"
 pytorch-lightning = "*"
 scikit-learn = "*"
 matplotlib = "*"
@@ -16,6 +15,7 @@ opacus = "*"
 torch = "*"
 seaborn = ">=0.13.2"
 torchmetrics = "*"
+numpy = "<=2.0.0"
 
 [dev-packages]
 pytest = "*"
