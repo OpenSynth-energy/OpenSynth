@@ -4,7 +4,7 @@ import typer
 from rich.logging import RichHandler
 from typing_extensions import Annotated
 
-from src.datasets.low_carbon_london import get_data
+from src.opensynth.datasets.low_carbon_london import get_data
 
 logging.basicConfig(
     level=logging.INFO,
