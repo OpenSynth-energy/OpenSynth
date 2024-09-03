@@ -5,7 +5,10 @@ import logging
 from pathlib import Path
 
 from opensynth.datasets import datasets_utils
-from opensynth.datasets import low_carbon_london as lcl
+from opensynth.datasets.low_carbon_london import (
+    preprocess_lcl,
+    split_households,
+)
 
 LCL_URL = "https://data.london.gov.uk/download/smartmeter-energy-use-data-in-london-households/3527bf39-d93e-4071-8451-df2ade1ea4f2/LCL-FullData.zip"  # noqa
 FILE_NAME = Path("data/raw/lcl_full_data.zip")  # noqa
@@ -41,6 +44,6 @@ def get_lcl_data(download: bool, split: bool, preprocess: bool):
     if download:
         datasets_utils.download_data(LCL_URL, FILE_NAME)
     if split:
-        lcl.split_households.split_lcl_data(CSV_FILE_NAME, 2000)
+        split_households.split_lcl_data(CSV_FILE_NAME, 2000)
     if preprocess:
-        lcl.preprocess_lcl.preprocess_lcl_data()
+        preprocess_lcl.preprocess_lcl_data()

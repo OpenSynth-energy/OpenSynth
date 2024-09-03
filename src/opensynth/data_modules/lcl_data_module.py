@@ -3,6 +3,7 @@
 
 import ast
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -25,18 +26,21 @@ class LCLData(Dataset):
         data_path: Path,
         stats_path: Path,
         n_samples: int,
+        outlier_path: Optional[Path] = None,
     ):
         """
         Args:
             data_path (Path): Data path
-            stats_path (Path): Stats path. Note when loading
-            evaluation dataset, the stats path point to the
-            stats of training data, rather than evaluation data
-            to avoid data leakage!
+            stats_path (Path): Stats path. Note when loading evaluation
+            dataset, the stats path point to the stats of training data,
+            rather than evaluation data to avoid data leakage!
             n_samples (int): Number of samples to load
+            outlier_path (Path, optional): Path to outlier data.
+            Defaults to None.
         """
-        self.df = pd.read_csv(f"{data_path}/lcl_data.csv")
-        self.df_stats = pd.read_csv(f"{stats_path}/mean_std.csv")
+        self.df = pd.read_csv(data_path)
+        self.df_stats = pd.read_csv(stats_path)
+        self.outlier = True if outlier_path else False
 
         # Parse stats
         self.feature_mean = self.df_stats["mean"].values[0]
@@ -48,6 +52,15 @@ class LCLData(Dataset):
             self.n_samples, random_state=RANDOM_STATE
         ).reset_index(drop=True)
 
+        # Combine with outliers:
+        if self.outlier:
+            self.df_outliers = pd.read_csv(outlier_path)
+            self.df = pd.concat([self.df, self.df_outliers])
+            self.df = self.df.sample(
+                frac=1, random_state=RANDOM_STATE
+            ).reset_index(drop=True)
+
+        # Parse columns
         self.kwh = self.df["kwh"].apply(ast.literal_eval)
         self.kwh = torch.from_numpy(np.array(self.kwh.tolist())).float()
         self.month = self.df["month"]
@@ -99,27 +112,48 @@ class LCLDataModule(pl.LightningDataModule):
         stats_path: Path,
         batch_size: int,
         n_samples: int,
+        outlier_path: Optional[Path] = None,
     ):
         super().__init__()
         self.data_path = data_path
         self.stats_path = stats_path
         self.batch_size = batch_size
         self.n_samples = n_samples
+        self.outlier_path = outlier_path
+        self.outlier = True if outlier_path else False
 
     def prepare_data(self):
         pass
 
     def setup(self, stage=""):
+
         self.dataset = LCLData(
             data_path=self.data_path,
             stats_path=self.stats_path,
             n_samples=self.n_samples,
+            outlier_path=self.outlier_path,
         )
+
+        if self.outlier:
+            self.outlier_dataset = LCLData(
+                data_path=self.outlier_path,
+                stats_path=self.stats_path,
+                n_samples=100,  # Outlier size = 100
+            )
 
     def train_dataloader(self):
         return DataLoader(
             self.dataset,
             self.batch_size,
+            drop_last=True,
+            shuffle=False,
+            generator=g,
+        )
+
+    def outlier_dataloader(self):
+        return DataLoader(
+            self.outlier_dataset,
+            100,
             drop_last=True,
             shuffle=False,
             generator=g,
