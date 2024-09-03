@@ -6,7 +6,7 @@ from setuptools import find_packages, setup
 # allow setup.py to be run from any path
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
-VERSION = "v0.0.4b"
+VERSION = "v0.0.4"
 
 
 REPO_ROOT = pathlib.Path(__file__).parent
