@@ -25,7 +25,8 @@ install_requires = (
     "pytorch-lightning>=2.3.3",
     "matplotlib>=3.9.1",
     "opacus>=1.4.1",
-    "seaborn>=0.13.2" "torchmetrics>==1.4.1",
+    "seaborn>=0.13.2",
+    "torchmetrics>==1.4.1",
 )
 
 setup(
