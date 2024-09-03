@@ -6,7 +6,7 @@ from setuptools import find_packages, setup
 # allow setup.py to be run from any path
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
-VERSION = "v0.0.2"
+VERSION = "v0.0.3"
 
 
 REPO_ROOT = pathlib.Path(__file__).parent
@@ -25,6 +25,8 @@ install_requires = (
     "pytorch-lightning>=2.3.3",
     "matplotlib>=3.9.1",
     "opacus>=1.4.1",
+    "seaborn>=0.13.2",
+    "torchmetrics>=1.4.1",
 )
 
 setup(
