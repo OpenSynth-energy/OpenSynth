@@ -6,7 +6,7 @@ from setuptools import find_packages, setup
 # allow setup.py to be run from any path
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
-VERSION = "v0.0.4a"
+VERSION = "v0.0.4b"
 
 
 REPO_ROOT = pathlib.Path(__file__).parent
@@ -17,16 +17,16 @@ with open(REPO_ROOT / "README.md", encoding="utf-8") as f:
 
 install_requires = (
     "wget>=3.2",
-    "pandas>=2.2.2",
     "tqdm>=4.66.4",
     "numpy<=2.0.0",
     "torch>=2.3.1",
-    "scikit-learn>=1.5.1",
+    "scikit-learn>=1.3.2",
     "pytorch-lightning>=2.3.3",
-    "matplotlib>=3.9.1",
+    "matplotlib>3.6.1",
     "opacus>=1.4.1",
     "seaborn>=0.13.2",
     "torchmetrics>=1.4.1",
+    "pandas>=1.2",
 )
 
 setup(

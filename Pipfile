@@ -6,16 +6,16 @@ name = "pypi"
 [packages]
 opensynth-energy = {editable = true, path = "."}
 wget = "*"
-pandas = "*"
 tqdm = "*"
 pytorch-lightning = "*"
 scikit-learn = "*"
-matplotlib = "*"
 opacus = "*"
 torch = "*"
 seaborn = ">=0.13.2"
 torchmetrics = "*"
 numpy = "<=2.0.0"
+pandas = "<2.2.2"
+matplotlib = "*"
 
 [dev-packages]
 pytest = "*"
