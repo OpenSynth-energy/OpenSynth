@@ -501,11 +501,11 @@
         },
         "lightning-utilities": {
             "hashes": [
-                "sha256:79fc27ef8ec8b8d55a537920f2c7610270c0c9e037fa6efc78f1aa34ec8cdf04",
-                "sha256:ecd9953c316cbaf56ad820fbe7bd062187b9973c4a23d47b076cd59dc080a310"
+                "sha256:7e8458a9f0bfb51ffe6c5ab3957aa37b2792fe8281dd9f1b66aa513a558ec4ce",
+                "sha256:84eebbc700edbfaa6c005458fc911a7fe7f99f02970b00cb322b4d2767deba98"
             ],
             "markers": "python_version >= '3.8'",
-            "version": "==0.11.6"
+            "version": "==0.11.7"
         },
         "markupsafe": {
             "hashes": [
@@ -1110,11 +1110,11 @@
         },
         "setuptools": {
             "hashes": [
-                "sha256:0274581a0037b638b9fc1c6883cc71c0210865aaa76073f7882376b641b84e8f",
-                "sha256:a85e96b8be2b906f3e3e789adec6a9323abf79758ecfa3065bd740d81158b11e"
+                "sha256:bea195a800f510ba3a2bc65645c88b7e016fe36709fefc58a880c4ae8a0138d7",
+                "sha256:cee604bd76cc092355a4e43ec17aee5369095974f41f088676724dc6bc2c9ef8"
             ],
             "markers": "python_version >= '3.8'",
-            "version": "==74.0.0"
+            "version": "==74.1.0"
         },
         "six": {
             "hashes": [
@@ -2650,11 +2650,11 @@
         },
         "setuptools": {
             "hashes": [
-                "sha256:0274581a0037b638b9fc1c6883cc71c0210865aaa76073f7882376b641b84e8f",
-                "sha256:a85e96b8be2b906f3e3e789adec6a9323abf79758ecfa3065bd740d81158b11e"
+                "sha256:bea195a800f510ba3a2bc65645c88b7e016fe36709fefc58a880c4ae8a0138d7",
+                "sha256:cee604bd76cc092355a4e43ec17aee5369095974f41f088676724dc6bc2c9ef8"
             ],
             "markers": "python_version >= '3.8'",
-            "version": "==74.0.0"
+            "version": "==74.1.0"
         },
         "shellingham": {
             "hashes": [
