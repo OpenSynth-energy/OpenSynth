@@ -8,6 +8,7 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 VERSION = "v0.0.2"
 
+
 REPO_ROOT = pathlib.Path(__file__).parent
 
 # Fetch the long description from the readme
