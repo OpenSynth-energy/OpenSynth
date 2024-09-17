@@ -3,7 +3,7 @@
 
 import ast
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,11 @@ from torch.utils.data import DataLoader, Dataset
 RANDOM_STATE = 0
 g = torch.Generator()
 g.manual_seed(RANDOM_STATE)
+
+
+class TrainingData(TypedDict):
+    kwh: torch.tensor
+    features: dict[str, torch.tensor]
 
 
 class LCLData(Dataset):
@@ -95,10 +100,11 @@ class LCLData(Dataset):
 
     def __getitem__(self, idx):
         standardised_kwh = self.standardise(self.kwh[idx])
-        mth = self.month[idx]
-        dow = self.dayofweek[idx]
-
-        return standardised_kwh, mth, dow
+        features: dict[str, torch.tensor] = {
+            "month": self.month[idx],
+            "dayofweek": self.dayofweek[idx],
+        }
+        return TrainingData(kwh=standardised_kwh, features=features)
 
 
 class LCLDataModule(pl.LightningDataModule):
