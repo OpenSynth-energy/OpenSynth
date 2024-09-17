@@ -358,7 +358,25 @@ class FaradayModel:
             logger.info(f"⏳ Batch {batch_num} completed")
 
         self.feature_range = self.get_feature_range(features)
+        self.feature_list = list(features.keys())
         logger.info("🎉 GMM Training Completed")
+
+    def create_mask(self, gmm_labels, range_dict):
+        label_mask = None  # Initialize mask
+        for key, bounds in range_dict.items():
+            min_value = bounds["min"]
+            max_value = bounds["max"]
+            # Dynamically fetch the respective labels
+            gmm_value = gmm_labels.get(key)
+            # Create the mask for this label
+            current_mask = (gmm_value >= min_value) & (gmm_value <= max_value)
+            # Combine the masks with `&` (AND operation)
+            label_mask = (
+                current_mask
+                if label_mask is None
+                else (label_mask & current_mask)
+            )
+        return label_mask
 
     def sample_gmm(
         self, n_samples: int
@@ -374,27 +392,28 @@ class FaradayModel:
               Decoder output (KWH), month label, dow label
         """
         gmm_samples = self.gmm.sample(n_samples)[0]
+
+        # Parse labels and profiles
         gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
-        gmm_mth = np.round(gmm_samples[:, -2], decimals=0).astype(int)
-        gmm_dow = np.round(gmm_samples[:, -1], decimals=0).astype(int)
+        gmm_labels: dict[str, torch.tensor] = {}
+        for i, feature in enumerate(self.feature_list):
+            index = -(len(self.feature_list) - i)  #
+            gmm_labels[feature] = np.round(
+                gmm_samples[:, index], decimals=0
+            ).astype(int)
 
         # Filter invalid (out of distribution) samples
-        label_mask = (
-            (gmm_mth >= self.feature_range["month"]["min"])
-            & (gmm_mth <= self.feature_range["month"]["max"])
-            & (gmm_dow >= self.feature_range["dayofweek"]["min"])
-            & (gmm_dow <= self.feature_range["dayofweek"]["max"])
-        )
-
+        label_mask = self.create_mask(gmm_labels, self.feature_range)
         gmm_kwh = gmm_kwh[label_mask]
-        gmm_mth = gmm_mth[label_mask]
-        gmm_dow = gmm_dow[label_mask]
+        for features in self.feature_range:
+            gmm_labels[features] = torch.from_numpy(
+                gmm_labels[features][label_mask]
+            )
 
         latent_tensor = torch.from_numpy(gmm_kwh)
-        mth_tensor = torch.from_numpy(gmm_mth).reshape(len(latent_tensor), 1)
-        dow_tensor = torch.from_numpy(gmm_dow).reshape(len(latent_tensor), 1)
-        decoder_input = torch.cat(
-            [latent_tensor, mth_tensor, dow_tensor], dim=1
+        decoder_input = self.vae_module.reshape_data(
+            latent_tensor, gmm_labels
         ).float()
         decoder_output = self.vae_module.decode(decoder_input)
-        return decoder_output, mth_tensor, dow_tensor
+        outputs = TrainingData(kwh=decoder_output, features=gmm_labels)
+        return outputs
