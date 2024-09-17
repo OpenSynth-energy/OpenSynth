@@ -552,11 +552,12 @@ class FaradayModel:
         # Assuming that batches are random, than this should
         # be representative.
         self.feature_range = self.get_feature_range(features)
+        self.feature_list = list(features.keys())
         logger.info("🎉 GMM Training Completed")
 
         self.gmm_module = gmm_module
 
-    def sample_gmm(self, gmm_module, n_samples: int) -> TrainingData:
+    def sample_gmm(self, n_samples: int) -> TrainingData:
         """
         Samples latent codes from GMM and decode with decoder.
 
