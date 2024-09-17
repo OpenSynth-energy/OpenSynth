@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import numpy as np
@@ -15,17 +14,10 @@ from sklearn.mixture import GaussianMixture
 from torch.optim import lr_scheduler
 from tqdm import tqdm
 
-from opensynth.data_modules.lcl_data_module import LCLDataModule
+from opensynth.data_modules.lcl_data_module import LCLDataModule, TrainingData
 from opensynth.models.faraday.losses import calculate_training_loss
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TrainingData:
-    kwh: torch.tensor
-    month: torch.tensor
-    dow: torch.tensor
 
 
 class Encoder(nn.Module):
@@ -215,25 +207,33 @@ class FaradayVAE(pl.LightningModule):
             )
             return [optim], [lr_schedule]
 
+    def reshape_data(self, kwh_tensor, features: dict[str, torch.tensor]):
+        reshaped_batch = torch.cat([kwh_tensor], dim=1)
+        for feature in features:
+            feature_tensor = features[feature].reshape(len(kwh_tensor), 1)
+            reshaped_batch = torch.cat([reshaped_batch, feature_tensor], dim=1)
+        return reshaped_batch
+
     def forward(self, input_data: TrainingData):
-        kwh = input_data.kwh
-        month = input_data.month.reshape(len(kwh), 1)
-        dow = input_data.dow.reshape(len(kwh), 1)
 
-        encoder_inputs = torch.cat([kwh, month, dow], dim=1)
+        encoder_inputs = self.reshape_data(
+            input_data["kwh"], input_data["features"]
+        )
         encoder_outputs = self.encode(encoder_inputs)
-        decoder_inputs = torch.cat([encoder_outputs, month, dow], dim=1)
-        decoder_outputs = self.decode(decoder_inputs)
 
-        return decoder_outputs
+        decoder_outputs = self.reshape_data(
+            encoder_outputs, input_data["features"]
+        )
+        dec_outputs = self.decode(decoder_outputs)
+        return dec_outputs
 
-    def training_step(self, batch):
-        batch_data = TrainingData(kwh=batch[0], month=batch[1], dow=batch[2])
-        vae_outputs = self.forward(batch_data)
+    def training_step(self, batch: TrainingData):
+
+        vae_outputs = self.forward(batch)
         total_loss, mmd_loss, mse_loss, quantile_loss = (
             calculate_training_loss(
                 x_hat=vae_outputs,
-                x=batch_data.kwh,
+                x=batch["kwh"],
                 lower_quantile=self.lower_quantile,
                 upper_quantile=self.upper_quantile,
                 mse_weight=self.mse_weight,
