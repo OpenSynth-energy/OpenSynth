@@ -329,6 +329,15 @@ class FaradayModel:
             tol=tol,
         )
 
+    def get_feature_range(self, features: dict[str, torch.tensor]):
+        feature_range: dict[str, dict[str, int]] = {}
+        for feature in features:
+            feature_range[feature] = {
+                "min": features[feature].min().item(),
+                "max": features[feature].max().item(),
+            }
+        return feature_range
+
     def train_gmm(self, dm: LCLDataModule):
         """
         Train Gaussian Mixture Module
@@ -338,24 +347,17 @@ class FaradayModel:
         """
         dl = dm.train_dataloader()
         for batch_num, batch_data in tqdm(enumerate(dl)):
-            kwh = batch_data[0]
-            mth = batch_data[1].reshape(len(kwh), 1)
-            dow = batch_data[2].reshape(len(kwh), 1)
-            vae_input = torch.cat([kwh, mth, dow], dim=1)
+            kwh = batch_data["kwh"]
+            features = batch_data["features"]
+
+            vae_input = self.vae_module.reshape_data(kwh, features)
             vae_output = self.vae_module.encode(vae_input)
-            gmm_input = torch.cat([vae_output, mth, dow], dim=1)
+
+            gmm_input = self.vae_module.reshape_data(vae_output, features)
             self.gmm.fit(gmm_input.detach().numpy())
             logger.info(f"⏳ Batch {batch_num} completed")
 
-        self.max_mth = mth.max().item()
-        self.min_mth = mth.min().item()
-        self.max_dow = dow.max().item()
-        self.min_dow = dow.min().item()
-        logger.info(
-            f"Labels Min max: Max month: {self.max_mth},"
-            "Min month: {self.min_mth}"
-            ", Max dow: {self.max_dow}, Min dow: {self.min_dow}"
-        )
+        self.feature_range = self.get_feature_range(features)
         logger.info("🎉 GMM Training Completed")
 
     def sample_gmm(
@@ -378,11 +380,12 @@ class FaradayModel:
 
         # Filter invalid (out of distribution) samples
         label_mask = (
-            (gmm_mth >= self.min_mth)
-            & (gmm_mth <= self.max_mth)
-            & (gmm_dow >= self.min_dow)
-            & (gmm_dow <= self.max_dow)
+            (gmm_mth >= self.feature_range["month"]["min"])
+            & (gmm_mth <= self.feature_range["month"]["max"])
+            & (gmm_dow >= self.feature_range["dayofweek"]["min"])
+            & (gmm_dow <= self.feature_range["dayofweek"]["max"])
         )
+
         gmm_kwh = gmm_kwh[label_mask]
         gmm_mth = gmm_mth[label_mask]
         gmm_dow = gmm_dow[label_mask]
