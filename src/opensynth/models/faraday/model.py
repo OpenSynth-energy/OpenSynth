@@ -1,6 +1,10 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
 
+# TODO: Add tests, specifically these functions:
+#  get_feature_range, create_mask, get_index
+# TODO: Test with Non-LCL data
+
 import logging
 from typing import Optional
 
@@ -504,7 +508,8 @@ class FaradayModel:
             ][mask]
         return sampled_data
 
-    def get_feature_range(self, features: dict[str, torch.tensor]):
+    @staticmethod
+    def get_feature_range(features: dict[str, torch.tensor]):
         feature_range: dict[str, dict[str, int]] = {}
         for feature in features:
             feature_range[feature] = {
@@ -512,6 +517,28 @@ class FaradayModel:
                 "max": features[feature].max().item(),
             }
         return feature_range
+
+    @staticmethod
+    def create_mask(gmm_labels, range_dict):
+        label_mask = None  # Initialize mask
+        for key, bounds in range_dict.items():
+            min_value = bounds["min"]
+            max_value = bounds["max"]
+            # Dynamically fetch the respective labels
+            gmm_value = gmm_labels.get(key)
+            # Create the mask for this label
+            current_mask = (gmm_value >= min_value) & (gmm_value <= max_value)
+            # Combine the masks with `&` (AND operation)
+            label_mask = (
+                current_mask
+                if label_mask is None
+                else (label_mask & current_mask)
+            )
+        return label_mask
+
+    @staticmethod
+    def get_index(feature_list: list[str], current_index: int):
+        return -(len(feature_list) - current_index)
 
     def train_gmm(self, dm: LCLDataModule):
         """
