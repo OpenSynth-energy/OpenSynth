@@ -504,6 +504,15 @@ class FaradayModel:
             ][mask]
         return sampled_data
 
+    def get_feature_range(self, features: dict[str, torch.tensor]):
+        feature_range: dict[str, dict[str, int]] = {}
+        for feature in features:
+            feature_range[feature] = {
+                "min": features[feature].min().item(),
+                "max": features[feature].max().item(),
+            }
+        return feature_range
+
     def train_gmm(self, dm: LCLDataModule):
         """
         Train Gaussian Mixture Module
