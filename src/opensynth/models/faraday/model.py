@@ -552,7 +552,6 @@ class FaradayModel:
         # Assuming that batches are random, than this should
         # be representative.
         self.feature_range = self.get_feature_range(features)
-        self.feature_list = list(features.keys())
         logger.info("🎉 GMM Training Completed")
 
         self.gmm_module = gmm_module
