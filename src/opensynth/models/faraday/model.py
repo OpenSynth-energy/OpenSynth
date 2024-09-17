@@ -1,6 +1,10 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
 
+# TODO: Add tests, specifically these functions:
+#  get_feature_range, create_mask, get_index
+# TODO: Test with Non-LCL data
+
 import logging
 from typing import Optional, Tuple
 
@@ -331,7 +335,8 @@ class FaradayModel:
             tol=tol,
         )
 
-    def get_feature_range(self, features: dict[str, torch.tensor]):
+    @staticmethod
+    def get_feature_range(features: dict[str, torch.tensor]):
         feature_range: dict[str, dict[str, int]] = {}
         for feature in features:
             feature_range[feature] = {
@@ -339,6 +344,28 @@ class FaradayModel:
                 "max": features[feature].max().item(),
             }
         return feature_range
+
+    @staticmethod
+    def create_mask(gmm_labels, range_dict):
+        label_mask = None  # Initialize mask
+        for key, bounds in range_dict.items():
+            min_value = bounds["min"]
+            max_value = bounds["max"]
+            # Dynamically fetch the respective labels
+            gmm_value = gmm_labels.get(key)
+            # Create the mask for this label
+            current_mask = (gmm_value >= min_value) & (gmm_value <= max_value)
+            # Combine the masks with `&` (AND operation)
+            label_mask = (
+                current_mask
+                if label_mask is None
+                else (label_mask & current_mask)
+            )
+        return label_mask
+
+    @staticmethod
+    def get_index(feature_list: list[str], current_index: int):
+        return -(len(feature_list) - current_index)
 
     def train_gmm(self, dm: LCLDataModule):
         """
@@ -371,23 +398,6 @@ class FaradayModel:
         self.feature_range = self.get_feature_range(features)
         logger.info("🎉 GMM Training Completed")
 
-    def create_mask(self, gmm_labels, range_dict):
-        label_mask = None  # Initialize mask
-        for key, bounds in range_dict.items():
-            min_value = bounds["min"]
-            max_value = bounds["max"]
-            # Dynamically fetch the respective labels
-            gmm_value = gmm_labels.get(key)
-            # Create the mask for this label
-            current_mask = (gmm_value >= min_value) & (gmm_value <= max_value)
-            # Combine the masks with `&` (AND operation)
-            label_mask = (
-                current_mask
-                if label_mask is None
-                else (label_mask & current_mask)
-            )
-        return label_mask
-
     def sample_gmm(
         self, n_samples: int
     ) -> Tuple[torch.tensor, torch.tensor, torch.tensor]:
@@ -407,7 +417,7 @@ class FaradayModel:
         gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
         gmm_labels: dict[str, torch.tensor] = {}
         for i, feature in enumerate(self.vae_module.feature_list):
-            index = -(len(self.vae_module.feature_list) - i)  #
+            index = self.get_index(self.vae_module.feature_list, i)
             gmm_labels[feature] = np.round(
                 gmm_samples[:, index], decimals=0
             ).astype(int)
