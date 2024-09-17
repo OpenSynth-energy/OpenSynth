@@ -242,6 +242,8 @@ class FaradayVAE(pl.LightningModule):
                 quantile_median_weight=self.quantile_median_weight,
             )
         )
+        # Save list of feature names
+        self.feature_list = list(batch["features"].keys())
 
         # Might be an overkill to sync_dist for all losses.
         # If this causes significant I/O bottleneck
@@ -346,6 +348,15 @@ class FaradayModel:
             dm (LCLDataModule): Training data
         """
         dl = dm.train_dataloader()
+        next_batch = next(iter(dl))
+
+        # Explicit check to make sure that data module used
+        # to train GMM has features ordered the same way as
+        # when training the VAE
+        obtained_feature_list = list(next_batch["features"].keys())
+        expected_feature_list = self.vae_module.feature_list
+        assert obtained_feature_list == expected_feature_list
+
         for batch_num, batch_data in tqdm(enumerate(dl)):
             kwh = batch_data["kwh"]
             features = batch_data["features"]
@@ -358,7 +369,6 @@ class FaradayModel:
             logger.info(f"⏳ Batch {batch_num} completed")
 
         self.feature_range = self.get_feature_range(features)
-        self.feature_list = list(features.keys())
         logger.info("🎉 GMM Training Completed")
 
     def create_mask(self, gmm_labels, range_dict):
@@ -396,8 +406,8 @@ class FaradayModel:
         # Parse labels and profiles
         gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
         gmm_labels: dict[str, torch.tensor] = {}
-        for i, feature in enumerate(self.feature_list):
-            index = -(len(self.feature_list) - i)  #
+        for i, feature in enumerate(self.vae_module.feature_list):
+            index = -(len(self.vae_module.feature_list) - i)  #
             gmm_labels[feature] = np.round(
                 gmm_samples[:, index], decimals=0
             ).astype(int)
