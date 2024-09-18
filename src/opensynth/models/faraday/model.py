@@ -506,12 +506,12 @@ class FaradayModel:
 
     @staticmethod
     def get_feature_range(
-        features: dict[str, torch.tensor]
+        features: dict[str, torch.Tensor]
     ) -> dict[str, dict[str, int]]:
         """
         Get the max and min values of numerically encoded features
         Args:
-            features (dict[str, torch.tensor]): Dictionary of
+            features (dict[str, torch.Tensor]): Dictionary of
             feature tensors
         Returns:
             dict[str, dict[str, int]]: A dictionary of
@@ -527,7 +527,7 @@ class FaradayModel:
 
     @staticmethod
     def create_mask(
-        gmm_labels: dict[str, torch.tensor],
+        gmm_labels: dict[str, torch.Tensor],
         range_dict: dict[str, dict[str, int]],
     ) -> npt.NDArray[np.bool_]:
         """
@@ -537,7 +537,7 @@ class FaradayModel:
         ranges from 0-11, there is no guarantee that GMM will not
         result in `month of year` = 100.
         Args:
-            gmm_labels (dict[str, torch.tensor]): Dictionary of features
+            gmm_labels (dict[str, torch.Tensor]): Dictionary of features
             obtained from GMM model
             range_dict (dict[str, dict[str, int]]): Dictionary of
             ranges of each label
