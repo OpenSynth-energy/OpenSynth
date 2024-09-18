@@ -211,7 +211,20 @@ class FaradayVAE(pl.LightningModule):
             )
             return [optim], [lr_schedule]
 
-    def reshape_data(self, kwh_tensor, features: dict[str, torch.tensor]):
+    @staticmethod
+    def reshape_data(
+        kwh_tensor: torch.tensor, features: dict[str, torch.tensor]
+    ) -> torch.tensor:
+        """
+        Reshape training data to turn a concatenated training tensor.
+
+        Args:
+            kwh_tensor (torch.tensor): kWh values
+            features (dict[str, torch.tensor]): Dictionary of feature tensors
+
+        Returns:
+            torch.tensor: kWh tensor concatenated with feature labels
+        """
         reshaped_batch = torch.cat([kwh_tensor], dim=1)
         for feature in features:
             feature_tensor = features[feature].reshape(len(kwh_tensor), 1)
@@ -336,7 +349,18 @@ class FaradayModel:
         )
 
     @staticmethod
-    def get_feature_range(features: dict[str, torch.tensor]):
+    def get_feature_range(
+        features: dict[str, torch.tensor]
+    ) -> dict[str, dict[str, int]]:
+        """
+        Get the max and min values of numerically encoded features
+        Args:
+            features (dict[str, torch.tensor]): Dictionary of
+            feature tensors
+        Returns:
+            dict[str, dict[str, int]]: A dictionary of
+            min and max values for each feature label
+        """
         feature_range: dict[str, dict[str, int]] = {}
         for feature in features:
             feature_range[feature] = {
@@ -346,25 +370,64 @@ class FaradayModel:
         return feature_range
 
     @staticmethod
-    def create_mask(gmm_labels, range_dict):
-        label_mask = None  # Initialize mask
-        for key, bounds in range_dict.items():
-            min_value = bounds["min"]
-            max_value = bounds["max"]
+    def create_mask(
+        gmm_labels: dict[str, torch.tensor],
+        range_dict: dict[str, dict[str, int]],
+    ) -> list[bool]:
+        """
+        Create a filter mask to make sure that GMM sampled labels are within
+        the range of accepted values. There is no guarantee that GMM will not
+        create out-of-distribution values. For example if `month of year`
+        ranges from 0-11, there is no guarantee that GMM will not
+        result in `month of year` = 100.
+        Args:
+            gmm_labels (dict[str, torch.tensor]): Dictionary of features
+            obtained from GMM model
+            range_dict (dict[str, dict[str, int]]): Dictionary of
+            ranges of each label
+        Returns:
+            list[bool]: Mask to filter out-of-distribution values
+        """
+        label_mask: list[bool] = []  # Initialize mask
+
+        for feature, bounds in range_dict.items():
+
+            # Fetch the feature range
+            min_value = bounds.get("min")
+            max_value = bounds.get("max")
+
+            if min_value is None or max_value is None:
+                raise ValueError(f"Feature {feature} have missing range")
+
             # Dynamically fetch the respective labels
-            gmm_value = gmm_labels.get(key)
+            gmm_value = gmm_labels.get(feature)
+            if gmm_value is None:
+                raise ValueError(f"Feature {feature} not found in GMM labels")
+
             # Create the mask for this label
             current_mask = (gmm_value >= min_value) & (gmm_value <= max_value)
+
             # Combine the masks with `&` (AND operation)
             label_mask = (
                 current_mask
                 if label_mask is None
                 else (label_mask & current_mask)
             )
+
         return label_mask
 
     @staticmethod
-    def get_index(feature_list: list[str], current_index: int):
+    def get_index(feature_list: list[str], current_index: int) -> int:
+        """
+        Get the index of each label
+
+        Args:
+            feature_list (list[str]): List of features
+            current_index (int): Current iter index
+
+        Returns:
+            int: Returns colum index
+        """
         return -(len(feature_list) - current_index)
 
     def train_gmm(self, dm: LCLDataModule):
@@ -395,6 +458,9 @@ class FaradayModel:
             self.gmm.fit(gmm_input.detach().numpy())
             logger.info(f"⏳ Batch {batch_num} completed")
 
+        # Record the ranges of features seen during training
+        # Assuming that batches are random, than this should
+        # be representative.
         self.feature_range = self.get_feature_range(features)
         logger.info("🎉 GMM Training Completed")
 
@@ -416,6 +482,7 @@ class FaradayModel:
         # Parse labels and profiles
         gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
         gmm_labels: dict[str, torch.tensor] = {}
+        # Abstract the labels and round numerical values to integers
         for i, feature in enumerate(self.vae_module.feature_list):
             index = self.get_index(self.vae_module.feature_list, i)
             gmm_labels[feature] = np.round(
