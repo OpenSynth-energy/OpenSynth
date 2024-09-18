@@ -1,10 +1,6 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
 
-# TODO: Add tests, specifically these functions:
-#  get_feature_range, create_mask, get_index
-# TODO: Test with Non-LCL data
-
 import logging
 from typing import Optional
 
@@ -533,7 +529,7 @@ class FaradayModel:
     def create_mask(
         gmm_labels: dict[str, torch.tensor],
         range_dict: dict[str, dict[str, int]],
-    ) -> list[bool]:
+    ) -> npt.NDArray[np.bool_]:
         """
         Create a filter mask to make sure that GMM sampled labels are within
         the range of accepted values. There is no guarantee that GMM will not
@@ -548,14 +544,13 @@ class FaradayModel:
         Returns:
             list[bool]: Mask to filter out-of-distribution values
         """
-        label_mask: list[bool] = []  # Initialize mask
+        label_mask: Optional[npt.NDArray[np.bool_]] = None  # Initialize mask
 
         for feature, bounds in range_dict.items():
 
             # Fetch the feature range
             min_value = bounds.get("min")
             max_value = bounds.get("max")
-
             if min_value is None or max_value is None:
                 raise ValueError(f"Feature {feature} have missing range")
 
@@ -565,7 +560,10 @@ class FaradayModel:
                 raise ValueError(f"Feature {feature} not found in GMM labels")
 
             # Create the mask for this label
-            current_mask = (gmm_value >= min_value) & (gmm_value <= max_value)
+            current_mask = np.logical_and(
+                gmm_value.detach().numpy() >= min_value,
+                gmm_value.detach().numpy() <= max_value,
+            )
 
             # Combine the masks with `&` (AND operation)
             label_mask = (
