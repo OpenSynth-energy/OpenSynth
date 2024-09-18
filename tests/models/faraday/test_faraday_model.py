@@ -6,15 +6,15 @@ from opensynth.models.faraday import FaradayModel, FaradayVAE
 
 
 @pytest.fixture
-def kwh_tensor() -> torch.tensor:
+def kwh_tensor() -> torch.Tensor:
     kwh = np.random.rand(100, 48)
     return torch.from_numpy(kwh).float()
 
 
 @pytest.fixture
-def feature_dict() -> dict[str, torch.tensor]:
+def feature_dict() -> dict[str, torch.Tensor]:
     feature_list = ["feature_1", "feature_2"]
-    output_dict: dict[str, torch.tensor] = {}
+    output_dict: dict[str, torch.Tensor] = {}
     for feature in feature_list:
         # numpy randint high is exclusive!
         random_tensor = np.random.randint(low=0, high=6, size=100)
@@ -51,7 +51,7 @@ def test_faraday_model_get_mask(feature_dict):
     expected_mask = feature_1_mask & feature_2_mask
 
     # Compare expected mask vs results from create_mask
-    test_dict: dict[str, torch.tensor] = {
+    test_dict: dict[str, torch.Tensor] = {
         "feature_1": torch.from_numpy(test_labels),
         "feature_2": torch.from_numpy(test_labels),
     }
@@ -61,7 +61,7 @@ def test_faraday_model_get_mask(feature_dict):
     assert (got_mask == expected_mask).all()
 
 
-def test_get_index(feature_dict: dict[str, torch.tensor]):
+def test_get_index(feature_dict: dict[str, torch.Tensor]):
     feature_list = list(feature_dict.keys())
     for feature, value in enumerate(feature_list):
         if feature == "feature_1":

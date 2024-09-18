@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -171,12 +171,12 @@ class FaradayVAE(pl.LightningModule):
         )
         self.reparametriser = ReparametrisationModule(self.latent_dim)
 
-    def encode(self, input_tensor: torch.tensor):
+    def encode(self, input_tensor: torch.Tensor):
         encoded_x = self.encoder(input_tensor)
         encoded_x, _, _ = self.reparametriser(encoded_x)
         return encoded_x
 
-    def decode(self, latent_tensor: torch.tensor):
+    def decode(self, latent_tensor: torch.Tensor):
         return self.decoder(latent_tensor)
 
     def configure_optimizers(self):
@@ -210,17 +210,17 @@ class FaradayVAE(pl.LightningModule):
 
     @staticmethod
     def reshape_data(
-        kwh_tensor: torch.tensor, features: dict[str, torch.tensor]
-    ) -> torch.tensor:
+        kwh_tensor: torch.Tensor, features: dict[str, torch.Tensor]
+    ) -> torch.Tensor:
         """
         Reshape training data to turn a concatenated training tensor.
 
         Args:
-            kwh_tensor (torch.tensor): kWh values
-            features (dict[str, torch.tensor]): Dictionary of feature tensors
+            kwh_tensor (torch.Tensor): kWh values
+            features (dict[str, torch.Tensor]): Dictionary of feature tensors
 
         Returns:
-            torch.tensor: kWh tensor concatenated with feature labels
+            torch.Tensor: kWh tensor concatenated with feature labels
         """
         reshaped_batch = torch.cat([kwh_tensor], dim=1)
         for feature in features:
@@ -347,12 +347,12 @@ class FaradayModel:
 
     @staticmethod
     def get_feature_range(
-        features: dict[str, torch.tensor]
+        features: dict[str, torch.Tensor]
     ) -> dict[str, dict[str, int]]:
         """
         Get the max and min values of numerically encoded features
         Args:
-            features (dict[str, torch.tensor]): Dictionary of
+            features (dict[str, torch.Tensor]): Dictionary of
             feature tensors
         Returns:
             dict[str, dict[str, int]]: A dictionary of
@@ -368,7 +368,7 @@ class FaradayModel:
 
     @staticmethod
     def create_mask(
-        gmm_labels: dict[str, torch.tensor],
+        gmm_labels: dict[str, torch.Tensor],
         range_dict: dict[str, dict[str, int]],
     ) -> npt.NDArray[np.bool_]:
         """
@@ -378,7 +378,7 @@ class FaradayModel:
         ranges from 0-11, there is no guarantee that GMM will not
         result in `month of year` = 100.
         Args:
-            gmm_labels (dict[str, torch.tensor]): Dictionary of features
+            gmm_labels (dict[str, torch.Tensor]): Dictionary of features
             obtained from GMM model
             range_dict (dict[str, dict[str, int]]): Dictionary of
             ranges of each label
@@ -463,9 +463,7 @@ class FaradayModel:
         self.feature_range = self.get_feature_range(features)
         logger.info("🎉 GMM Training Completed")
 
-    def sample_gmm(
-        self, n_samples: int
-    ) -> Tuple[torch.tensor, torch.tensor, torch.tensor]:
+    def sample_gmm(self, n_samples: int) -> TrainingData:
         """
         Samples latent codes from GMM and decode with decoder.
 
@@ -473,14 +471,13 @@ class FaradayModel:
             n_samples (int): Number of samples to generate.
 
         Returns:
-            Tuple[torch.tensor, torch.tensor, torch.tensor]:
-              Decoder output (KWH), month label, dow label
+            TrainingData: Decoder output (KWH), month label, dow label
         """
         gmm_samples = self.gmm.sample(n_samples)[0]
 
         # Parse labels and profiles
         gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
-        gmm_labels: dict[str, torch.tensor] = {}
+        gmm_labels: dict[str, torch.Tensor] = {}
         # Abstract the labels and round numerical values to integers
         for i, feature in enumerate(self.vae_module.feature_list):
             index = self.get_index(self.vae_module.feature_list, i)

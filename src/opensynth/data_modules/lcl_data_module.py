@@ -17,8 +17,8 @@ g.manual_seed(RANDOM_STATE)
 
 
 class TrainingData(TypedDict):
-    kwh: torch.tensor
-    features: dict[str, torch.tensor]
+    kwh: torch.Tensor
+    features: dict[str, torch.Tensor]
 
 
 class LCLData(Dataset):
@@ -71,27 +71,27 @@ class LCLData(Dataset):
         self.month = self.df["month"]
         self.dayofweek = self.df["dayofweek"]
 
-    def standardise(self, x: torch.tensor) -> torch.tensor:
+    def standardise(self, x: torch.Tensor) -> torch.Tensor:
         """
         Standardise kWh with mean 0 and std 1
 
         Args:
-            x (torch.tensor): Input kWh
+            x (torch.Tensor): Input kWh
 
         Returns:
-            torch.tensor: Standardised kWh
+            torch.Tensor: Standardised kWh
         """
         return (x - self.feature_mean) / self.feature_std
 
-    def reconstruct(self, xhat: torch.tensor) -> torch.tensor:
+    def reconstruct(self, xhat: torch.Tensor) -> torch.Tensor:
         """
         Reconstruct kWh from standardised values
 
         Args:
-            xhat (torch.tensor): standardised kWh
+            xhat (torch.Tensor): standardised kWh
 
         Returns:
-            torch.tensor: reconstructed kWh
+            torch.Tensor: reconstructed kWh
         """
         return (xhat * self.feature_std) + self.feature_mean
 
@@ -100,7 +100,7 @@ class LCLData(Dataset):
 
     def __getitem__(self, idx):
         standardised_kwh = self.standardise(self.kwh[idx])
-        features: dict[str, torch.tensor] = {
+        features: dict[str, torch.Tensor] = {
             "month": self.month[idx],
             "dayofweek": self.dayofweek[idx],
         }
@@ -165,5 +165,5 @@ class LCLDataModule(pl.LightningDataModule):
             generator=g,
         )
 
-    def reconstruct_kwh(self, xhat: torch.tensor) -> torch.tensor:
+    def reconstruct_kwh(self, xhat: torch.Tensor) -> torch.Tensor:
         return self.dataset.reconstruct(xhat)
