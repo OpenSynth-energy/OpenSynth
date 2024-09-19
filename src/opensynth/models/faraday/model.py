@@ -326,6 +326,8 @@ class FaradayModel:
         - Faraday Model only supports integer-encoded labels.
         - If you wish to have float labels, you should subclass FaradayModel
         and implement your own `sample_gmm` method.
+        - Faraday Model also expects data module to return a
+        TrainingData object.
 
         Args:
             vae_module (FaradayVAE): Trained VAE component

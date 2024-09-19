@@ -23,7 +23,13 @@ class TrainingData(TypedDict):
 
 class LCLData(Dataset):
     """
-    Low CarbonLondon Dataset
+    Low CarbonLondon Dataset. The dataset should return
+    TrainingData(TypedDict) which contains:
+    - kwh: kWh data
+    - features: Dictionary of features
+
+    To use Faraday on custom datasets, your data module
+    should also return data in the same format.
     """
 
     def __init__(
