@@ -451,7 +451,8 @@ class FaradayModel:
                 else (label_mask & current_mask)
             )
 
-        return label_mask
+        label_mask = np.squeeze(label_mask)
+        return np.squeeze(label_mask)
 
     @staticmethod
     def get_index(feature_list: list[str], current_index: int) -> int:

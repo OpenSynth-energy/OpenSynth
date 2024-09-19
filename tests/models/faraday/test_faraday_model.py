@@ -38,30 +38,6 @@ def test_faraday_model_feature_range(feature_dict):
     }
 
 
-def test_faraday_model_get_mask(feature_dict):
-
-    test_labels = np.array([100] * 100)
-
-    # Calculate the mask explicitly
-    feature_1_mask = (
-        test_labels <= feature_dict["feature_1"].detach().numpy().max()
-    )
-    feature_2_mask = (
-        test_labels <= feature_dict["feature_2"].detach().numpy().max()
-    )
-    expected_mask = feature_1_mask & feature_2_mask
-
-    # Compare expected mask vs results from create_mask
-    test_dict: dict[str, torch.Tensor] = {
-        "feature_1": torch.from_numpy(test_labels),
-        "feature_2": torch.from_numpy(test_labels),
-    }
-    test_range = FaradayModel.get_feature_range(feature_dict)
-    got_mask = FaradayModel.create_mask(test_dict, test_range)
-
-    assert (got_mask == expected_mask).all()
-
-
 def test_get_index(feature_dict):
     feature_list = list(feature_dict.keys())
     for feature_index, feature_value in enumerate(feature_list):
@@ -122,10 +98,32 @@ class TestFaradayModelParseLabelsAndProfiles:
             assert isinstance(self.parsed_features[feature], torch.Tensor)
 
 
+def test_faraday_model_get_mask(feature_dict):
+
+    test_labels = np.array([100] * 100)
+
+    # Calculate the mask explicitly
+    feature_1_mask = (
+        test_labels <= feature_dict["feature_1"].detach().numpy().max()
+    )
+    feature_2_mask = (
+        test_labels <= feature_dict["feature_2"].detach().numpy().max()
+    )
+    expected_mask = feature_1_mask & feature_2_mask
+
+    # Compare expected mask vs results from create_mask
+    test_dict: dict[str, torch.Tensor] = {
+        "feature_1": torch.from_numpy(test_labels),
+        "feature_2": torch.from_numpy(test_labels),
+    }
+    test_range = FaradayModel.get_feature_range(feature_dict)
+    got_mask = FaradayModel.create_mask(test_dict, test_range)
+    assert len(got_mask) == len(test_labels)
+    assert (got_mask == expected_mask).all()
+
+
 def test_filter_mask():
-    # Given a tensor of [1,2,3,4,5]
-    # And a mask of [True, False, True, False, True]
-    # We should expect [1,3,5]
+
     mask = np.array([True, False, True, False, True])
     test_tensor = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
     test_samples = TrainingData(
