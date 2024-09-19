@@ -402,7 +402,7 @@ class FaradayModel:
                 raise ValueError(f"Feature {feature} have missing range")
 
             # Dynamically fetch the respective labels
-            gmm_value = gmm_labels.get(feature)
+            gmm_value: torch.Tensor = gmm_labels.get(feature)
             if gmm_value is None:
                 raise ValueError(f"Feature {feature} not found in GMM labels")
 
@@ -481,7 +481,7 @@ class FaradayModel:
         Returns:
             TrainingData: Decoder output (KWH), month label, dow label
         """
-        gmm_samples = self.gmm.sample(n_samples)[0]
+        gmm_samples = torch.from_numpy(self.gmm.sample(n_samples)[0])
 
         # Parse labels and profiles
         gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
@@ -492,21 +492,18 @@ class FaradayModel:
         # it correctly, and is handled by `get_index` method.
         for i, feature in enumerate(self.vae_module.feature_list):
             index = self.get_index(self.vae_module.feature_list, i)
-            gmm_labels[feature] = np.round(
+            gmm_labels[feature] = torch.round(
                 gmm_samples[:, index], decimals=0
-            ).astype(int)
+            ).int()
 
         # Filter invalid (out of distribution) samples
         label_mask = self.create_mask(gmm_labels, self.feature_range)
         gmm_kwh = gmm_kwh[label_mask]
         for features in self.feature_range:
-            gmm_labels[features] = torch.from_numpy(
-                gmm_labels[features][label_mask]
-            )
+            gmm_labels[features] = gmm_labels[features][label_mask]
 
-        latent_tensor = torch.from_numpy(gmm_kwh)
         decoder_input = self.vae_module.reshape_data(
-            latent_tensor, gmm_labels
+            gmm_kwh, gmm_labels
         ).float()
         decoder_output = self.vae_module.decode(decoder_input)
         outputs = TrainingData(kwh=decoder_output, features=gmm_labels)
