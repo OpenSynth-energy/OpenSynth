@@ -403,10 +403,12 @@ class FaradayModel:
             Tuple[torch.tensor, torch.tensor, torch.tensor]:
               Decoder output (KWH), month label, dow label
         """
-        gmm_samples = self.gmm.sample(n_samples)[0].detach().numpy()
-        gmm_kwh = gmm_samples[: self.vae_module.latent_dim]
-        gmm_mth = np.round(gmm_samples[-2], decimals=0).astype(int)
-        gmm_dow = np.round(gmm_samples[-1], decimals=0).astype(int)
+        gmm_samples = (
+            self.gmm.sample(n_samples)[0].detach().numpy().reshape(1, -1)
+        )
+        gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
+        gmm_mth = np.round(gmm_samples[:, -2], decimals=0).astype(int)
+        gmm_dow = np.round(gmm_samples[:, -1], decimals=0).astype(int)
 
         # Filter invalid (out of distribution) samples
         label_mask = (
