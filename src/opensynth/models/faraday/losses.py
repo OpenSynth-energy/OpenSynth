@@ -7,16 +7,16 @@ import torch
 import torch.nn.functional as F
 
 
-def MMDLoss(y: torch.tensor, x: torch.tensor) -> torch.tensor:
+def MMDLoss(y: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     """
     Calculate MMD Loss
 
     Args:
-        y (torch.tensor): Tensor Y
-        x (torch.tensor): Tensor X
+        y (torch.Tensor): Tensor Y
+        x (torch.Tensor): Tensor X
 
     Returns:
-        torch.tensor: MMD Distances between Tensor Y and X
+        torch.Tensor: MMD Distances between Tensor Y and X
     """
 
     xx, yy, zz = torch.mm(x, x.t()), torch.mm(y, y.t()), torch.mm(x, y.t())
@@ -46,18 +46,18 @@ def MMDLoss(y: torch.tensor, x: torch.tensor) -> torch.tensor:
 
 
 def quantile_loss(
-    y_pred: torch.tensor, y_real: torch.tensor, quantile: float
-) -> torch.tensor:
+    y_pred: torch.Tensor, y_real: torch.Tensor, quantile: float
+) -> torch.Tensor:
     """
     Calculate quantile loss
     #TODO: Test this function
     Args:
-        y_pred (torch.tensor): Predicted quantile
-        y_real (torch.tensor): Actual quantile
+        y_pred (torch.Tensor): Predicted quantile
+        y_real (torch.Tensor): Actual quantile
         quantile (float): Quantile value
 
     Returns:
-        torch.tensor: Quantile loss
+        torch.Tensor: Quantile loss
     """
     return torch.mean(
         torch.max(
@@ -67,15 +67,15 @@ def quantile_loss(
 
 
 def calculate_training_loss(
-    x_hat: torch.tensor,
-    x: torch.tensor,
+    x_hat: torch.Tensor,
+    x: torch.Tensor,
     mse_weight: float,
     quantile_upper_weight: float,
     quantile_lower_weight: float,
     quantile_median_weight: float,
     lower_quantile: float,
     upper_quantile: float,
-) -> Tuple[torch.tensor, torch.tensor, torch.tensor, torch.tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Calculate training losses for Faraday.
     Losses are a combined total of:
@@ -85,8 +85,8 @@ def calculate_training_loss(
     4) lower quantile loss * lower quantile weight
     5) median quantile loss * median quantile weight
     Args:
-        x_hat (torch.tensor): Generated tensor
-        x (torch.tensor): Real tensor
+        x_hat (torch.Tensor): Generated tensor
+        x (torch.Tensor): Real tensor
         mse_weight (float): MSE Weight
         quantile_upper_weight (float): Upper quantile weight
         quantile_lower_weight (float): Lower quantile weight
@@ -95,7 +95,7 @@ def calculate_training_loss(
         upper_quantile (float): Upper quantile value
 
     Returns:
-        Tuple[torch.tensor, torch.tensor, torch.tensor, torch.tensor]:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         Total loss, MMD loss, MSE loss, Quantile loss
     """
     mmd_loss = MMDLoss(x_hat, x)
