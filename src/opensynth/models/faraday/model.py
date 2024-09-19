@@ -326,31 +326,34 @@ class FaradayModel:
         kmeans_max_epochs: int = 100,
     ):
         """
-        Faraday Model. Note:
+                Faraday Model. Note:
 
-        - Faraday Model only supports integer-encoded labels.
-        - If you wish to have float labels, you should subclass FaradayModel
-        and implement your own `sample_gmm` method.
-        - Faraday Model also expects data module to return a
-        TrainingData object.
+                - Faraday Model only supports integer-encoded labels.
+                - If you wish to have float labels, you should subclass FaradayModel
+                and implement your own `sample_gmm` method.
+        <<<<<<< HEAD
+                - Faraday Model also expects data module to return a
+                TrainingData object.
+        =======
+        >>>>>>> 53fdc1a (Add comments and docstrings to explain get_index)
 
-        Args:
-            vae_module (FaradayVAE): Trained VAE component.
-            n_components (int): GMM clusters.
-            max_iter (int, optional): Max iteration for GMM. Defaults to 1000.
-            covariance_type (str, optional): scikit-learn gmm covariance types.
-                Defaults to "full".
-            tol (float, optional): Tolerance for GMM. Defaults to 1e-3.
-            is_batch_training (bool, optional): Batch training for GMM.
-                Defaults to True.
-            accelerator (str, optional): Accelerator for GMM training.
-                Defaults to "cpu".
-            devices (int, optional): Number of devices for GMM training.
-                Defaults to 1.
-            gmm_max_epochs (int, optional): Max epochs for GMM training.
-                Defaults to 1000.
-            kmeans_max_epochs (int, optional): Max epochs for KMeans training.
-                Defaults to 10.
+                Args:
+                    vae_module (FaradayVAE): Trained VAE component.
+                    n_components (int): GMM clusters.
+                    max_iter (int, optional): Max iteration for GMM. Defaults to 1000.
+                    covariance_type (str, optional): scikit-learn gmm covariance types.
+                        Defaults to "full".
+                    tol (float, optional): Tolerance for GMM. Defaults to 1e-3.
+                    is_batch_training (bool, optional): Batch training for GMM.
+                        Defaults to True.
+                    accelerator (str, optional): Accelerator for GMM training.
+                        Defaults to "cpu".
+                    devices (int, optional): Number of devices for GMM training.
+                        Defaults to 1.
+                    gmm_max_epochs (int, optional): Max epochs for GMM training.
+                        Defaults to 1000.
+                    kmeans_max_epochs (int, optional): Max epochs for KMeans training.
+                        Defaults to 10.
         """
         self.n_components = n_components
         self.max_iter = max_iter
@@ -577,7 +580,9 @@ class FaradayModel:
     @staticmethod
     def get_index(feature_list: list[str], current_index: int) -> int:
         """
-        Get the index of each label
+        Get the index of each label, so that we can store the
+        correct column as the correct label in the gmm_labels
+        dictionary which the VAE needs in order to decode.
 
         Args:
             feature_list (list[str]): List of features
