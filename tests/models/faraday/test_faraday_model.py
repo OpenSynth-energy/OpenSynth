@@ -63,10 +63,10 @@ def test_faraday_model_get_mask(feature_dict):
 
 def test_get_index(feature_dict: dict[str, torch.Tensor]):
     feature_list = list(feature_dict.keys())
-    for feature, value in enumerate(feature_list):
-        if feature == "feature_1":
-            # First feature in feature_dict should have index = 1
-            assert FaradayModel.get_index(feature_list, value) == 1
-        elif feature == "feature_2":
-            # Second feature in feature_dict should have index = 2
-            assert FaradayModel.get_index(feature_list, value) == 2
+    for feature_index, feature_value in enumerate(feature_list):
+        if feature_value == "feature_1":
+            # First feature in feature_dict should have index = -2
+            assert FaradayModel.get_index(feature_list, feature_index) == -2
+        elif feature_value == "feature_2":
+            # Second feature in feature_dict should have index = -1
+            assert FaradayModel.get_index(feature_list, feature_index) == -1
