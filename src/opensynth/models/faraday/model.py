@@ -321,7 +321,11 @@ class FaradayModel:
         tol: float = 1e-3,
     ):
         """
-        Faraday Model
+        Faraday Model. Note:
+
+        - Faraday Model only supports integer-encoded labels.
+        - If you wish to have float labels, you should subclass FaradayModel
+        and implement your own `sample_gmm` method.
 
         Args:
             vae_module (FaradayVAE): Trained VAE component
@@ -418,7 +422,9 @@ class FaradayModel:
     @staticmethod
     def get_index(feature_list: list[str], current_index: int) -> int:
         """
-        Get the index of each label
+        Get the index of each label, so that we can store the
+        correct column as the correct label in the gmm_labels
+        dictionary which the VAE needs in order to decode.
 
         Args:
             feature_list (list[str]): List of features
@@ -478,7 +484,10 @@ class FaradayModel:
         # Parse labels and profiles
         gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
         gmm_labels: dict[str, torch.Tensor] = {}
+
         # Abstract the labels and round numerical values to integers
+        # Order of features needs to be preserved so VAE can decode
+        # it correctly, and is handled by `get_index` method.
         for i, feature in enumerate(self.vae_module.feature_list):
             index = self.get_index(self.vae_module.feature_list, i)
             gmm_labels[feature] = np.round(
