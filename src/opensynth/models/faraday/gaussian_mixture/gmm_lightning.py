@@ -219,13 +219,13 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             torch.Tensor: model inputs consisting of encoded data, month,
             and day of week.
         """
-        kwh = batch[0]
-        mth = batch[1].reshape(len(kwh), 1)
-        dow = batch[2].reshape(len(kwh), 1)
-        vae_input = torch.cat([kwh, mth, dow], dim=1)
+        kwh = batch["kwh"]
+        features = batch["features"]
+        vae_input = self.vae_module.reshape_data(kwh, features)
         vae_output = self.vae_module.encode(vae_input)
+        gmm_input = self.vae_module.reshape_data(vae_output, features)
 
-        return torch.cat([vae_output, mth, dow], dim=1)
+        return gmm_input
 
 
 class GaussianMixtureInitLightningModule(pl.LightningModule):
@@ -408,13 +408,13 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
             torch.Tensor: model inputs consisting of encoded data, month,
                 and day of week.
         """
-        kwh = batch[0]
-        mth = batch[1].reshape(len(kwh), 1)
-        dow = batch[2].reshape(len(kwh), 1)
-        vae_input = torch.cat([kwh, mth, dow], dim=1)
+        kwh = batch["kwh"]
+        features = batch["features"]
+        vae_input = self.vae_module.reshape_data(kwh, features)
         vae_output = self.vae_module.encode(vae_input)
+        gmm_input = self.vae_module.reshape_data(vae_output, features)
 
-        return torch.cat([vae_output, mth, dow], dim=1)
+        return gmm_input
 
 
 def cholesky_precision(

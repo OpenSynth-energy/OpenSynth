@@ -512,7 +512,7 @@ class FaradayModel:
             n_samples (int): Number of samples to generate.
 
         Returns:
-            TrainingData: Decoder output (KWH), month label, dow label
+            TrainingData: Decoder output (KWH), feature labels
         """
         gmm_samples = self.gmm.sample(n_samples)[0]
 
