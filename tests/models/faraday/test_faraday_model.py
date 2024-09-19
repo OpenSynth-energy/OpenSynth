@@ -65,8 +65,10 @@ def test_get_index(feature_dict: dict[str, torch.Tensor]):
     feature_list = list(feature_dict.keys())
     for feature_index, feature_value in enumerate(feature_list):
         if feature_value == "feature_1":
-            # First feature in feature_dict should have index = -2
+            # There are two items in the list, so first item
+            # should have index = -2 [last X column]
             assert FaradayModel.get_index(feature_list, feature_index) == -2
         elif feature_value == "feature_2":
-            # Second feature in feature_dict should have index = -1
+            # There are two items in the list, so second item
+            # should have index = -1 [last column]
             assert FaradayModel.get_index(feature_list, feature_index) == -1
