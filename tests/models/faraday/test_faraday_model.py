@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 import torch
 
+from opensynth.data_modules.lcl_data_module import TrainingData
 from opensynth.models.faraday import FaradayModel, FaradayVAE
 
 
@@ -61,7 +62,7 @@ def test_faraday_model_get_mask(feature_dict):
     assert (got_mask == expected_mask).all()
 
 
-def test_get_index(feature_dict: dict[str, torch.Tensor]):
+def test_get_index(feature_dict):
     feature_list = list(feature_dict.keys())
     for feature_index, feature_value in enumerate(feature_list):
         if feature_value == "feature_1":
@@ -72,3 +73,73 @@ def test_get_index(feature_dict: dict[str, torch.Tensor]):
             # There are two items in the list, so second item
             # should have index = -1 [last column]
             assert FaradayModel.get_index(feature_list, feature_index) == -1
+
+
+class TestFaradayModelParseLabelsAndProfiles:
+
+    samples = np.random.rand(12, 12)
+    latent_size = 10
+    feature_dict = {
+        "feature_1": torch.tensor([1, 2, 3, 4, 5]),
+        "feature_2": torch.tensor([1, 2, 3, 4, 5]),
+    }
+    parsed_samples = FaradayModel.parse_samples(
+        samples=samples,
+        latent_dim=latent_size,
+        feature_list=feature_dict.keys(),
+    )
+
+    parsed_kwh = parsed_samples["kwh"]
+    parsed_features = parsed_samples["features"]
+
+    def test_parsed_features_have_the_right_length(self):
+        # Given a set of samples of size 12X12 and a latent size 10
+        # We should expect there are 2 features being extracted
+        assert (
+            len(self.parsed_features)
+            == self.samples.shape[1] - self.latent_size
+        )
+
+    def test_parsed_kwh_has_the_right_shape(self):
+        # Given a set of samples of size 12X12 and a latent size 10
+        # We should expect kWh tensor to have shape 12X10
+        assert self.parsed_kwh.shape == (
+            self.samples.shape[0],
+            self.latent_size,
+        )
+
+    def test_parsed_features_has_the_right_shape(self):
+        # Each of the parsed features should have shape 12X1
+        for feature in self.feature_dict:
+            assert self.parsed_features[feature].shape == (
+                self.samples.shape[0],
+                1,
+            )
+
+    def test_parsed_samples_are_torch_tensors(self):
+        assert isinstance(self.parsed_kwh, torch.Tensor)
+        for feature in self.parsed_features:
+            assert isinstance(self.parsed_features[feature], torch.Tensor)
+
+
+def test_filter_mask():
+    # Given a tensor of [1,2,3,4,5]
+    # And a mask of [True, False, True, False, True]
+    # We should expect [1,3,5]
+    mask = np.array([True, False, True, False, True])
+    test_tensor = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+    test_samples = TrainingData(
+        kwh=test_tensor,
+        features={
+            "feature_1": test_tensor,
+            "feature_2": test_tensor,
+        },
+    )
+    expected_tensor = torch.tensor([1.0, 3.0, 5.0])
+    got_samples = FaradayModel.filter_mask(mask, test_samples)
+
+    got_kwh = got_samples["kwh"]
+    got_features = got_samples["features"]
+    assert torch.equal(got_kwh, expected_tensor)
+    for feature in got_features:
+        assert torch.equal(got_features[feature], expected_tensor)
