@@ -45,7 +45,7 @@ def download_data(url: str, filename: Path, unzip: bool = False):
         if filename.exists():
             os.remove(filename)
         logging.info(f"Downloading data from: {url}")
-        wget.download(url, filename)
+        wget.download(url, str(filename))
     else:
         logging.info("Skipping download")
 

@@ -274,7 +274,7 @@ def preprocess_pipeline(file_path: Path, out_path: Path):
 
 def preprocess_lcl_data():
 
-    SOURCE_DIR = "data/raw"
+    SOURCE_DIR = "data/processed"
     OUT_DIR = "data/processed"
     preprocess_pipeline(
         file_path=f"{SOURCE_DIR}/historical/train.csv",
