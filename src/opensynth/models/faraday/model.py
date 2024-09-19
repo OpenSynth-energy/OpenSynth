@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
+import numpy.typing as npt
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
@@ -15,17 +15,10 @@ from sklearn.mixture import GaussianMixture
 from torch.optim import lr_scheduler
 from tqdm import tqdm
 
-from opensynth.data_modules.lcl_data_module import LCLDataModule
+from opensynth.data_modules.lcl_data_module import LCLDataModule, TrainingData
 from opensynth.models.faraday.losses import calculate_training_loss
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TrainingData:
-    kwh: torch.tensor
-    month: torch.tensor
-    dow: torch.tensor
 
 
 class Encoder(nn.Module):
@@ -178,12 +171,12 @@ class FaradayVAE(pl.LightningModule):
         )
         self.reparametriser = ReparametrisationModule(self.latent_dim)
 
-    def encode(self, input_tensor: torch.tensor):
+    def encode(self, input_tensor: torch.Tensor):
         encoded_x = self.encoder(input_tensor)
         encoded_x, _, _ = self.reparametriser(encoded_x)
         return encoded_x
 
-    def decode(self, latent_tensor: torch.tensor):
+    def decode(self, latent_tensor: torch.Tensor):
         return self.decoder(latent_tensor)
 
     def configure_optimizers(self):
@@ -215,25 +208,46 @@ class FaradayVAE(pl.LightningModule):
             )
             return [optim], [lr_schedule]
 
+    @staticmethod
+    def reshape_data(
+        kwh_tensor: torch.Tensor, features: dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        """
+        Reshape training data to turn a concatenated training tensor.
+
+        Args:
+            kwh_tensor (torch.Tensor): kWh values
+            features (dict[str, torch.Tensor]): Dictionary of feature tensors
+
+        Returns:
+            torch.Tensor: kWh tensor concatenated with feature labels
+        """
+        reshaped_batch = torch.cat([kwh_tensor], dim=1)
+        for feature in features:
+            feature_tensor = features[feature].reshape(len(kwh_tensor), 1)
+            reshaped_batch = torch.cat([reshaped_batch, feature_tensor], dim=1)
+        return reshaped_batch
+
     def forward(self, input_data: TrainingData):
-        kwh = input_data.kwh
-        month = input_data.month.reshape(len(kwh), 1)
-        dow = input_data.dow.reshape(len(kwh), 1)
 
-        encoder_inputs = torch.cat([kwh, month, dow], dim=1)
+        encoder_inputs = self.reshape_data(
+            input_data["kwh"], input_data["features"]
+        )
         encoder_outputs = self.encode(encoder_inputs)
-        decoder_inputs = torch.cat([encoder_outputs, month, dow], dim=1)
-        decoder_outputs = self.decode(decoder_inputs)
 
-        return decoder_outputs
+        decoder_outputs = self.reshape_data(
+            encoder_outputs, input_data["features"]
+        )
+        dec_outputs = self.decode(decoder_outputs)
+        return dec_outputs
 
-    def training_step(self, batch):
-        batch_data = TrainingData(kwh=batch[0], month=batch[1], dow=batch[2])
-        vae_outputs = self.forward(batch_data)
+    def training_step(self, batch: TrainingData):
+
+        vae_outputs = self.forward(batch)
         total_loss, mmd_loss, mse_loss, quantile_loss = (
             calculate_training_loss(
                 x_hat=vae_outputs,
-                x=batch_data.kwh,
+                x=batch["kwh"],
                 lower_quantile=self.lower_quantile,
                 upper_quantile=self.upper_quantile,
                 mse_weight=self.mse_weight,
@@ -242,6 +256,8 @@ class FaradayVAE(pl.LightningModule):
                 quantile_median_weight=self.quantile_median_weight,
             )
         )
+        # Save list of feature names
+        self.feature_list = list(batch["features"].keys())
 
         # Might be an overkill to sync_dist for all losses.
         # If this causes significant I/O bottleneck
@@ -305,7 +321,13 @@ class FaradayModel:
         tol: float = 1e-3,
     ):
         """
-        Faraday Model
+        Faraday Model. Note:
+
+        - Faraday Model only supports integer-encoded labels.
+        - If you wish to have float labels, you should subclass FaradayModel
+        and implement your own `sample_gmm` method.
+        - Faraday Model also expects data module to return a
+        TrainingData object.
 
         Args:
             vae_module (FaradayVAE): Trained VAE component
@@ -329,6 +351,92 @@ class FaradayModel:
             tol=tol,
         )
 
+    @staticmethod
+    def get_feature_range(
+        features: dict[str, torch.Tensor]
+    ) -> dict[str, dict[str, int]]:
+        """
+        Get the max and min values of numerically encoded features
+        Args:
+            features (dict[str, torch.Tensor]): Dictionary of
+            feature tensors
+        Returns:
+            dict[str, dict[str, int]]: A dictionary of
+            min and max values for each feature label
+        """
+        feature_range: dict[str, dict[str, int]] = {}
+        for feature in features:
+            feature_range[feature] = {
+                "min": features[feature].min().item(),
+                "max": features[feature].max().item(),
+            }
+        return feature_range
+
+    @staticmethod
+    def create_mask(
+        gmm_labels: dict[str, torch.Tensor],
+        range_dict: dict[str, dict[str, int]],
+    ) -> npt.NDArray[np.bool_]:
+        """
+        Create a filter mask to make sure that GMM sampled labels are within
+        the range of accepted values. There is no guarantee that GMM will not
+        create out-of-distribution values. For example if `month of year`
+        ranges from 0-11, there is no guarantee that GMM will not
+        result in `month of year` = 100.
+        Args:
+            gmm_labels (dict[str, torch.Tensor]): Dictionary of features
+            obtained from GMM model
+            range_dict (dict[str, dict[str, int]]): Dictionary of
+            ranges of each label
+        Returns:
+            list[bool]: Mask to filter out-of-distribution values
+        """
+        label_mask: Optional[npt.NDArray[np.bool_]] = None  # Initialize mask
+
+        for feature, bounds in range_dict.items():
+
+            # Fetch the feature range
+            min_value = bounds.get("min")
+            max_value = bounds.get("max")
+            if min_value is None or max_value is None:
+                raise ValueError(f"Feature {feature} have missing range")
+
+            # Dynamically fetch the respective labels
+            gmm_value = gmm_labels.get(feature)
+            if gmm_value is None:
+                raise ValueError(f"Feature {feature} not found in GMM labels")
+
+            # Create the mask for this label
+            current_mask = np.logical_and(
+                gmm_value.detach().numpy() >= min_value,
+                gmm_value.detach().numpy() <= max_value,
+            )
+
+            # Combine the masks with `&` (AND operation)
+            label_mask = (
+                current_mask
+                if label_mask is None
+                else (label_mask & current_mask)
+            )
+
+        return label_mask
+
+    @staticmethod
+    def get_index(feature_list: list[str], current_index: int) -> int:
+        """
+        Get the index of each label, so that we can store the
+        correct column as the correct label in the gmm_labels
+        dictionary which the VAE needs in order to decode.
+
+        Args:
+            feature_list (list[str]): List of features
+            current_index (int): Current iter index
+
+        Returns:
+            int: Returns colum index
+        """
+        return -(len(feature_list) - current_index)
+
     def train_gmm(self, dm: LCLDataModule):
         """
         Train Gaussian Mixture Module
@@ -337,30 +445,33 @@ class FaradayModel:
             dm (LCLDataModule): Training data
         """
         dl = dm.train_dataloader()
+        next_batch = next(iter(dl))
+
+        # Explicit check to make sure that data module used
+        # to train GMM has features ordered the same way as
+        # when training the VAE
+        obtained_feature_list = list(next_batch["features"].keys())
+        expected_feature_list = self.vae_module.feature_list
+        assert obtained_feature_list == expected_feature_list
+
         for batch_num, batch_data in tqdm(enumerate(dl)):
-            kwh = batch_data[0]
-            mth = batch_data[1].reshape(len(kwh), 1)
-            dow = batch_data[2].reshape(len(kwh), 1)
-            vae_input = torch.cat([kwh, mth, dow], dim=1)
+            kwh = batch_data["kwh"]
+            features = batch_data["features"]
+
+            vae_input = self.vae_module.reshape_data(kwh, features)
             vae_output = self.vae_module.encode(vae_input)
-            gmm_input = torch.cat([vae_output, mth, dow], dim=1)
+
+            gmm_input = self.vae_module.reshape_data(vae_output, features)
             self.gmm.fit(gmm_input.detach().numpy())
             logger.info(f"⏳ Batch {batch_num} completed")
 
-        self.max_mth = mth.max().item()
-        self.min_mth = mth.min().item()
-        self.max_dow = dow.max().item()
-        self.min_dow = dow.min().item()
-        logger.info(
-            f"Labels Min max: Max month: {self.max_mth},"
-            "Min month: {self.min_mth}"
-            ", Max dow: {self.max_dow}, Min dow: {self.min_dow}"
-        )
+        # Record the ranges of features seen during training
+        # Assuming that batches are random, than this should
+        # be representative.
+        self.feature_range = self.get_feature_range(features)
         logger.info("🎉 GMM Training Completed")
 
-    def sample_gmm(
-        self, n_samples: int
-    ) -> Tuple[torch.tensor, torch.tensor, torch.tensor]:
+    def sample_gmm(self, n_samples: int) -> TrainingData:
         """
         Samples latent codes from GMM and decode with decoder.
 
@@ -368,30 +479,35 @@ class FaradayModel:
             n_samples (int): Number of samples to generate.
 
         Returns:
-            Tuple[torch.tensor, torch.tensor, torch.tensor]:
-              Decoder output (KWH), month label, dow label
+            TrainingData: Decoder output (KWH), month label, dow label
         """
         gmm_samples = self.gmm.sample(n_samples)[0]
+
+        # Parse labels and profiles
         gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
-        gmm_mth = np.round(gmm_samples[:, -2], decimals=0).astype(int)
-        gmm_dow = np.round(gmm_samples[:, -1], decimals=0).astype(int)
+        gmm_labels: dict[str, torch.Tensor] = {}
+
+        # Abstract the labels and round numerical values to integers
+        # Order of features needs to be preserved so VAE can decode
+        # it correctly, and is handled by `get_index` method.
+        for i, feature in enumerate(self.vae_module.feature_list):
+            index = self.get_index(self.vae_module.feature_list, i)
+            gmm_labels[feature] = np.round(
+                gmm_samples[:, index], decimals=0
+            ).astype(int)
 
         # Filter invalid (out of distribution) samples
-        label_mask = (
-            (gmm_mth >= self.min_mth)
-            & (gmm_mth <= self.max_mth)
-            & (gmm_dow >= self.min_dow)
-            & (gmm_dow <= self.max_dow)
-        )
+        label_mask = self.create_mask(gmm_labels, self.feature_range)
         gmm_kwh = gmm_kwh[label_mask]
-        gmm_mth = gmm_mth[label_mask]
-        gmm_dow = gmm_dow[label_mask]
+        for features in self.feature_range:
+            gmm_labels[features] = torch.from_numpy(
+                gmm_labels[features][label_mask]
+            )
 
         latent_tensor = torch.from_numpy(gmm_kwh)
-        mth_tensor = torch.from_numpy(gmm_mth).reshape(len(latent_tensor), 1)
-        dow_tensor = torch.from_numpy(gmm_dow).reshape(len(latent_tensor), 1)
-        decoder_input = torch.cat(
-            [latent_tensor, mth_tensor, dow_tensor], dim=1
+        decoder_input = self.vae_module.reshape_data(
+            latent_tensor, gmm_labels
         ).float()
         decoder_output = self.vae_module.decode(decoder_input)
-        return decoder_output, mth_tensor, dow_tensor
+        outputs = TrainingData(kwh=decoder_output, features=gmm_labels)
+        return outputs
