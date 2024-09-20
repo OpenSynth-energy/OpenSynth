@@ -555,7 +555,7 @@ class FaradayModel:
                 raise ValueError(f"Feature {feature} have missing range")
 
             # Dynamically fetch the respective labels
-            gmm_value = gmm_labels.get(feature)
+            gmm_value: torch.Tensor = gmm_labels.get(feature)
             if gmm_value is None:
                 raise ValueError(f"Feature {feature} not found in GMM labels")
 
@@ -572,7 +572,8 @@ class FaradayModel:
                 else (label_mask & current_mask)
             )
 
-        return label_mask
+        label_mask = np.squeeze(label_mask)
+        return np.squeeze(label_mask)
 
     @staticmethod
     def get_index(feature_list: list[str], current_index: int) -> int:
@@ -589,6 +590,28 @@ class FaradayModel:
             int: Returns colum index
         """
         return -(len(feature_list) - current_index)
+
+    @staticmethod
+    def filter_mask(
+        mask: npt.NDArray[np.bool_], sampled_data: TrainingData
+    ) -> TrainingData:
+        """
+        Given a mask and GMM sampled data, filter the GMM
+        sample with the mask.
+
+        Args:
+            mask (npt.NDArray[np.bool_]): Numpy array of boolean values
+            sampled_data (TrainingData): GMM sampled data
+
+        Returns:
+            TrainingData: Filtered GMM samples
+        """
+        sampled_data["kwh"] = sampled_data["kwh"][mask]
+        for feature in sampled_data["features"]:
+            sampled_data["features"][feature] = sampled_data["features"][
+                feature
+            ][mask]
+        return sampled_data
 
     def train_gmm(self, dm: LCLDataModule):
         """
