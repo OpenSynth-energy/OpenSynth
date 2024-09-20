@@ -364,6 +364,38 @@ class FaradayModel:
         self.kmeans_max_epochs = kmeans_max_epochs
 
     @staticmethod
+    def parse_samples(
+        samples: np.array, latent_dim: int, feature_list: list[str]
+    ) -> TrainingData:
+        """
+        Abstract the labels and round numerical values to integers
+        Order of features needs to be preserved so VAE can decode
+        it correctly, and is handled by `get_index` method.
+
+        Args:
+            samples (np.array): Samples sampled from GMM
+            latent_dim (int): Latent Dimension Size
+            feature_list (list[str]): List of feature names
+
+        Returns:
+            TrainingData: TypedDict containing GMM sampled
+            kWh and feature labels
+        """
+
+        gmm_tensors: torch.Tensor = torch.from_numpy(samples)
+        kwh: torch.Tensor = gmm_tensors[:, :latent_dim]
+        labels: dict[str, torch.Tensor] = {}
+
+        for i, feature in enumerate(feature_list):
+            index = FaradayModel.get_index(feature_list, i)
+            feature_tensor = torch.round(
+                gmm_tensors[:, index], decimals=0
+            ).int()
+            labels[feature] = feature_tensor.reshape(len(kwh), 1)
+
+        return TrainingData(kwh=kwh, features=labels)
+
+    @staticmethod
     def get_feature_range(
         features: dict[str, torch.Tensor]
     ) -> dict[str, dict[str, int]]:
@@ -414,7 +446,7 @@ class FaradayModel:
                 raise ValueError(f"Feature {feature} have missing range")
 
             # Dynamically fetch the respective labels
-            gmm_value = gmm_labels.get(feature)
+            gmm_value: torch.Tensor = gmm_labels.get(feature)
             if gmm_value is None:
                 raise ValueError(f"Feature {feature} not found in GMM labels")
 
@@ -431,7 +463,8 @@ class FaradayModel:
                 else (label_mask & current_mask)
             )
 
-        return label_mask
+        label_mask = np.squeeze(label_mask)
+        return np.squeeze(label_mask)
 
     @staticmethod
     def get_index(feature_list: list[str], current_index: int) -> int:
@@ -448,6 +481,28 @@ class FaradayModel:
             int: Returns colum index
         """
         return -(len(feature_list) - current_index)
+
+    @staticmethod
+    def filter_mask(
+        mask: npt.NDArray[np.bool_], sampled_data: TrainingData
+    ) -> TrainingData:
+        """
+        Given a mask and GMM sampled data, filter the GMM
+        sample with the mask.
+
+        Args:
+            mask (npt.NDArray[np.bool_]): Numpy array of boolean values
+            sampled_data (TrainingData): GMM sampled data
+
+        Returns:
+            TrainingData: Filtered GMM samples
+        """
+        sampled_data["kwh"] = sampled_data["kwh"][mask]
+        for feature in sampled_data["features"]:
+            sampled_data["features"][feature] = sampled_data["features"][
+                feature
+            ][mask]
+        return sampled_data
 
     def train_gmm(self, dm: LCLDataModule):
         """
@@ -490,7 +545,7 @@ class FaradayModel:
         self.feature_range = self.get_feature_range(features)
         logger.info("🎉 GMM Training Completed")
 
-        return gmm_module
+        self.gmm_module = gmm_module
 
     def sample_gmm(self, gmm_module, n_samples: int) -> TrainingData:
         """
@@ -502,33 +557,32 @@ class FaradayModel:
         Returns:
             TrainingData: Decoder output (KWH), feature labels
         """
-        gmm_samples = gmm_module.model.sample(n_samples)
+        gmm_samples: np.array = (
+            self.gmm_module.model.sample(n_samples).detach().numpy()
+        )
 
-        # Parse labels and profiles
-        gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
-        gmm_labels: dict[str, torch.Tensor] = {}
-
-        # Abstract the labels and round numerical values to integers
-        # Order of features needs to be preserved so VAE can decode
-        # it correctly, and is handled by `get_index` method.
-        for i, feature in enumerate(self.vae_module.feature_list):
-            index = self.get_index(self.vae_module.feature_list, i)
-            gmm_labels[feature] = np.round(
-                gmm_samples[:, index], decimals=0
-            ).astype(int)
+        # Parse GMM samples
+        gmm_samples_parsed: TrainingData = self.parse_samples(
+            gmm_samples,
+            self.vae_module.latent_dim,
+            self.vae_module.feature_list,
+        )
 
         # Filter invalid (out of distribution) samples
-        label_mask = self.create_mask(gmm_labels, self.feature_range)
-        gmm_kwh = gmm_kwh[label_mask]
-        for features in self.feature_range:
-            gmm_labels[features] = torch.from_numpy(
-                gmm_labels[features][label_mask]
-            )
+        label_mask = self.create_mask(
+            gmm_samples_parsed["features"], self.feature_range
+        )
+        gmm_samples_filtered = self.filter_mask(label_mask, gmm_samples_parsed)
 
-        latent_tensor = torch.from_numpy(gmm_kwh)
+        # Decode samples with VAE
         decoder_input = self.vae_module.reshape_data(
-            latent_tensor, gmm_labels
+            gmm_samples_filtered["kwh"], gmm_samples_filtered["features"]
         ).float()
+
         decoder_output = self.vae_module.decode(decoder_input)
-        outputs = TrainingData(kwh=decoder_output, features=gmm_labels)
+
+        # Output samples
+        outputs = TrainingData(
+            kwh=decoder_output, features=gmm_samples_filtered["features"]
+        )
         return outputs
