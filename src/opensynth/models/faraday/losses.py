@@ -86,8 +86,10 @@ def quantile_loss(
     quantile_loss = torch.max(
         quantile * (y_real - y_pred), (1 - quantile) * (y_pred - y_real)
     )
+
     if sample_weights is not None:
         quantile_loss = quantile_loss * sample_weights
+        return torch.sum(quantile_loss) / torch.sum(sample_weights)
 
     return torch.mean(quantile_loss)
 
@@ -111,8 +113,11 @@ def mse_loss(
         _type_: _description_
     """
     squared_loss = F.mse_loss(y_pred, y_real, reduction="none")
+
     if sample_weights is not None:
         squared_loss = squared_loss * sample_weights
+        return torch.sum(squared_loss) / torch.sum(sample_weights)
+
     return torch.mean(squared_loss)
 
 
