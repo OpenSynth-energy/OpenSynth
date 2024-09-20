@@ -14,10 +14,7 @@ from opacus.validators import ModuleValidator
 from torch.optim import lr_scheduler
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule, TrainingData
-from opensynth.models.faraday.gaussian_mixture import (
-    GaussianMixtureModel,
-    fit_gmm,
-)
+from opensynth.models.faraday.gaussian_mixture import fit_gmm
 from opensynth.models.faraday.losses import calculate_training_loss
 
 logger = logging.getLogger(__name__)
@@ -319,7 +316,6 @@ class FaradayModel:
         self,
         vae_module: FaradayVAE,
         n_components: int,
-        num_non_encoded_features: int,
         max_iter: int = 1000,
         covariance_type: str = "full",
         tol: float = 1e-3,
@@ -327,7 +323,7 @@ class FaradayModel:
         accelerator: str = "cpu",
         devices: int = 1,
         gmm_max_epochs: int = 1000,
-        kmeans_max_epochs: int = 10,
+        kmeans_max_epochs: int = 100,
     ):
         """
         Faraday Model. Note:
@@ -341,8 +337,6 @@ class FaradayModel:
         Args:
             vae_module (FaradayVAE): Trained VAE component.
             n_components (int): GMM clusters.
-            num_non_encoded_features (int): Number of features that are not
-                encoded by the vae model.
             max_iter (int, optional): Max iteration for GMM. Defaults to 1000.
             covariance_type (str, optional): scikit-learn gmm covariance types.
                 Defaults to "full".
@@ -365,17 +359,9 @@ class FaradayModel:
         self.tol = tol
         self.is_batch_training = is_batch_training
         self.accelerator = accelerator
-        self.num_non_encoded_features = num_non_encoded_features
         self.devices = devices
         self.gmm_max_epochs = gmm_max_epochs
         self.kmeans_max_epochs = kmeans_max_epochs
-
-        self.gmm = GaussianMixtureModel(
-            num_components=n_components,
-            covariance_type=covariance_type,
-            num_features=self.vae_module.latent_dim
-            + self.num_non_encoded_features,
-        )
 
     @staticmethod
     def get_feature_range(
@@ -488,7 +474,7 @@ class FaradayModel:
             vae_module=self.vae_module,
             num_components=self.n_components,
             num_features=self.vae_module.latent_dim
-            + self.num_non_encoded_features,
+            + len(obtained_feature_list),
             gmm_convergence_tolerance=self.tol,
             init_method="kmeans",
             gmm_max_epochs=self.gmm_max_epochs,
@@ -504,7 +490,9 @@ class FaradayModel:
         self.feature_range = self.get_feature_range(features)
         logger.info("🎉 GMM Training Completed")
 
-    def sample_gmm(self, n_samples: int) -> TrainingData:
+        return gmm_module
+
+    def sample_gmm(self, gmm_module, n_samples: int) -> TrainingData:
         """
         Samples latent codes from GMM and decode with decoder.
 
@@ -514,7 +502,7 @@ class FaradayModel:
         Returns:
             TrainingData: Decoder output (KWH), feature labels
         """
-        gmm_samples = self.gmm.sample(n_samples)[0]
+        gmm_samples = gmm_module.model.sample(n_samples)
 
         # Parse labels and profiles
         gmm_kwh = gmm_samples[:, : self.vae_module.latent_dim]
