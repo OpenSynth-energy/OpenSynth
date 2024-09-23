@@ -9,7 +9,7 @@ from opensynth.models.faraday import FaradayModel
 
 def generate_synthetic_samples(
     model: FaradayModel, dm: LCLDataModule, n_samples: int
-) -> torch.tensor:
+) -> torch.Tensor:
     """
     Generate synthetic samples from model.
     TODO: Add support for non-Faraday models in the future by
@@ -21,7 +21,7 @@ def generate_synthetic_samples(
         n_samples (int): Number of synhetic samples to generate.
 
     Returns:
-        torch.tensor: Synthetic samples.
+        torch.Tensor: Synthetic samples.
     """
     synthetic_samples = model.sample_gmm(n_samples)
     synthetic_kwh = synthetic_samples[0]
@@ -32,7 +32,7 @@ def generate_synthetic_samples(
 
 def draw_real_data(
     dm: LCLDataModule, n_samples: int, outliers: bool = False
-) -> torch.tensor:
+) -> torch.Tensor:
     """
     Draw real samples from data module
 
@@ -43,7 +43,7 @@ def draw_real_data(
         training data. Defaults to False.
 
     Returns:
-        torch.tensor: Real training samples.
+        torch.Tensor: Real training samples.
     """
     if outliers:
         samples = next(iter(dm.outlier_dataloader()))

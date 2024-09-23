@@ -31,3 +31,4 @@ share/python-wheels/
 *.egg
 MANIFES
 *.pt
+*.tmp

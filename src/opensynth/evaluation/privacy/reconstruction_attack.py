@@ -61,17 +61,17 @@ def create_attack_dataset(
 
 
 def _calculate_pairwise_euclidean(
-    vec1: torch.tensor, vec2: torch.tensor
-) -> torch.tensor:
+    vec1: torch.Tensor, vec2: torch.Tensor
+) -> torch.Tensor:
     """
         Calculates pairwise euclidean distance. Creates a matrix of
         Size(Vec1) X Size(Vec2)
     Args:
-        vec1 (torch.tensor): Vector 1
-        vec2 (torch.tensor): Vector 2
+        vec1 (torch.Tensor): Vector 1
+        vec2 (torch.Tensor): Vector 2
 
     Returns:
-        torch.tensor: Pairwise euclidean distance matrix
+        torch.Tensor: Pairwise euclidean distance matrix
     """
     logger.info("Calculating pairwise euclidean distance..")
     euc_pairwise = torch.cdist(vec1, vec2)
@@ -79,14 +79,14 @@ def _calculate_pairwise_euclidean(
 
 
 def _convert_wide_to_long(
-    matrix: torch.tensor, metric_name: str
+    matrix: torch.Tensor, metric_name: str
 ) -> pd.DataFrame:
     """
     Converts euclidean matrix (wide table) to long table of
     pairwise distances
 
     Args:
-        matrix (torch.tensor): Pairwise euclidean distance matrix
+        matrix (torch.Tensor): Pairwise euclidean distance matrix
         metric_name (str): Metric name
 
     Returns:
@@ -108,12 +108,12 @@ def _convert_wide_to_long(
     return df_out
 
 
-def _calculate_vector_norm(data: torch.tensor) -> pd.DataFrame:
+def _calculate_vector_norm(data: torch.Tensor) -> pd.DataFrame:
     """
     Calculate norm of outlier vector
 
     Args:
-        data (torch.tensor): Input data
+        data (torch.Tensor): Input data
 
     Returns:
         pd.DataFrame: A long dataframe consisting of the seen outlier
@@ -127,14 +127,14 @@ def _calculate_vector_norm(data: torch.tensor) -> pd.DataFrame:
 
 
 def calculate_distance_norm(
-    real: torch.tensor, fake: torch.tensor, group_min: bool = True
+    real: torch.Tensor, fake: torch.Tensor, group_min: bool = True
 ) -> pd.DataFrame:
     """
     Calculates distance norms between generated data and seen outliers.
 
     Args:
-        real (torch.tensor): Seen outlier
-        fake (torch.tensor): Generated data
+        real (torch.Tensor): Seen outlier
+        fake (torch.Tensor): Generated data
         group_min (bool, optional): Group pairwise distances to
         return only the nearest neighbour. Defaults to True. If
         False, returns all pairwise distances.

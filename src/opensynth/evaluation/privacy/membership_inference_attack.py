@@ -35,7 +35,7 @@ class MembershipInferenceAttackSamples:
     outlier_unseen_diff_samples: torch.Tensor
 
 
-def _create_unseen_outliers(df: pd.DataFrame, mean: float) -> torch.tensor:
+def _create_unseen_outliers(df: pd.DataFrame, mean: float) -> torch.Tensor:
     """
     Creates unseen outliers. Calls unpon the method
     opensynth.datasets.low_carbon_london.preprocess_lcl.create_outliers.
@@ -47,7 +47,7 @@ def _create_unseen_outliers(df: pd.DataFrame, mean: float) -> torch.tensor:
         mean (float): Mean value for gaussian and gamma distribution.
 
     Returns:
-        torch.tensor: Generated unseen outliers.
+        torch.Tensor: Generated unseen outliers.
     """
     outliers = create_outliers(df, mean)
     return torch.from_numpy(np.array(outliers["kwh"].values.tolist()))
