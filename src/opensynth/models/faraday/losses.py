@@ -37,10 +37,6 @@ def mmd_loss(
         torch.Tensor: MMD Distances between Tensor Y and X
     """
     # Expand the weights array based on number of samples
-    if sample_weights is not None:
-        x = _expand_samples(x, sample_weights)
-        y = _expand_samples(y, sample_weights)
-
     xx, yy, zz = torch.mm(x, x.t()), torch.mm(y, y.t()), torch.mm(x, y.t())
     rx = xx.diag().unsqueeze(0).expand_as(xx)
     ry = yy.diag().unsqueeze(0).expand_as(yy)
@@ -64,7 +60,15 @@ def mmd_loss(
         YY += torch.exp(-0.5 * dyy / a)
         XY += torch.exp(-0.5 * dxy / a)
 
-    return torch.mean(XX + YY - 2.0 * XY)
+    mmd_loss = XX + YY - 2.0 * XY
+
+    if sample_weights is not None:
+        weights = sample_weights.squeeze().long()
+        mmd_loss = torch.repeat_interleave(mmd_loss, weights, dim=0)
+        mmd_loss = mmd_loss * weights
+        return torch.sum(mmd_loss) / torch.sum(sample_weights) ** 2
+
+    return torch.mean(mmd_loss)
 
 
 def quantile_loss(
