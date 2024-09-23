@@ -155,7 +155,7 @@ def calculate_training_loss(
         Total loss, MMD loss, MSE loss, Quantile loss
     """
     mmd_loss_ = mmd_loss(x_hat, x, sample_weights=sample_weights)
-    mse_loss_ = mse_loss(x_hat, x, sample_weights=sample_weights)
+    mse_loss_ = mse_loss(x_hat, x, sample_weights=sample_weights) * mse_weight
     quantile_upper_loss = (
         quantile_loss(x_hat, x, upper_quantile, sample_weights)
         * quantile_upper_weight
