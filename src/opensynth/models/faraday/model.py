@@ -324,6 +324,7 @@ class FaradayModel:
         devices: int = 1,
         gmm_max_epochs: int = 1000,
         kmeans_max_epochs: int = 100,
+        feature_list: list[str] = [],
     ):
         """
         Faraday Model. Note:
@@ -547,7 +548,7 @@ class FaradayModel:
 
         self.gmm_module = gmm_module
 
-    def sample_gmm(self, gmm_module, n_samples: int) -> TrainingData:
+    def sample_gmm(self, n_samples: int) -> TrainingData:
         """
         Samples latent codes from GMM and decode with decoder.
 
