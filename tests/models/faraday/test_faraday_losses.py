@@ -57,6 +57,32 @@ class TestFaradayLosses:
         got_mmd_loss = losses.mmd_loss(sample_1, sample_2)
         assert torch.round(got_mmd_loss, decimals=3) <= tol
 
+    def test_mmd_loss_weighted_and_expanded_same_values(self):
+
+        N = 1000
+        sample_1 = self.norm_dist_1.sample([N, 2])
+        sample_2 = self.norm_dist_2.sample([N, 2])
+        weights = torch.randint(low=1, high=3, size=(N, 1))
+        assert weights.sum() > N
+
+        got_mmd_loss = losses.mmd_loss(sample_1, sample_2, weights)
+        got_mmd_loss = torch.round(got_mmd_loss, decimals=3)
+
+        # Expanded samples
+        sample_1_expanded = losses._expand_samples(sample_1, weights)
+        sample_2_expanded = losses._expand_samples(sample_2, weights)
+
+        # Check that expanded samples are larger than original samples!
+        assert len(sample_1_expanded) == weights.sum()
+        assert len(sample_2_expanded) == weights.sum()
+
+        expected_mmd_loss = losses.mmd_loss(
+            sample_1_expanded, sample_2_expanded
+        )
+        expected_mmd_loss = torch.round(expected_mmd_loss, decimals=3)
+
+        assert got_mmd_loss == expected_mmd_loss
+
     @pytest.mark.parametrize(
         "t1,t2,quantile,expected_value",
         [
