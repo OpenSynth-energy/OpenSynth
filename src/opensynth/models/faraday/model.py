@@ -11,11 +11,10 @@ import torch
 import torch.nn as nn
 from opacus import PrivacyEngine
 from opacus.validators import ModuleValidator
-from sklearn.mixture import GaussianMixture
 from torch.optim import lr_scheduler
-from tqdm import tqdm
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule, TrainingData
+from opensynth.models.faraday.gaussian_mixture import fit_gmm
 from opensynth.models.faraday.losses import calculate_training_loss
 
 logger = logging.getLogger(__name__)
@@ -312,6 +311,7 @@ class FaradayVAE(pl.LightningModule):
 
 
 class FaradayModel:
+
     def __init__(
         self,
         vae_module: FaradayVAE,
@@ -319,6 +319,11 @@ class FaradayModel:
         max_iter: int = 1000,
         covariance_type: str = "full",
         tol: float = 1e-3,
+        is_batch_training: bool = True,
+        accelerator: str = "cpu",
+        devices: int = 1,
+        gmm_max_epochs: int = 1000,
+        kmeans_max_epochs: int = 100,
     ):
         """
         Faraday Model. Note:
@@ -330,26 +335,33 @@ class FaradayModel:
         TrainingData object.
 
         Args:
-            vae_module (FaradayVAE): Trained VAE component
-            n_components (int): GMM clusteres
+            vae_module (FaradayVAE): Trained VAE component.
+            n_components (int): GMM clusters.
             max_iter (int, optional): Max iteration for GMM. Defaults to 1000.
             covariance_type (str, optional): scikit-learn gmm covariance types.
                 Defaults to "full".
             tol (float, optional): Tolerance for GMM. Defaults to 1e-3.
+            is_batch_training (bool, optional): Batch training for GMM.
+                Defaults to True.
+            accelerator (str, optional): Accelerator for GMM training.
+                Defaults to "cpu".
+            devices (int, optional): Number of devices for GMM training.
+                Defaults to 1.
+            gmm_max_epochs (int, optional): Max epochs for GMM training.
+                Defaults to 1000.
+            kmeans_max_epochs (int, optional): Max epochs for KMeans training.
+                Defaults to 10.
         """
         self.n_components = n_components
         self.max_iter = max_iter
         self.covariance_type = covariance_type
         self.vae_module = vae_module
         self.tol = tol
-
-        self.gmm = GaussianMixture(
-            n_components=n_components,
-            max_iter=max_iter,
-            covariance_type=covariance_type,
-            warm_start=True,
-            tol=tol,
-        )
+        self.is_batch_training = is_batch_training
+        self.accelerator = accelerator
+        self.devices = devices
+        self.gmm_max_epochs = gmm_max_epochs
+        self.kmeans_max_epochs = kmeans_max_epochs
 
     @staticmethod
     def parse_samples(
@@ -499,32 +511,46 @@ class FaradayModel:
         Args:
             dm (LCLDataModule): Training data
         """
+        logger.info("🚀 Training GMM")
+
         dl = dm.train_dataloader()
         next_batch = next(iter(dl))
 
         # Explicit check to make sure that data module used
         # to train GMM has features ordered the same way as
         # when training the VAE
-        obtained_feature_list = list(next_batch["features"].keys())
+        features = next_batch["features"]
+        obtained_feature_list = list(features.keys())
         expected_feature_list = self.vae_module.feature_list
-        assert obtained_feature_list == expected_feature_list
+        if obtained_feature_list != expected_feature_list:
+            logger.error(
+                """Feature list required by `vae_module` and does not match
+                features specified by the data module.
+                """
+            )
 
-        for batch_num, batch_data in tqdm(enumerate(dl)):
-            kwh = batch_data["kwh"]
-            features = batch_data["features"]
-
-            vae_input = self.vae_module.reshape_data(kwh, features)
-            vae_output = self.vae_module.encode(vae_input)
-
-            gmm_input = self.vae_module.reshape_data(vae_output, features)
-            self.gmm.fit(gmm_input.detach().numpy())
-            logger.info(f"⏳ Batch {batch_num} completed")
+        gmm_module, _, _ = fit_gmm(
+            data=dl,
+            vae_module=self.vae_module,
+            num_components=self.n_components,
+            num_features=self.vae_module.latent_dim
+            + len(obtained_feature_list),
+            gmm_convergence_tolerance=self.tol,
+            init_method="kmeans",
+            gmm_max_epochs=self.gmm_max_epochs,
+            kmeans_max_epochs=self.kmeans_max_epochs,
+            is_batch_training=self.is_batch_training,
+            accelerator=self.accelerator,
+            devices=self.devices,
+        )
 
         # Record the ranges of features seen during training
         # Assuming that batches are random, than this should
         # be representative.
         self.feature_range = self.get_feature_range(features)
         logger.info("🎉 GMM Training Completed")
+
+        self.gmm_module = gmm_module
 
     def sample_gmm(self, n_samples: int) -> TrainingData:
         """
@@ -534,10 +560,11 @@ class FaradayModel:
             n_samples (int): Number of samples to generate.
 
         Returns:
-            TrainingData: Decoder output (KWH), month label, dow label
+            TrainingData: Decoder output (KWH), feature labels
         """
-        # Sample data from GMM
-        gmm_samples: np.array = self.gmm.sample(n_samples)[0]
+        gmm_samples: np.array = (
+            self.gmm_module.model.sample(n_samples).detach().numpy()
+        )
 
         # Parse GMM samples
         gmm_samples_parsed: TrainingData = self.parse_samples(
