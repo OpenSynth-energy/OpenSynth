@@ -324,6 +324,7 @@ class FaradayModel:
         devices: int = 1,
         gmm_max_epochs: int = 1000,
         kmeans_max_epochs: int = 100,
+        feature_list: list[str] = [],
     ):
         """
         Faraday Model. Note:
