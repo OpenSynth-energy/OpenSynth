@@ -36,7 +36,7 @@ def mmd_loss(
         torch.Tensor: MMD Distances between Tensor Y and X
     """
     # Expand the weights array based on number of samples
-    if sample_weights:
+    if sample_weights is not None:
         x = _expand_samples(x, sample_weights)
         y = _expand_samples(y, sample_weights)
 
