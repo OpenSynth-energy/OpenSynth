@@ -1,9 +1,8 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
-
 """
-This script fits a Gaussian Mixture Model (GMM) to synthetic data using
-Pytorch Lightning. Code is based on the PyCave framework.
+Code based on source: Borchert, O. (2022). PyCave (Version 3.2.1)
+[Computer software] https://pycave.borchero.com/
 """
 
 import time

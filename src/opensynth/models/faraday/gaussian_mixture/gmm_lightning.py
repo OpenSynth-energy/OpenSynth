@@ -1,9 +1,8 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
-
 """
-Lightning modules for training and initialising a GMM model.
-Code is based on the PyCave framework.
+Code based on source: Borchert, O. (2022). PyCave (Version 3.2.1)
+[Computer software] https://pycave.borchero.com/
 """
 
 from __future__ import annotations

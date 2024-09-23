@@ -1,8 +1,8 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
 """
-Model classes for Gaussian Mixture Models and K-Means.
-Code is based on the PyCave framework.
+Code based on source: Borchert, O. (2022). PyCave (Version 3.2.1)
+[Computer software] https://pycave.borchero.com/
 """
 
 import math

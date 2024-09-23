@@ -1,11 +1,9 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
-
 """
-Lightning modules for training and initialising a K-Means model.
-Code is based on the PyCave framework.
+Code based on source: Borchert, O. (2022). PyCave (Version 3.2.1)
+[Computer software] https://pycave.borchero.com/
 """
-
 from typing import List, Literal
 
 import pytorch_lightning as pl
