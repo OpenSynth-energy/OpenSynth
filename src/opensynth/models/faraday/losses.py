@@ -19,7 +19,8 @@ def _expand_samples(x: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
     Returns:
         torch.Tensor: Repeated tensor by sample weight
     """
-    return torch.cat([x[i].repeat(weights[i], 1) for i in range(len(weights))])
+    weights = weights.squeeze().long()
+    return torch.repeat_interleave(x, weights, dim=0)
 
 
 def mmd_loss(
