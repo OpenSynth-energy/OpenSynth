@@ -17,7 +17,9 @@ from opensynth.models.faraday.gaussian_mixture.metrics import (
     UniformSampler,
 )
 from opensynth.models.faraday.gaussian_mixture.model import KMeansModel
-from opensynth.models.faraday.losses import _expand_samples
+from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
+    prepare_data_for_model,
+)
 
 
 class KMeansLightningModule(pl.LightningModule):
@@ -100,7 +102,7 @@ class KMeansLightningModule(pl.LightningModule):
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> None:
         # First, we compute the cluster assignments
-        encoded_batch = self.prepare_data_for_model(batch)
+        encoded_batch = prepare_data_for_model(self.vae_module, batch)
         _, assignments, inertias = self.model.forward(encoded_batch)
 
         # Then, we update the centroids
@@ -126,7 +128,9 @@ class KMeansLightningModule(pl.LightningModule):
         self.model.centroids.copy_(centroids)
 
     def test_step(self, batch: torch.Tensor, _batch_idx: int) -> None:
-        _, _, inertias = self.model.forward(self.prepare_data_for_model(batch))
+        _, _, inertias = self.model.forward(
+            prepare_data_for_model(self.vae_module, batch)
+        )
         self.metric_inertia.update(inertias)
         self.log("inertia", self.metric_inertia)
 
@@ -134,37 +138,13 @@ class KMeansLightningModule(pl.LightningModule):
         self, batch: torch.Tensor, batch_idx: int
     ) -> torch.Tensor:
         distances, assignments, inertias = self.model.forward(
-            self.prepare_data_for_model(batch)
+            prepare_data_for_model(self.vae_module, batch)
         )
         if self.predict_target == "assignments":
             return assignments
         if self.predict_target == "inertias":
             return inertias
         return distances
-
-    def prepare_data_for_model(self, batch: torch.Tensor):
-        """Prepare data for the model by encoding it with the VAE and adding
-            month and day of week.
-
-        Args:
-            batch (torch.Tensor): a batch of data to prepare.
-        Returns:
-            torch.Tensor: model inputs consisting of encoded data, month,
-                and day of week.
-        """
-        kwh = batch["kwh"]
-        features = batch["features"]
-        vae_input = self.vae_module.reshape_data(kwh, features)
-        vae_output = self.vae_module.encode(vae_input)
-        gmm_input = self.vae_module.reshape_data(vae_output, features)
-        if "weights" in batch:
-            weights = batch["weights"]
-            gmm_input = _expand_samples(gmm_input, weights)
-            gmm_input = gmm_input[
-                torch.randperm(gmm_input.size()[0])
-            ]  # Shuffle tensor
-
-        return gmm_input
 
 
 # -----------------------------------------------------------------------
@@ -217,34 +197,10 @@ class KmeansRandomInitLightningModule(pl.LightningModule):
         self.sampler.reset()
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> None:
-        self.sampler.update(self.prepare_data_for_model(batch))
+        self.sampler.update(prepare_data_for_model(self.vae_module, batch))
 
     def on_train_epoch_end(self) -> None:
         choices = self.sampler.compute()
         if choices.dim() > self.model.centroids.dim():
             choices = choices.mean(dim=0)  # Average across all processes
         self.model.centroids.copy_(choices)
-
-    def prepare_data_for_model(self, batch: torch.Tensor):
-        """Prepare data for the model by encoding it with the VAE and adding
-            month and day of week.
-
-        Args:
-            batch (torch.Tensor): a batch of data to prepare.
-        Returns:
-            torch.Tensor: model inputs consisting of encoded data, month,
-                and day of week.
-        """
-        kwh = batch["kwh"]
-        features = batch["features"]
-        vae_input = self.vae_module.reshape_data(kwh, features)
-        vae_output = self.vae_module.encode(vae_input)
-        gmm_input = self.vae_module.reshape_data(vae_output, features)
-        if "weights" in batch:
-            weights = batch["weights"]
-            gmm_input = _expand_samples(gmm_input, weights)
-            gmm_input = gmm_input[
-                torch.randperm(gmm_input.size()[0])
-            ]  # Shuffle tensor
-
-        return gmm_input
