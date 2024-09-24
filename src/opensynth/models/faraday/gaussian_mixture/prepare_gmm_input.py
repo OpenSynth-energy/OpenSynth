@@ -1,3 +1,5 @@
+# Copyright Contributors to the Opensynth-energy Project.
+# SPDX-License-Identifier: Apache-2.0
 import torch
 
 from opensynth.models.faraday.losses import _expand_samples
@@ -26,8 +28,8 @@ def prepare_data_for_model(
     if "weights" in data:
         weights = data["weights"]
         model_input = _expand_samples(model_input, weights)
-        model_input = model_input[
-            torch.randperm(model_input.size()[0])
-        ]  # Shuffle tensor
+        # Shuffle tensor to prevent consecutive samples from being the same
+        # after expansion.
+        model_input = model_input[torch.randperm(model_input.size()[0])]
 
     return model_input
