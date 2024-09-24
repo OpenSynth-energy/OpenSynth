@@ -21,6 +21,7 @@ from opensynth.models.faraday.gaussian_mixture.metrics import (
 from opensynth.models.faraday.gaussian_mixture.model import (
     GaussianMixtureModel,
 )
+from opensynth.models.faraday.losses import _expand_samples
 
 
 class GaussianMixtureLightningModule(pl.LightningModule):
@@ -226,6 +227,12 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         vae_input = self.vae_module.reshape_data(kwh, features)
         vae_output = self.vae_module.encode(vae_input)
         gmm_input = self.vae_module.reshape_data(vae_output, features)
+        if "weights" in batch:
+            weights = batch["weights"]
+            gmm_input = _expand_samples(gmm_input, weights)
+            gmm_input = gmm_input[
+                torch.randperm(gmm_input.size()[0])
+            ]  # Shuffle tensor
 
         return gmm_input
 
@@ -412,9 +419,16 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
         """
         kwh = batch["kwh"]
         features = batch["features"]
+        weights = batch["weights"]
         vae_input = self.vae_module.reshape_data(kwh, features)
         vae_output = self.vae_module.encode(vae_input)
         gmm_input = self.vae_module.reshape_data(vae_output, features)
+        if "weights" in batch:
+            weights = batch["weights"]
+            gmm_input = _expand_samples(gmm_input, weights)
+            gmm_input = gmm_input[
+                torch.randperm(gmm_input.size()[0])
+            ]  # Shuffle tensor
 
         return gmm_input
 
