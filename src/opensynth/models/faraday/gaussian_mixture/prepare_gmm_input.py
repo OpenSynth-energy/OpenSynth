@@ -1,15 +1,15 @@
-import pytorch_lightning as pl
 import torch
 
 from opensynth.models.faraday.losses import _expand_samples
+from opensynth.models.faraday.vae_model import FaradayVAE
 
 
 def prepare_data_for_model(
-    vae_module: pl.LightningModule, data: torch.Tensor
+    vae_module: FaradayVAE, data: torch.Tensor
 ) -> torch.Tensor:
     """Prepare data for the GMM by encoding it with the VAE.
      If sample weights are used, then expand the repeat based on the weights
-      and shuffle the expanded dataset.
+     and shuffle the expanded dataset.
 
     Args:
         data (torch.Tensor): data for GMM training.

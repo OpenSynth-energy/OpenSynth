@@ -24,6 +24,7 @@ from opensynth.models.faraday.gaussian_mixture.model import (
 from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
     prepare_data_for_model,
 )
+from opensynth.models.faraday.vae_model import FaradayVAE
 
 
 class GaussianMixtureLightningModule(pl.LightningModule):
@@ -36,7 +37,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
     def __init__(
         self,
         model: GaussianMixtureModel,
-        vae_module: pl.LightningModule,
+        vae_module: FaradayVAE,
         num_components: int,
         num_features: int,
         covariance_type: str = "full",
@@ -226,7 +227,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
     def __init__(
         self,
         model: GaussianMixtureModel,
-        vae_module: pl.LightningModule,
+        vae_module: FaradayVAE,
         num_components: int,
         num_features: int,
         init_method: str = "kmeans",

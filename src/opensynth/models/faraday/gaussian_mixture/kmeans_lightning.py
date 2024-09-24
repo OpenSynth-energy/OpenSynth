@@ -20,6 +20,7 @@ from opensynth.models.faraday.gaussian_mixture.model import KMeansModel
 from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
     prepare_data_for_model,
 )
+from opensynth.models.faraday.vae_model import FaradayVAE
 
 
 class KMeansLightningModule(pl.LightningModule):
@@ -30,7 +31,7 @@ class KMeansLightningModule(pl.LightningModule):
     def __init__(
         self,
         model: KMeansModel,
-        vae_module: pl.LightningModule,
+        vae_module: FaradayVAE,
         num_clusters: int,
         num_features: int,
         convergence_tolerance: float = 1e-4,
@@ -41,7 +42,7 @@ class KMeansLightningModule(pl.LightningModule):
         """
         Args:
             model (KMeansModel): model to train.
-            vae_module (pl.LightningModule): VAE module to use for encoding
+            vae_module (FaradayVAE): VAE module to use for encoding
             the data.
             num_clusters (int): number of clusters in the data
             num_features (int): number of features in the data
@@ -162,7 +163,7 @@ class KmeansRandomInitLightningModule(pl.LightningModule):
     def __init__(
         self,
         model: KMeansModel,
-        vae_module: pl.LightningModule,
+        vae_module: FaradayVAE,
         num_clusters: int,
         num_features: int,
     ):
