@@ -23,6 +23,28 @@ def _expand_samples(x: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
     return torch.repeat_interleave(x, weights, dim=0)
 
 
+def _check_shape(x: torch.Tensor) -> torch.Tensor:
+    """
+    Check that tensor is either a 1-D or 2_D tensor.
+    If tensor is 1-D, reshape to [N,1] tensor.
+
+    Args:
+        x (torch.Tensor): Input tensor
+
+    Raises:
+        ValueError: Raises error if tensor is not 1-D or 2-D
+
+    Returns:
+        torch.Tensor: Reshaped tensor
+    """
+    if len(x.shape) == 1:
+        return x.reshape(-1, 1)
+    elif len(x.shape) == 2:
+        return x
+    else:
+        raise ValueError(f"Input tensor {x} must be 1D or 2D")
+
+
 def mmd_loss(
     y: torch.Tensor, x: torch.Tensor, sample_weights: torch.Tensor = None
 ) -> torch.Tensor:
@@ -87,14 +109,20 @@ def quantile_loss(
     Returns:
         torch.Tensor: Quantile loss
     """
-
+    y_pred = _check_shape(y_pred)
+    y_real = _check_shape(y_real)
     quantile_loss = torch.max(
         quantile * (y_real - y_pred), (1 - quantile) * (y_pred - y_real)
     )
 
     if sample_weights is not None:
-        quantile_loss = quantile_loss * sample_weights
-        return torch.sum(quantile_loss) / torch.sum(sample_weights)
+        quantile_loss = quantile_loss * sample_weights.reshape(
+            len(sample_weights), 1
+        )
+
+        return torch.sum(quantile_loss) / (
+            torch.sum(sample_weights) * y_pred.shape[1]
+        )
 
     return torch.mean(quantile_loss)
 
@@ -117,11 +145,17 @@ def mse_loss(
     Returns:
         _type_: _description_
     """
+    y_pred = _check_shape(y_pred)
+    y_real = _check_shape(y_real)
     squared_loss = F.mse_loss(y_pred, y_real, reduction="none")
 
     if sample_weights is not None:
-        squared_loss = squared_loss * sample_weights
-        return torch.sum(squared_loss) / torch.sum(sample_weights)
+        squared_loss = squared_loss * sample_weights.reshape(
+            len(sample_weights), 1
+        )
+        return torch.sum(squared_loss) / (
+            torch.sum(sample_weights) * y_pred.shape[1]
+        )
 
     return torch.mean(squared_loss)
 

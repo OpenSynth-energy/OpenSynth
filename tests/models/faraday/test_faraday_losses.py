@@ -10,15 +10,15 @@ class TestFaradayLosses:
     mmd_tol = 0.001
     norm_dist_1 = Normal(0, 1)
     norm_dist_2 = Normal(25, 96)
-    tensor1 = torch.tensor([1, 2, 3, 4, 5]).float()
-    tensor2 = torch.tensor([0, 0, 0, 0, 0]).float()
-    weights = torch.tensor([1, 1, 3, 1, 5])
+    list1 = [2, 3, 4, 5, 6]
+    list2 = [1, 1, 1, 2, 3]
+    tensor1 = torch.tensor(list1).float()
+    tensor2 = torch.tensor(list2).float()
+    weights = torch.tensor([1, 1, 3, 1, 2])
 
     def test_expand_samples_1d_tensor(self):
         tensor1_expanded = losses._expand_samples(self.tensor1, self.weights)
-        expected_tensor = torch.tensor(
-            [1, 2, 3, 3, 3, 4, 5, 5, 5, 5, 5]
-        ).float()
+        expected_tensor = torch.tensor([2, 3, 4, 4, 4, 5, 6, 6]).float()
         assert torch.equal(
             tensor1_expanded.squeeze(),
             expected_tensor.squeeze(),
@@ -27,9 +27,7 @@ class TestFaradayLosses:
     def test_expand_samples_2d_tensor(self):
         tensor1 = self.tensor1.reshape(len(self.tensor1), 1)
         tensor1_expanded = losses._expand_samples(tensor1, self.weights)
-        expected_tensor_flat = torch.tensor(
-            [1, 2, 3, 3, 3, 4, 5, 5, 5, 5, 5]
-        ).float()
+        expected_tensor_flat = torch.tensor([2, 3, 4, 4, 4, 5, 6, 6]).float()
         expected_tensor = expected_tensor_flat.reshape(
             len(expected_tensor_flat), 1
         )
@@ -88,9 +86,9 @@ class TestFaradayLosses:
         [
             # Exact tensor should return quantile loss of 0
             pytest.param(tensor1, tensor1, 0.5, 0),
-            pytest.param(tensor1, tensor2, 0.3, 2.1),
-            pytest.param(tensor1, tensor2, 0.5, 1.5),
-            pytest.param(tensor1, tensor2, 0.9, 0.3),
+            pytest.param(tensor1, tensor2, 0.3, 1.68),
+            pytest.param(tensor1, tensor2, 0.5, 1.2),
+            pytest.param(tensor1, tensor2, 0.9, 0.24),
         ],
     )
     def test_quantile_loss(self, t1, t2, quantile, expected_value):
@@ -102,7 +100,7 @@ class TestFaradayLosses:
         [
             # Exact tensor should return quantile loss of 0
             pytest.param(tensor1, tensor1, 0.5, 0),
-            pytest.param(tensor1, tensor2, 0.5, 1.86),
+            pytest.param(tensor1, tensor2, 0.5, 1.31),
         ],
     )
     def test_quantile_loss_with_weights(
@@ -111,7 +109,7 @@ class TestFaradayLosses:
         got_loss = losses.quantile_loss(t1, t2, quantile, self.weights)
         assert torch.round(got_loss, decimals=2) == expected_value
 
-    def test_quantile_loss_weighted_and_expanded_same_values(self):
+    def test_1d_quantile_loss_weighted_and_expanded_same_values(self):
         # Test supplying weights gives the same
         # results as manually expanding the tensors and
         # calculating the quantile loss
@@ -128,19 +126,44 @@ class TestFaradayLosses:
             unweighted_quantile_loss, decimals=2
         ) == torch.round(weighted_quantile_loss, decimals=2)
 
+    def test_2d_quantile_loss_weighted_and_expanded_same_values(self):
+        # Test supplying weights gives the same
+        # results as manually expanding the tensors and
+        # calculating the quantile loss
+        t1 = torch.tensor(
+            [self.list1, self.list2, self.list1, self.list2, self.list2]
+        ).float()
+        t2 = torch.tensor(
+            [self.list2, self.list2, self.list2, self.list2, self.list2]
+        ).float()
+
+        t1_expanded = losses._expand_samples(t1, self.weights)
+        t2_expanded = losses._expand_samples(t2, self.weights)
+
+        weighted_quantile_loss = losses.quantile_loss(
+            t1, t2, 0.5, self.weights
+        )
+        unweighted_quantile_loss = losses.quantile_loss(
+            t1_expanded, t2_expanded, 0.5, None
+        )
+
+        assert torch.round(weighted_quantile_loss, decimals=2) == torch.round(
+            unweighted_quantile_loss, decimals=2
+        )
+
     @pytest.mark.parametrize(
         "t1,t2,expected_value",
         [
             # Exact tensor should return quantile loss of 0
             pytest.param(tensor1, tensor1, 0),
-            pytest.param(tensor1, tensor2, 15.73),
+            pytest.param(tensor1, tensor2, 7.38),
         ],
     )
     def test_mse_loss(self, t1, t2, expected_value):
         got_loss = losses.mse_loss(t1, t2, self.weights)
         assert torch.round(got_loss, decimals=2) == expected_value
 
-    def test_mse_loss_weighted_and_expanded_same_values(self):
+    def test_1d_mse_loss_weighted_and_expanded_same_values(self):
         tensor1_expanded = losses._expand_samples(self.tensor1, self.weights)
         tensor2_expanded = losses._expand_samples(self.tensor2, self.weights)
         weighted_mse_loss = losses.mse_loss(
@@ -149,6 +172,24 @@ class TestFaradayLosses:
         unweighted_mse_loss = losses.mse_loss(
             tensor1_expanded, tensor2_expanded, None
         )
+        assert torch.round(weighted_mse_loss, decimals=2) == torch.round(
+            unweighted_mse_loss, decimals=2
+        )
+
+    def test_2d_mse_loss_weighted_and_expanded_same_values(self):
+        t1 = torch.tensor(
+            [self.list1, self.list2, self.list1, self.list2, self.list2]
+        ).float()
+        t2 = torch.tensor(
+            [self.list2, self.list2, self.list2, self.list2, self.list2]
+        ).float()
+
+        t1_expanded = losses._expand_samples(t1, self.weights)
+        t2_expanded = losses._expand_samples(t2, self.weights)
+
+        weighted_mse_loss = losses.mse_loss(t1, t2, self.weights)
+        unweighted_mse_loss = losses.mse_loss(t1_expanded, t2_expanded, None)
+
         assert torch.round(weighted_mse_loss, decimals=2) == torch.round(
             unweighted_mse_loss, decimals=2
         )
