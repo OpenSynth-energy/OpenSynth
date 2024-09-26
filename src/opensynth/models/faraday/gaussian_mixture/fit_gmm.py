@@ -35,6 +35,7 @@ def fit_gmm(
     gmm_max_epochs: int = 10000,
     gmm_convergence_tolerance: float = 1e-6,
     covariance_regularization: float = 1e-6,
+    initial_regularization: float = 1e-6,
     init_method: str = "kmeans",
     kmeans_max_epochs: int = 500,
     kmeans_convergence_tolerance: float = 1e-4,
@@ -57,11 +58,15 @@ def fit_gmm(
             Defaults to 10000.
         gmm_convergence_tolerance (float, optional): convergence tolerance for
             early stopping of GMM training. Early stopping happens when the
-                negative log probability doesn't change more than this value.
-                Defaults to 1e-6.
+            negative log probability doesn't change more than this value.
+            Defaults to 1e-6.
         covariance_regularization (float, optional): a small value which is
             added to the diagonal of the covariance matrix to ensure that it is
-                positive semi-definite. Defaults to 1e-6.
+            positive semi-definite. Defaults to 1e-6.
+        initial_regularization (float, optional): Regularization factor applied
+            during the initialization of the GMM. Defaults to 1e-6. Increasing
+            this value can help prevent singular covariance matrices during
+            initialization but may lead to a poorer initial solution.
         init_method (str, optional): initialisation method for GMM. Allowed
             "rand" or "kmeans". Defaults to "kmeans".
         kmeans_max_epochs (int, optional): maximum epochs to run k-means
@@ -119,7 +124,7 @@ def fit_gmm(
         num_features=num_features,
         init_method=init_method,
         covariance_type=covariance_type,
-        covariance_regularization=covariance_regularization,
+        covariance_regularization=initial_regularization,
         is_batch_training=is_batch_training,
     )
 
@@ -137,6 +142,8 @@ def fit_gmm(
         num_components,
         num_features,
         is_batch_training=is_batch_training,
+        covariance_type=covariance_type,
+        covariance_regularization=covariance_regularization,
         convergence_tolerance=gmm_convergence_tolerance,
     )
     trainer = pl.Trainer(

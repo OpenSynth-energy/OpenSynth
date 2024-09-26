@@ -40,7 +40,9 @@ class PriorAggregator(Metric):
         self.responsibilities.add_(responsibilities.sum(0))
 
     def compute(self) -> torch.Tensor:
-        return self.responsibilities / self.responsibilities.sum()
+        return (self.responsibilities / self.responsibilities.sum()).add_(
+            1e-16
+        )
 
 
 class MeanAggregator(Metric):
@@ -80,7 +82,7 @@ class MeanAggregator(Metric):
         self.component_weights.add_(responsibilities.sum(0))
 
     def compute(self) -> torch.Tensor:
-        return self.mean_sum / self.component_weights.unsqueeze(1)
+        return self.mean_sum / self.component_weights.unsqueeze(1).add_(1e-16)
 
 
 class CovarianceAggregator(Metric):
@@ -167,17 +169,25 @@ class CovarianceAggregator(Metric):
                 covars = (
                     responsibilities[:, i].unsqueeze(1) * component_diff
                 ).T.matmul(component_diff)
-                self.covariance_sum[i].add_(covars)
+
+                # Add regularization to the diagonal of the covariance matrix
+                regularization = self.reg * torch.eye(
+                    self.num_features, device=covars.device
+                )
+                covars_regularized = covars + regularization
+
+                self.covariance_sum[i].add_(covars_regularized)
 
     def compute(self) -> torch.Tensor:
         if self.covariance_type == "diag":
             return (
-                self.covariance_sum / self.component_weights.unsqueeze(-1)
+                self.covariance_sum
+                / self.component_weights.unsqueeze(-1).add_(1e-16)
                 + self.reg
             )
         if self.covariance_type == "spherical":
             return (
-                self.covariance_sum / self.component_weights
+                self.covariance_sum / self.component_weights.add_(1e-16)
                 + self.reg * self.num_features
             )
         if self.covariance_type == "tied":
@@ -189,7 +199,8 @@ class CovarianceAggregator(Metric):
         # covariance_type == "full"
         result = self.covariance_sum / self.component_weights.unsqueeze(
             -1
-        ).unsqueeze(-1)
+        ).unsqueeze(-1).add_(1e-16)
+
         diag_mask = (
             torch.eye(
                 self.num_features, device=result.device, dtype=result.dtype

@@ -28,6 +28,8 @@ class FaradayModel:
         accelerator: str = "cpu",
         devices: int = 1,
         gmm_max_epochs: int = 1000,
+        gmm_covariance_reg: float = 1e-6,
+        gmm_initial_regularization: float = 1e-6,
         kmeans_max_epochs: int = 100,
     ):
         """
@@ -54,6 +56,17 @@ class FaradayModel:
                 Defaults to 1.
             gmm_max_epochs (int, optional): Max epochs for GMM training.
                 Defaults to 1000.
+            gmm_covariance_reg (float, optional): Covariance
+                regularization for GMM. Defaults to 1e-6.
+                This is added to the diagonal of the covariance matrix to
+                ensure that it is positive semi-definite. Higher values will
+                make the algorithm more robust to singular covariance matrices,
+                at the cost of higher regularization.
+            gmm_initial_regularization (float, optional): Regularization factor
+                applied during the initialization of the GMM. Defaults to 1e-6.
+                Increasing this value can help prevent singular covariance
+                matrices during initialization but may lead to a poorer initial
+                solution.
             kmeans_max_epochs (int, optional): Max epochs for KMeans training.
                 Defaults to 10.
         """
@@ -66,6 +79,8 @@ class FaradayModel:
         self.accelerator = accelerator
         self.devices = devices
         self.gmm_max_epochs = gmm_max_epochs
+        self.gmm_covariance_reg = gmm_covariance_reg
+        self.gmm_initial_regularization = gmm_initial_regularization
         self.kmeans_max_epochs = kmeans_max_epochs
 
     @staticmethod
@@ -241,6 +256,9 @@ class FaradayModel:
             num_features=self.vae_module.latent_dim
             + len(obtained_feature_list),
             gmm_convergence_tolerance=self.tol,
+            covariance_regularization=self.gmm_covariance_reg,
+            covariance_type=self.covariance_type,
+            initial_regularization=self.gmm_initial_regularization,
             init_method="kmeans",
             gmm_max_epochs=self.gmm_max_epochs,
             kmeans_max_epochs=self.kmeans_max_epochs,

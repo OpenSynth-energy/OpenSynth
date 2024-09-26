@@ -51,6 +51,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.num_features = num_features
         self.covariance_type = covariance_type
         self.convergence_tolerance = convergence_tolerance
+        self.covariance_regularization = covariance_regularization
         self.is_batch_training = is_batch_training
         self.vae_module = vae_module
         self.save_hyperparameters(
@@ -81,7 +82,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             num_components=self.num_components,
             num_features=self.num_features,
             covariance_type=self.covariance_type,
-            reg=covariance_regularization,
+            reg=self.covariance_regularization,
         )
         # Initialize metrics
         self.metric_nll = MeanMetric()
@@ -170,6 +171,23 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             covars = self.covar_aggregator.compute()
             self.model.precisions_cholesky.copy_(
                 cholesky_precision(covars, self.covariance_type)
+            )
+
+        num_empty_components = (
+            torch.isclose(
+                self.model.component_probs,
+                torch.zeros_like(self.model.component_probs),
+            )
+            .sum()
+            .numpy()
+        )
+        if num_empty_components / self.num_components > 0.1:
+            print(
+                f"""
+                {100 * (num_empty_components / self.num_components).round(2)}%
+                of components have no data assigned to them. Consider reducing
+                the number of components to avoid overfitting.
+                """
             )
 
     def test_step(self, batch: torch.Tensor, _batch_idx: int) -> None:
@@ -323,8 +341,8 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
                 device=encoded_batch.device,
                 dtype=self.encoded_batch.dtype,
             )
-            responsibilities = responsibilities / responsibilities.sum(
-                1, keepdim=True
+            responsibilities = responsibilities / (
+                responsibilities.sum(1, keepdim=True)
             )
 
             if self.current_epoch == 0:
@@ -412,7 +430,17 @@ def cholesky_precision(
     """
     if covariance_type in ("tied", "full"):
         # Compute Cholesky decomposition
-        cholesky = torch.linalg.cholesky(covariances)
+        try:
+            cholesky = torch.linalg.cholesky(covariances)
+        except torch.linalg.LinAlgError:
+            raise ValueError(
+                """
+                Covariance matrix is not positive definite.
+                This is likely due to some of the components having singlular
+                covariance matrices. Try reducing the number of components, or
+                increasing the gmm_covariance_reg parameter.
+                """
+            )
         # Invert
         num_features = covariances.size(-1)
         target = torch.eye(
