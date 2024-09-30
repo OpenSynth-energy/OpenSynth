@@ -4,6 +4,10 @@ import torch
 
 from opensynth.data_modules.lcl_data_module import TrainingData
 from opensynth.models.faraday import FaradayModel, FaradayVAE
+from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
+    prepare_data_for_model,
+)
+from opensynth.models.faraday.losses import _expand_samples
 
 
 @pytest.fixture
@@ -141,3 +145,43 @@ def test_filter_mask():
     assert torch.equal(got_kwh, expected_tensor)
     for feature in got_features:
         assert torch.equal(got_features[feature], expected_tensor)
+
+
+def test_prepare_gmm_input():
+
+    vae_module = FaradayVAE(
+        class_dim=2, latent_dim=16, learning_rate=0.001, mse_weight=3
+    )
+    batch = TrainingData(
+        kwh=torch.rand(100, 48),
+        features={"feature_1": torch.rand(100), "feature_2": torch.rand(100)},
+        weights=torch.randint(low=1, high=5, size=(100,)),
+    )
+    encoded_batch = prepare_data_for_model(vae_module, batch)
+
+    assert encoded_batch.shape[0] == batch["weights"].sum()
+    assert encoded_batch.shape[1] == 16 + 2
+
+    # Check that the dataset has actually been shuffled
+    kwh = batch["kwh"]
+    features = batch["features"]
+    vae_input = vae_module.reshape_data(kwh, features)
+    vae_output = vae_module.encode(vae_input)
+    model_input = vae_module.reshape_data(vae_output, features)
+    model_input = _expand_samples(model_input, batch["weights"])
+
+    assert not torch.eq(model_input, encoded_batch).all()
+    assert model_input[0, :] in encoded_batch
+
+    # Test without weights
+    batch_no_weight = TrainingData(
+        kwh=torch.rand(100, 48),
+        features={
+            "feature_1": torch.rand(100),
+            "feature_2": torch.rand(100),
+        },
+    )
+    encoded_batch = prepare_data_for_model(vae_module, batch_no_weight)
+
+    assert encoded_batch.size(0) == 100
+    assert encoded_batch.size(1) == 16 + 2
