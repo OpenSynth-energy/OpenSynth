@@ -29,7 +29,6 @@ class FaradayModel:
         devices: int = 1,
         gmm_max_epochs: int = 1000,
         gmm_covariance_reg: float = 1e-6,
-        kmeans_max_epochs: int = 100,
     ):
         """
         Faraday Model. Note:
@@ -61,8 +60,6 @@ class FaradayModel:
                 ensure that it is positive semi-definite. Higher values will
                 make the algorithm more robust to singular covariance matrices,
                 at the cost of higher regularization.
-            kmeans_max_epochs (int, optional): Max epochs for KMeans training.
-                Defaults to 10.
         """
         self.n_components = n_components
         self.max_iter = max_iter
@@ -74,7 +71,6 @@ class FaradayModel:
         self.devices = devices
         self.gmm_max_epochs = gmm_max_epochs
         self.gmm_covariance_reg = gmm_covariance_reg
-        self.kmeans_max_epochs = kmeans_max_epochs
 
     @staticmethod
     def parse_samples(
@@ -253,7 +249,6 @@ class FaradayModel:
             covariance_type=self.covariance_type,
             init_method="kmeans",
             gmm_max_epochs=self.gmm_max_epochs,
-            kmeans_max_epochs=self.kmeans_max_epochs,
             is_batch_training=self.is_batch_training,
             accelerator=self.accelerator,
             devices=self.devices,

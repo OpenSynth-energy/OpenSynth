@@ -62,7 +62,7 @@ def fit_kmeans(
     # )
     # trainer.fit(kmeans_module, data)
 
-    kmeans_model_ = KMeans(n_clusters=num_components, init="k-means++")
+    kmeans_model_ = KMeans(n_clusters=num_components)
     next_batch = next(iter(data))
     kwh = next_batch["kwh"]
     features = next_batch["features"]

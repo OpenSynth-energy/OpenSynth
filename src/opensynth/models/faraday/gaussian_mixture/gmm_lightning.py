@@ -40,6 +40,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         vae_module: FaradayVAE,
         num_components: int,
         num_features: int,
+        num_datapoints: int,
         covariance_type: str = "full",
         convergence_tolerance: float = 1e-6,
         covariance_regularization: float = 1e-6,
@@ -49,6 +50,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.model = model
         self.num_components = num_components
         self.num_features = num_features
+        self.num_datapoints = num_datapoints
         self.covariance_type = covariance_type
         self.convergence_tolerance = convergence_tolerance
         self.covariance_regularization = covariance_regularization
@@ -125,9 +127,8 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             )
         responsibilities = log_responsibilities.exp()
 
-        responsibilities += 1e-15 / len(
-            encoded_batch
-        )  # Avoid zero responsibilities
+        # ensure the lowest cluster probability is 1/N.
+        responsibilities += 1 / (self.num_datapoints * len(encoded_batch))
 
         # Compute the NLL for early stopping
         if self._should_log_nll:

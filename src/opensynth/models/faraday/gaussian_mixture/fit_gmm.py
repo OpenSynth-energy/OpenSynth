@@ -36,8 +36,6 @@ def fit_gmm(
     gmm_convergence_tolerance: float = 1e-6,
     covariance_regularization: float = 1e-6,
     init_method: str = "kmeans",
-    kmeans_max_epochs: int = 500,
-    kmeans_convergence_tolerance: float = 1e-4,
     is_batch_training: bool = True,
     accelerator: str = "cpu",
     devices: int = 1,
@@ -64,10 +62,6 @@ def fit_gmm(
             positive semi-definite. Defaults to 1e-6.
         init_method (str, optional): initialisation method for GMM. Allowed
             "rand" or "kmeans". Defaults to "kmeans".
-        kmeans_max_epochs (int, optional): maximum epochs to run k-means
-            fitting if init_method = "kmeans". Defaults to 500.
-        kmeans_convergence_tolerance (float, optional): convergence tolerance
-            for early stopping of k-means training. Defaults to 1e-4.
         is_batch_training (bool, optional): flag whether batch training.
             Defaults to True.
         accelerator (str, optional): accelerator for training.
@@ -131,6 +125,7 @@ def fit_gmm(
         vae_module,
         num_components,
         num_features,
+        num_datapoints=data.dataset.n_samples,
         is_batch_training=is_batch_training,
         covariance_type=covariance_type,
         covariance_regularization=covariance_regularization,
