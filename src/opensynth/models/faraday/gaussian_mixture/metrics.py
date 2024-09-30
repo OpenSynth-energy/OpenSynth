@@ -40,9 +40,7 @@ class PriorAggregator(Metric):
         self.responsibilities.add_(responsibilities.sum(0))
 
     def compute(self) -> torch.Tensor:
-        return (self.responsibilities / self.responsibilities.sum()).add_(
-            1e-16
-        )
+        return self.responsibilities / self.responsibilities.sum().add_(1e-16)
 
 
 class MeanAggregator(Metric):

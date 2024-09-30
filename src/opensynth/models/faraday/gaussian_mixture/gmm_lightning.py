@@ -125,6 +125,10 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             )
         responsibilities = log_responsibilities.exp()
 
+        responsibilities += 1e-15 / len(
+            encoded_batch
+        )  # Avoid zero responsibilities
+
         # Compute the NLL for early stopping
         if self._should_log_nll:
             self.metric_nll.update(-log_probs)
@@ -171,23 +175,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             covars = self.covar_aggregator.compute()
             self.model.precisions_cholesky.copy_(
                 cholesky_precision(covars, self.covariance_type)
-            )
-
-        num_empty_components = (
-            torch.isclose(
-                self.model.component_probs,
-                torch.zeros_like(self.model.component_probs),
-            )
-            .sum()
-            .numpy()
-        )
-        if num_empty_components / self.num_components > 0.1:
-            print(
-                f"""
-                {100 * (num_empty_components / self.num_components).round(2)}%
-                of components have no data assigned to them. Consider reducing
-                the number of components to avoid overfitting.
-                """
             )
 
     def test_step(self, batch: torch.Tensor, _batch_idx: int) -> None:
@@ -436,7 +423,7 @@ def cholesky_precision(
             raise ValueError(
                 """
                 Covariance matrix is not positive definite.
-                This is likely due to some of the components having singlular
+                This is likely due to some of the components having singular
                 covariance matrices. Try reducing the number of components, or
                 increasing the gmm_covariance_reg parameter.
                 """
