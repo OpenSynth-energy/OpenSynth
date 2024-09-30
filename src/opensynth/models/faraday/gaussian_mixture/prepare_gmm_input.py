@@ -30,6 +30,6 @@ def prepare_data_for_model(
         model_input = _expand_samples(model_input, weights)
         # Shuffle tensor to prevent consecutive samples from being the same
         # after expansion.
-        model_input = model_input[torch.randperm(model_input.size()[0])]
+        model_input = model_input[torch.randperm(model_input.size(dim=0))]
 
     return model_input
