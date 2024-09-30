@@ -24,6 +24,9 @@ def fit_kmeans(
 ) -> torch.Tensor:
     """Fit K-means model to data using Sklearn
 
+    # Using sklearn implementation of K-means as opposed to PyTorch Lightning
+    # future versions may use PyTorch Lightning, if GPU acceleration is needed.
+
     Args:
         data (DataLoader): training data
         num_components (int): number of components or clusters in the data
@@ -62,6 +65,8 @@ def fit_kmeans(
     # )
     # trainer.fit(kmeans_module, data)
 
+    # TODO : perform k-means on a random subsample of the training dataset to
+    # speed up convergence. This is necessary when working with large datasets.
     kmeans_model_ = KMeans(n_clusters=num_components)
     next_batch = next(iter(data))
     kwh = next_batch["kwh"]

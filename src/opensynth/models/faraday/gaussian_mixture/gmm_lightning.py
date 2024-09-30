@@ -128,7 +128,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         responsibilities = log_responsibilities.exp()
 
         # ensure the lowest cluster probability is 1/N.
-        responsibilities += 1 / (self.num_datapoints * len(encoded_batch))
+        responsibilities += 1 / (self.num_datapoints**2)
 
         # Compute the NLL for early stopping
         if self._should_log_nll:
