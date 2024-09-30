@@ -210,7 +210,7 @@ class FaradayVAE(pl.LightningModule):
         kwh_tensor: torch.Tensor, features: dict[str, torch.Tensor]
     ) -> torch.Tensor:
         """
-        Reshape training data to turn a concatenated training tensor.
+        Reshape training data to return a concatenated training tensor.
 
         Args:
             kwh_tensor (torch.Tensor): kWh values
