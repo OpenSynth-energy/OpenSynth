@@ -167,7 +167,14 @@ class CovarianceAggregator(Metric):
                 covars = (
                     responsibilities[:, i].unsqueeze(1) * component_diff
                 ).T.matmul(component_diff)
-                self.covariance_sum[i].add_(covars)
+
+                # Add regularization to the diagonal of the covariance matrix
+                regularization = self.reg * torch.eye(
+                    self.num_features, device=covars.device
+                )
+                covars_regularized = covars + regularization
+
+                self.covariance_sum[i].add_(covars_regularized)
 
     def compute(self) -> torch.Tensor:
         if self.covariance_type == "diag":
@@ -189,7 +196,8 @@ class CovarianceAggregator(Metric):
         # covariance_type == "full"
         result = self.covariance_sum / self.component_weights.unsqueeze(
             -1
-        ).unsqueeze(-1)
+        ).unsqueeze(-1).add_(1e-16)
+
         diag_mask = (
             torch.eye(
                 self.num_features, device=result.device, dtype=result.dtype

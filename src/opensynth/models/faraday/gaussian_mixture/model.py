@@ -194,8 +194,14 @@ class GaussianMixtureModel(nn.Module):
             datapoints, call this method multiple times.
         """
         # First, we sample counts for each
+
+        # Normalise component probabilities after converting to float64
+        # This is necessary because numpy casts the probabilities to float64
+        # and we want to avoid precision issues resulting from this conversion
+        # See https://github.com/numpy/numpy/issues/8317.
+        _probs = self.component_probs.numpy().astype("float64")
         component_counts = np.random.multinomial(
-            num_datapoints, self.component_probs.numpy()
+            num_datapoints, _probs / _probs.sum()
         )
 
         # Then, we generate datapoints for each components

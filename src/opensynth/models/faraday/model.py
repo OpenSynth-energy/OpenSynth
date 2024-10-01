@@ -21,14 +21,13 @@ class FaradayModel:
         self,
         vae_module: FaradayVAE,
         n_components: int,
-        max_iter: int = 1000,
         covariance_type: str = "full",
         tol: float = 1e-3,
         is_batch_training: bool = True,
         accelerator: str = "cpu",
         devices: int = 1,
         gmm_max_epochs: int = 1000,
-        kmeans_max_epochs: int = 100,
+        gmm_covariance_reg: float = 1e-6,
     ):
         """
         Faraday Model. Note:
@@ -42,7 +41,6 @@ class FaradayModel:
         Args:
             vae_module (FaradayVAE): Trained VAE component.
             n_components (int): GMM clusters.
-            max_iter (int, optional): Max iteration for GMM. Defaults to 1000.
             covariance_type (str, optional): scikit-learn gmm covariance types.
                 Defaults to "full".
             tol (float, optional): Tolerance for GMM. Defaults to 1e-3.
@@ -54,11 +52,14 @@ class FaradayModel:
                 Defaults to 1.
             gmm_max_epochs (int, optional): Max epochs for GMM training.
                 Defaults to 1000.
-            kmeans_max_epochs (int, optional): Max epochs for KMeans training.
-                Defaults to 10.
+            gmm_covariance_reg (float, optional): Covariance
+                regularization for GMM. Defaults to 1e-6.
+                This is added to the diagonal of the covariance matrix to
+                ensure that it is positive semi-definite. Higher values will
+                make the algorithm more robust to singular covariance matrices,
+                at the cost of higher regularization.
         """
         self.n_components = n_components
-        self.max_iter = max_iter
         self.covariance_type = covariance_type
         self.vae_module = vae_module
         self.tol = tol
@@ -66,7 +67,7 @@ class FaradayModel:
         self.accelerator = accelerator
         self.devices = devices
         self.gmm_max_epochs = gmm_max_epochs
-        self.kmeans_max_epochs = kmeans_max_epochs
+        self.gmm_covariance_reg = gmm_covariance_reg
 
     @staticmethod
     def parse_samples(
@@ -241,9 +242,10 @@ class FaradayModel:
             num_features=self.vae_module.latent_dim
             + len(obtained_feature_list),
             gmm_convergence_tolerance=self.tol,
+            covariance_regularization=self.gmm_covariance_reg,
+            covariance_type=self.covariance_type,
             init_method="kmeans",
             gmm_max_epochs=self.gmm_max_epochs,
-            kmeans_max_epochs=self.kmeans_max_epochs,
             is_batch_training=self.is_batch_training,
             accelerator=self.accelerator,
             devices=self.devices,

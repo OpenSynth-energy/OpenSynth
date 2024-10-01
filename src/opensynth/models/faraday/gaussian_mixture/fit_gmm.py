@@ -36,8 +36,6 @@ def fit_gmm(
     gmm_convergence_tolerance: float = 1e-6,
     covariance_regularization: float = 1e-6,
     init_method: str = "kmeans",
-    kmeans_max_epochs: int = 500,
-    kmeans_convergence_tolerance: float = 1e-4,
     is_batch_training: bool = True,
     accelerator: str = "cpu",
     devices: int = 1,
@@ -57,17 +55,13 @@ def fit_gmm(
             Defaults to 10000.
         gmm_convergence_tolerance (float, optional): convergence tolerance for
             early stopping of GMM training. Early stopping happens when the
-                negative log probability doesn't change more than this value.
-                Defaults to 1e-6.
+            negative log probability doesn't change more than this value.
+            Defaults to 1e-6.
         covariance_regularization (float, optional): a small value which is
             added to the diagonal of the covariance matrix to ensure that it is
-                positive semi-definite. Defaults to 1e-6.
+            positive semi-definite. Defaults to 1e-6.
         init_method (str, optional): initialisation method for GMM. Allowed
             "rand" or "kmeans". Defaults to "kmeans".
-        kmeans_max_epochs (int, optional): maximum epochs to run k-means
-            fitting if init_method = "kmeans". Defaults to 500.
-        kmeans_convergence_tolerance (float, optional): convergence tolerance
-            for early stopping of k-means training. Defaults to 1e-4.
         is_batch_training (bool, optional): flag whether batch training.
             Defaults to True.
         accelerator (str, optional): accelerator for training.
@@ -96,11 +90,6 @@ def fit_gmm(
             data,
             num_components,
             vae_module,
-            num_features,
-            kmeans_max_epochs,
-            kmeans_convergence_tolerance,
-            accelerator,
-            devices,
         )
         # Use k-means centroids as initial means for GMM
         model_.means.copy_(centroids)
@@ -137,6 +126,8 @@ def fit_gmm(
         num_components,
         num_features,
         is_batch_training=is_batch_training,
+        covariance_type=covariance_type,
+        covariance_regularization=covariance_regularization,
         convergence_tolerance=gmm_convergence_tolerance,
     )
     trainer = pl.Trainer(

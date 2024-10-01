@@ -51,6 +51,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.num_features = num_features
         self.covariance_type = covariance_type
         self.convergence_tolerance = convergence_tolerance
+        self.covariance_regularization = covariance_regularization
         self.is_batch_training = is_batch_training
         self.vae_module = vae_module
         self.save_hyperparameters(
@@ -81,7 +82,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             num_components=self.num_components,
             num_features=self.num_features,
             covariance_type=self.covariance_type,
-            reg=covariance_regularization,
+            reg=self.covariance_regularization,
         )
         # Initialize metrics
         self.metric_nll = MeanMetric()
@@ -123,6 +124,9 @@ class GaussianMixtureLightningModule(pl.LightningModule):
                 encoded_batch
             )
         responsibilities = log_responsibilities.exp()
+
+        # ensure the lowest cluster probability is 1/batch_size
+        responsibilities += 1 / len(encoded_batch)
 
         # Compute the NLL for early stopping
         if self._should_log_nll:
@@ -323,8 +327,8 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
                 device=encoded_batch.device,
                 dtype=self.encoded_batch.dtype,
             )
-            responsibilities = responsibilities / responsibilities.sum(
-                1, keepdim=True
+            responsibilities = responsibilities / (
+                responsibilities.sum(1, keepdim=True)
             )
 
             if self.current_epoch == 0:
@@ -412,7 +416,17 @@ def cholesky_precision(
     """
     if covariance_type in ("tied", "full"):
         # Compute Cholesky decomposition
-        cholesky = torch.linalg.cholesky(covariances)
+        try:
+            cholesky = torch.linalg.cholesky(covariances)
+        except torch.linalg.LinAlgError:
+            raise ValueError(
+                """
+                Covariance matrix is not positive definite.
+                This is likely due to some of the components having singular
+                covariance matrices. Try reducing the number of components, or
+                increasing the gmm_covariance_reg parameter.
+                """
+            )
         # Invert
         num_features = covariances.size(-1)
         target = torch.eye(
