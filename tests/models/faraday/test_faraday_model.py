@@ -160,7 +160,9 @@ def test_prepare_gmm_input():
     encoded_batch = prepare_data_for_model(vae_module, batch)
 
     assert encoded_batch.shape[0] == batch["weights"].sum()
-    assert encoded_batch.shape[1] == 16 + 2
+    assert encoded_batch.shape[1] == vae_module.latent_dim + len(
+        batch["features"].keys()
+    )
 
     # Check that the dataset has actually been shuffled
     kwh = batch["kwh"]
@@ -184,4 +186,6 @@ def test_prepare_gmm_input():
     encoded_batch = prepare_data_for_model(vae_module, batch_no_weight)
 
     assert encoded_batch.size(0) == 100
-    assert encoded_batch.size(1) == 16 + 2
+    assert encoded_batch.size(1) == vae_module.latent_dim + len(
+        batch["features"].keys()
+    )
