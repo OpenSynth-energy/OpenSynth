@@ -17,6 +17,10 @@ from opensynth.models.faraday.gaussian_mixture.metrics import (
     UniformSampler,
 )
 from opensynth.models.faraday.gaussian_mixture.model import KMeansModel
+from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
+    prepare_data_for_model,
+)
+from opensynth.models.faraday.vae_model import FaradayVAE
 
 
 class KMeansLightningModule(pl.LightningModule):
@@ -27,7 +31,7 @@ class KMeansLightningModule(pl.LightningModule):
     def __init__(
         self,
         model: KMeansModel,
-        vae_module: pl.LightningModule,
+        vae_module: FaradayVAE,
         num_clusters: int,
         num_features: int,
         convergence_tolerance: float = 1e-4,
@@ -38,7 +42,7 @@ class KMeansLightningModule(pl.LightningModule):
         """
         Args:
             model (KMeansModel): model to train.
-            vae_module (pl.LightningModule): VAE module to use for encoding
+            vae_module (FaradayVAE): VAE module to use for encoding
             the data.
             num_clusters (int): number of clusters in the data
             num_features (int): number of features in the data
@@ -99,7 +103,7 @@ class KMeansLightningModule(pl.LightningModule):
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> None:
         # First, we compute the cluster assignments
-        encoded_batch = self.prepare_data_for_model(batch)
+        encoded_batch = prepare_data_for_model(self.vae_module, batch)
         _, assignments, inertias = self.model.forward(encoded_batch)
 
         # Then, we update the centroids
@@ -125,7 +129,9 @@ class KMeansLightningModule(pl.LightningModule):
         self.model.centroids.copy_(centroids)
 
     def test_step(self, batch: torch.Tensor, _batch_idx: int) -> None:
-        _, _, inertias = self.model.forward(self.prepare_data_for_model(batch))
+        _, _, inertias = self.model.forward(
+            prepare_data_for_model(self.vae_module, batch)
+        )
         self.metric_inertia.update(inertias)
         self.log("inertia", self.metric_inertia)
 
@@ -133,31 +139,13 @@ class KMeansLightningModule(pl.LightningModule):
         self, batch: torch.Tensor, batch_idx: int
     ) -> torch.Tensor:
         distances, assignments, inertias = self.model.forward(
-            self.prepare_data_for_model(batch)
+            prepare_data_for_model(self.vae_module, batch)
         )
         if self.predict_target == "assignments":
             return assignments
         if self.predict_target == "inertias":
             return inertias
         return distances
-
-    def prepare_data_for_model(self, batch: torch.Tensor):
-        """Prepare data for the model by encoding it with the VAE and adding
-            month and day of week.
-
-        Args:
-            batch (torch.Tensor): a batch of data to prepare.
-        Returns:
-            torch.Tensor: model inputs consisting of encoded data, month,
-                and day of week.
-        """
-        kwh = batch["kwh"]
-        features = batch["features"]
-        vae_input = self.vae_module.reshape_data(kwh, features)
-        vae_output = self.vae_module.encode(vae_input)
-        gmm_input = self.vae_module.reshape_data(vae_output, features)
-
-        return gmm_input
 
 
 # -----------------------------------------------------------------------
@@ -175,7 +163,7 @@ class KmeansRandomInitLightningModule(pl.LightningModule):
     def __init__(
         self,
         model: KMeansModel,
-        vae_module: pl.LightningModule,
+        vae_module: FaradayVAE,
         num_clusters: int,
         num_features: int,
     ):
@@ -210,28 +198,10 @@ class KmeansRandomInitLightningModule(pl.LightningModule):
         self.sampler.reset()
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> None:
-        self.sampler.update(self.prepare_data_for_model(batch))
+        self.sampler.update(prepare_data_for_model(self.vae_module, batch))
 
     def on_train_epoch_end(self) -> None:
         choices = self.sampler.compute()
         if choices.dim() > self.model.centroids.dim():
             choices = choices.mean(dim=0)  # Average across all processes
         self.model.centroids.copy_(choices)
-
-    def prepare_data_for_model(self, batch: torch.Tensor):
-        """Prepare data for the model by encoding it with the VAE and adding
-            month and day of week.
-
-        Args:
-            batch (torch.Tensor): a batch of data to prepare.
-        Returns:
-            torch.Tensor: model inputs consisting of encoded data, month,
-                and day of week.
-        """
-        kwh = batch["kwh"]
-        features = batch["features"]
-        vae_input = self.vae_module.reshape_data(kwh, features)
-        vae_output = self.vae_module.encode(vae_input)
-        gmm_input = self.vae_module.reshape_data(vae_output, features)
-
-        return gmm_input

@@ -21,6 +21,10 @@ from opensynth.models.faraday.gaussian_mixture.metrics import (
 from opensynth.models.faraday.gaussian_mixture.model import (
     GaussianMixtureModel,
 )
+from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
+    prepare_data_for_model,
+)
+from opensynth.models.faraday.vae_model import FaradayVAE
 
 
 class GaussianMixtureLightningModule(pl.LightningModule):
@@ -33,7 +37,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
     def __init__(
         self,
         model: GaussianMixtureModel,
-        vae_module: pl.LightningModule,
+        vae_module: FaradayVAE,
         num_components: int,
         num_features: int,
         covariance_type: str = "full",
@@ -110,7 +114,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
     def training_step(self, batch: torch.Tensor) -> None:
 
         # Encode the batch
-        encoded_batch = self.prepare_data_for_model(batch)
+        encoded_batch = prepare_data_for_model(self.vae_module, batch)
 
         if self._computes_responsibilities_on_live_model:
             log_responsibilities, log_probs = self.model.forward(encoded_batch)
@@ -169,7 +173,9 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             )
 
     def test_step(self, batch: torch.Tensor, _batch_idx: int) -> None:
-        _, log_probs = self.model.forward(self.prepare_data_for_model(batch))
+        _, log_probs = self.model.forward(
+            prepare_data_for_model(self.vae_module, batch)
+        )
         self.metric_nll.update(-log_probs)
         self.log("nll", self.metric_nll)
 
@@ -177,7 +183,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self, batch: torch.Tensor, batch_idx: int
     ) -> tuple[torch.Tensor, torch.Tensor]:
         log_responsibilities, log_probs = self.model.forward(
-            self.prepare_data_for_model(batch)
+            prepare_data_for_model(self.vae_module, batch)
         )
         return log_responsibilities.exp(), -log_probs
 
@@ -211,24 +217,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             return True
         return self.current_epoch % 2 == 1
 
-    def prepare_data_for_model(self, batch: torch.Tensor):
-        """Prepare data for the model by encoding it with the VAE and adding
-            month and day of week.
-
-        Args:
-            batch (torch.Tensor): a batch of data to prepare.
-        Returns:
-            torch.Tensor: model inputs consisting of encoded data, month,
-            and day of week.
-        """
-        kwh = batch["kwh"]
-        features = batch["features"]
-        vae_input = self.vae_module.reshape_data(kwh, features)
-        vae_output = self.vae_module.encode(vae_input)
-        gmm_input = self.vae_module.reshape_data(vae_output, features)
-
-        return gmm_input
-
 
 class GaussianMixtureInitLightningModule(pl.LightningModule):
     """
@@ -239,7 +227,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
     def __init__(
         self,
         model: GaussianMixtureModel,
-        vae_module: pl.LightningModule,
+        vae_module: FaradayVAE,
         num_components: int,
         num_features: int,
         init_method: str = "kmeans",
@@ -309,7 +297,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> None:
 
         # Encode the batch
-        encoded_batch = self.prepare_data_for_model(batch)
+        encoded_batch = prepare_data_for_model(self.vae_module, batch)
 
         if self.init_method == "kmeans":
             # Just like for k-means, responsibilities are one-hot assignments
@@ -399,24 +387,6 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
             dtype=data.dtype,
         )
         return onehot[assignments]
-
-    def prepare_data_for_model(self, batch: torch.Tensor):
-        """Prepare data for the model by encoding it with the VAE and adding
-            month and day of week.
-
-        Args:
-            batch (torch.Tensor): a batch of data to prepare.
-        Returns:
-            torch.Tensor: model inputs consisting of encoded data, month,
-                and day of week.
-        """
-        kwh = batch["kwh"]
-        features = batch["features"]
-        vae_input = self.vae_module.reshape_data(kwh, features)
-        vae_output = self.vae_module.encode(vae_input)
-        gmm_input = self.vae_module.reshape_data(vae_output, features)
-
-        return gmm_input
 
 
 def cholesky_precision(

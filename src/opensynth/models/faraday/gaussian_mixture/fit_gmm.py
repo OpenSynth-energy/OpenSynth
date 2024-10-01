@@ -21,6 +21,7 @@ from opensynth.models.faraday.gaussian_mixture.gmm_lightning import (
 from opensynth.models.faraday.gaussian_mixture.model import (
     GaussianMixtureModel,
 )
+from opensynth.models.faraday.vae_model import FaradayVAE
 
 logger = CSVLogger("lightning_logs", name="gmm_logs")
 
@@ -28,7 +29,7 @@ logger = CSVLogger("lightning_logs", name="gmm_logs")
 def fit_gmm(
     data: DataLoader,
     num_components: int,
-    vae_module: pl.LightningModule,
+    vae_module: FaradayVAE,
     num_features: int,
     covariance_type: str = "full",
     gmm_max_epochs: int = 10000,
@@ -47,7 +48,7 @@ def fit_gmm(
         data (DataLoader): training dataset
         num_components (int): number of Gaussian components in the
             mixture model.
-        vae_module: pl.LightningModule, A trained VAE model.
+        vae_module (FaradayVAE): trained VAE model.
         num_features (int): number of features in latent space
             (size of latent space + number of non encoded features)
         covariance_type (str, optional): GMM covariance type.

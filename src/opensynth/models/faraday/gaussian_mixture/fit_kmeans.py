@@ -15,6 +15,7 @@ from opensynth.models.faraday.gaussian_mixture.kmeans_lightning import (
     KmeansRandomInitLightningModule,
 )
 from opensynth.models.faraday.gaussian_mixture.model import KMeansModel
+from opensynth.models.faraday.vae_model import FaradayVAE
 
 logger = CSVLogger("lightning_logs", name="kmeans_logs")
 
@@ -22,7 +23,7 @@ logger = CSVLogger("lightning_logs", name="kmeans_logs")
 def fit_kmeans(
     data: DataLoader,
     num_components: int,
-    vae_module: pl.LightningModule,
+    vae_module: FaradayVAE,
     input_dim: int,
     max_epochs: int = 500,
     convergence_tolerance: float = 1e-4,
@@ -39,7 +40,7 @@ def fit_kmeans(
     Args:
         data (DataLoader): training data
         num_components (int): number of components or clusters in the data
-        vae_module (pl.LightningModule): A trained VAE model
+        vae_module (FaradayVAE): trained VAE model
         input_dim (int): input dimensions of data
         max_epochs(int): maximum epochs for K-means fitting
         convergence_tolerance(float): convergence tolerance for early stopping
