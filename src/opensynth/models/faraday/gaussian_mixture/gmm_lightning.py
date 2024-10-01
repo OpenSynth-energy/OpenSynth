@@ -7,8 +7,6 @@ Code based on source: Borchert, O. (2022). PyCave (Version 3.2.1)
 
 from __future__ import annotations
 
-import math
-
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import EarlyStopping
@@ -42,7 +40,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         vae_module: FaradayVAE,
         num_components: int,
         num_features: int,
-        num_datapoints: int,
         covariance_type: str = "full",
         convergence_tolerance: float = 1e-6,
         covariance_regularization: float = 1e-6,
@@ -52,7 +49,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.model = model
         self.num_components = num_components
         self.num_features = num_features
-        self.num_datapoints = num_datapoints
         self.covariance_type = covariance_type
         self.convergence_tolerance = convergence_tolerance
         self.covariance_regularization = covariance_regularization
@@ -129,8 +125,8 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             )
         responsibilities = log_responsibilities.exp()
 
-        # ensure the lowest cluster probability is 1/N.
-        responsibilities += 1 / (self.num_datapoints)
+        # ensure the lowest cluster probability is 1/batch_size
+        responsibilities += 1 / len(encoded_batch)
 
         # Compute the NLL for early stopping
         if self._should_log_nll:
@@ -170,24 +166,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         if self._should_update_means:
             priors = self.prior_aggregator.compute()
             self.model.component_probs.copy_(priors)
-
-            # Check that the minimum cluster probability is at least 1/N.
-            order_min_prob_expected = abs(
-                math.floor(math.log10(1 / self.num_datapoints))
-            )
-
-            if (
-                self.model.component_probs.min().round(
-                    decimals=order_min_prob_expected
-                )
-                < 1 / self.num_datapoints
-            ):
-                raise ValueError(
-                    """
-                    Cluster probabilities are too low. The lowest value should
-                    be 1/N, where N is the number of data points.
-                    """
-                )
 
             means = self.mean_aggregator.compute()
             self.model.means.copy_(means)

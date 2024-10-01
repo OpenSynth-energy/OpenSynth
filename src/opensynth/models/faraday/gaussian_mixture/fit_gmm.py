@@ -125,7 +125,6 @@ def fit_gmm(
         vae_module,
         num_components,
         num_features,
-        num_datapoints=data.dataset.n_samples,
         is_batch_training=is_batch_training,
         covariance_type=covariance_type,
         covariance_regularization=covariance_regularization,
