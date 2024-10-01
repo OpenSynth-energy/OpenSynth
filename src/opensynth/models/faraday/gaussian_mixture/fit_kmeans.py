@@ -5,12 +5,10 @@ Code based on source: Borchert, O. (2022). PyCave (Version 3.2.1)
 [Computer software] https://pycave.borchero.com/
 """
 
-import pytorch_lightning as pl
 import torch
 from pytorch_lightning.loggers import CSVLogger
 from sklearn.cluster import KMeans
 from torch.utils.data import DataLoader
-
 
 from opensynth.models.faraday.vae_model import FaradayVAE
 
