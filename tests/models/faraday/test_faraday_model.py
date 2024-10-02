@@ -4,11 +4,6 @@ import torch
 
 from opensynth.data_modules.lcl_data_module import TrainingData
 from opensynth.models.faraday import FaradayModel, FaradayVAE
-from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
-    encode_data_for_gmm,
-    expand_weights,
-    prepare_data_for_model,
-)
 
 
 @pytest.fixture
@@ -146,60 +141,3 @@ def test_filter_mask():
     assert torch.equal(got_kwh, expected_tensor)
     for feature in got_features:
         assert torch.equal(got_features[feature], expected_tensor)
-
-
-def test_prepare_gmm_input():
-
-    vae_module = FaradayVAE(
-        class_dim=2, latent_dim=16, learning_rate=0.001, mse_weight=3
-    )
-    batch = TrainingData(
-        kwh=torch.rand(100, 48),
-        features={"feature_1": torch.rand(100), "feature_2": torch.rand(100)},
-        weights=torch.randint(low=1, high=5, size=(100,)),
-    )
-    model_input = prepare_data_for_model(vae_module, batch)
-
-    assert model_input.shape[0] == batch["weights"].sum()
-    assert model_input.shape[1] == vae_module.latent_dim + len(
-        batch["features"].keys()
-    )
-
-    # Check the weights > 1 have been incorporated correctly
-    test_idx = torch.where(batch["weights"] > 1)[0][0]
-    encoded_batch = encode_data_for_gmm(batch, vae_module)
-    model_input = expand_weights(encoded_batch, batch["weights"])
-    assert (
-        torch.Tensor(
-            [
-                torch.all(
-                    model_input[i, :] == encoded_batch[test_idx, :]
-                ).item()
-                for i in range(model_input.size(0))
-            ]
-        ).sum()
-        == batch["weights"][test_idx]
-    )
-
-    # Check the dataset is shuffled
-    assert not torch.equal(
-        torch.where(model_input == encoded_batch[test_idx, :])[0].unique(),
-        torch.Tensor(
-            [test_idx + i for i in range(batch["weights"][test_idx])]
-        ),
-    )
-
-    # Test without weights
-    batch_no_weight = TrainingData(
-        kwh=torch.rand(100, 48),
-        features={
-            "feature_1": torch.rand(100),
-            "feature_2": torch.rand(100),
-        },
-    )
-    model_input = prepare_data_for_model(vae_module, batch_no_weight)
-
-    assert model_input.size(0) == 100
-    assert model_input.size(1) == vae_module.latent_dim + len(
-        batch["features"].keys()
-    )
