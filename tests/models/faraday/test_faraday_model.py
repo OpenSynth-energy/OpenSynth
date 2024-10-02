@@ -148,58 +148,68 @@ def test_filter_mask():
         assert torch.equal(got_features[feature], expected_tensor)
 
 
-def test_prepare_gmm_input():
+class TestGMMDataPreparation:
 
     vae_module = FaradayVAE(
         class_dim=2, latent_dim=16, learning_rate=0.001, mse_weight=3
     )
+
     batch = TrainingData(
         kwh=torch.rand(100, 48),
         features={"feature_1": torch.rand(100), "feature_2": torch.rand(100)},
         weights=torch.randint(low=1, high=5, size=(100,)),
     )
-    model_input = prepare_data_for_model(vae_module, batch)
 
-    assert model_input.shape[0] == batch["weights"].sum()
-    assert model_input.shape[1] == vae_module.latent_dim + len(
-        batch["features"].keys()
-    )
+    def check_data_size(self):
 
-    # Check the weights > 1 have been incorporated correctly
-    test_idx = torch.where(batch["weights"] > 1)[0][0]
-    encoded_batch = encode_data_for_gmm(batch, vae_module)
-    model_input = expand_weights(encoded_batch, batch["weights"])
-    assert (
-        torch.Tensor(
-            [
-                torch.all(
-                    model_input[i, :] == encoded_batch[test_idx, :]
-                ).item()
-                for i in range(model_input.size(0))
-            ]
-        ).sum()
-        == batch["weights"][test_idx]
-    )
+        model_input = prepare_data_for_model(self.vae_module, self.batch)
 
-    # Check the dataset is shuffled
-    assert not torch.equal(
-        torch.where(model_input == encoded_batch[test_idx, :])[0].unique(),
-        torch.Tensor(
-            [test_idx + i for i in range(batch["weights"][test_idx])]
-        ),
-    )
+        assert model_input.shape[0] == self.batch["weights"].sum()
+        assert model_input.shape[1] == self.vae_module.latent_dim + len(
+            self.batch["features"].keys()
+        )
 
-    # Test without weights
-    batch_no_weight = TrainingData(
-        kwh=torch.rand(100, 48),
-        features={
-            "feature_1": torch.rand(100),
-            "feature_2": torch.rand(100),
-        },
-    )
-    model_input = prepare_data_for_model(vae_module, batch_no_weight)
+    def check_weights(self):
+        # Check weights > 1 have been incorporated correctly
+        # If sample weight = 3, expect 3 rows of the same data in final tensor
+        # Expect these rows to be shuffled into random positions in the final
+        # tensor, not just repreated on consecutive rows.
 
-    assert model_input.size(0) == 100
-    assert model_input.size(1) == vae_module.latent_dim + len(
-        batch["features"].keys()
-    )
+        test_idx = torch.where(self.batch["weights"] > 1)[0][0]
+        encoded_batch = encode_data_for_gmm(self.batch, self.vae_module)
+        model_input = expand_weights(encoded_batch, self.batch["weights"])
+
+        assert (
+            torch.Tensor(
+                [
+                    torch.all(
+                        model_input[i, :] == encoded_batch[test_idx, :]
+                    ).item()
+                    for i in range(model_input.size(0))
+                ]
+            ).sum()
+            == self.batch["weights"][test_idx]
+        )
+
+        assert not torch.equal(
+            torch.where(model_input == encoded_batch[test_idx, :])[0].unique(),
+            torch.Tensor(
+                [test_idx + i for i in range(self.batch["weights"][test_idx])]
+            ),
+        )
+
+    def test_no_weights(self):
+
+        batch_no_weight = TrainingData(
+            kwh=torch.rand(100, 48),
+            features={
+                "feature_1": torch.rand(100),
+                "feature_2": torch.rand(100),
+            },
+        )
+        model_input = prepare_data_for_model(self.vae_module, batch_no_weight)
+
+        assert model_input.size(0) == 100
+        assert model_input.size(1) == self.vae_module.latent_dim + len(
+            batch_no_weight["features"].keys()
+        )
