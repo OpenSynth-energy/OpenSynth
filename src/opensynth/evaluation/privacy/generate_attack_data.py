@@ -24,7 +24,7 @@ def generate_synthetic_samples(
         torch.Tensor: Synthetic samples.
     """
     synthetic_samples = model.sample_gmm(n_samples)
-    synthetic_kwh = synthetic_samples[0]
+    synthetic_kwh = synthetic_samples["kwh"]
     synthetic_kwh = dm.reconstruct_kwh(synthetic_kwh)
     synthetic_kwh = torch.clip(synthetic_kwh, min=0)
     return synthetic_kwh
@@ -51,7 +51,7 @@ def draw_real_data(
         dm.batch_size = n_samples
         samples = next(iter(dm.train_dataloader()))
 
-    real_kwh = samples[0]
+    real_kwh = samples["kwh"]
     real_kwh = dm.reconstruct_kwh(real_kwh)
     real_kwh = torch.clip(real_kwh, min=0)
     return real_kwh
