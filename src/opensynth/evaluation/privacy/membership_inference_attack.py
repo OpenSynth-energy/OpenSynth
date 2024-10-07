@@ -80,6 +80,7 @@ def _create_attack_samples(
         dm_train (LCLDataModule): Train data module
         dm_holdout (LCLDataModule): Holdout data module
         n_samples (int, optional): Number of samples. Defaults to 20000.
+        mean_factor (int): Mean factor for outliers. Defaults to 20.
 
     Returns:
         MembershipInferenceAttackSamples: Attack samples
@@ -225,6 +226,7 @@ class MembershipInferenceDataModule(pl.LightningDataModule):
             dm_train (LCLDataModule): Train data module with outliers injected
             dm_holdout (LCLDataModule): Holdout data module
             batch_size (int): Batch size for MIA.
+            mean_factor (int): Mean factor for outliers. Defaults to 20.
         """
 
         super().__init__()
