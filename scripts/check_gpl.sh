@@ -7,7 +7,7 @@ JSON_FILE="scan_results.json"
 GPL_LICENSES=("GPL-1.0-only" "GPL-1.0-or-later" "GPL-2.0-only" "GPL-2.0-or-later" "GPL-3.0-only" "GPL-3.0-or-later")
 
 # Directory to exclude from the scan
-EXCLUDED_DIR="notebooks"
+EXCLUDED_DIR="project/notebooks"
 
 # Check if jq is installed
 if ! command -v jq &> /dev/null; then
