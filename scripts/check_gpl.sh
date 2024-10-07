@@ -6,6 +6,9 @@ JSON_FILE="scan_results.json"
 # List of GPL licenses to search for
 GPL_LICENSES=("GPL-1.0-only" "GPL-1.0-or-later" "GPL-2.0-only" "GPL-2.0-or-later" "GPL-3.0-only" "GPL-3.0-or-later")
 
+# Directory to exclude from the scan
+EXCLUDED_DIR="notebooks"
+
 # Check if jq is installed
 if ! command -v jq &> /dev/null; then
     echo "jq is not installed. Please install jq to run this script."
@@ -16,6 +19,13 @@ fi
 check_for_gpl_licenses() {
     local file=$1
     local found=0
+
+    # Exclude files in the "notebooks" directory
+    if [[ "$file" == *"$EXCLUDED_DIR"* ]]; then
+        echo "Skipping file in excluded directory: $file"
+        return
+    fi
+
     for license in "${GPL_LICENSES[@]}"; do
         # Find all matching detections for the GPL licenses
         local matches=$(jq -c ".license_detections[] | select(.license_expression_spdx == \"$license\")" "$file")
