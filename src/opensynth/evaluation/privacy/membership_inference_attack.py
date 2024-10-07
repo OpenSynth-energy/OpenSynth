@@ -35,7 +35,9 @@ class MembershipInferenceAttackSamples:
     outlier_unseen_diff_samples: torch.Tensor
 
 
-def _create_unseen_outliers(df: pd.DataFrame, mean: float) -> torch.Tensor:
+def _create_unseen_outliers(
+    df: pd.DataFrame, mean: float, mean_factor: int = 20
+) -> torch.Tensor:
     """
     Creates unseen outliers. Calls unpon the method
     opensynth.datasets.low_carbon_london.preprocess_lcl.create_outliers.
@@ -49,7 +51,7 @@ def _create_unseen_outliers(df: pd.DataFrame, mean: float) -> torch.Tensor:
     Returns:
         torch.Tensor: Generated unseen outliers.
     """
-    outliers = create_outliers(df, mean)
+    outliers = create_outliers(df, mean, mean_factor=mean_factor)
     return torch.from_numpy(np.array(outliers["kwh"].values.tolist()))
 
 
@@ -58,6 +60,7 @@ def _create_attack_samples(
     dm_train: LCLDataModule,
     dm_holdout: LCLDataModule,
     n_samples: int = 20000,
+    mean_factor: int = 20,
 ) -> MembershipInferenceAttackSamples:
     """
     Creates attack samples for membership inference attack:
@@ -98,9 +101,11 @@ def _create_attack_samples(
         dm_train.dataset.df["segment"].isna()
     ].copy()
     outlier_unseen_same_samples = _create_unseen_outliers(
-        df_train, dm_train.dataset.feature_mean
+        df_train, dm_train.dataset.feature_mean, mean_factor
     )
-    outlier_unseen_diff_samples = _create_unseen_outliers(df_train, mean=0)
+    outlier_unseen_diff_samples = _create_unseen_outliers(
+        df_train, mean=0, mean_factor=mean_factor
+    )
 
     return MembershipInferenceAttackSamples(
         synthetic_samples=synthetic_samples,
@@ -210,6 +215,7 @@ class MembershipInferenceDataModule(pl.LightningDataModule):
         dm_train: LCLDataModule,
         dm_holdout: LCLDataModule,
         batch_size: int,
+        mean_factor: int = 20,
     ):
         """
         Membership Inference Attack Data Module
@@ -226,7 +232,10 @@ class MembershipInferenceDataModule(pl.LightningDataModule):
         self.dm_train = dm_train
         self.df_holdout = dm_holdout
         self.samples = _create_attack_samples(
-            model=model, dm_train=dm_train, dm_holdout=dm_holdout
+            model=model,
+            dm_train=dm_train,
+            dm_holdout=dm_holdout,
+            mean_factor=mean_factor,
         )
         self.batch_size = batch_size
 
