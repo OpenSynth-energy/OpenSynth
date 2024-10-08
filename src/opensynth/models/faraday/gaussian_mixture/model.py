@@ -36,7 +36,7 @@ class GaussianMixtureModel(nn.Module):
     #: on the covariance type, see :class:`CovarianceType`.
     precisions_cholesky: torch.Tensor
 
-    def __init__(self, covariance_type, num_components, num_features):
+    def __init__(self, num_components, num_features):
         """
         Args:
             config: The configuration to use for initializing the
@@ -44,7 +44,6 @@ class GaussianMixtureModel(nn.Module):
         """
         super().__init__()
 
-        self.covariance_type = covariance_type
         self.num_components = num_components
         self.num_features = num_features
 
@@ -68,18 +67,11 @@ class GaussianMixtureModel(nn.Module):
         """
         The covariance matrices learnt for the GMM's components.
 
-        The shape of the tensor depends on the covariance type,
-            see :class:`CovarianceType`.
+        The shape of the tensor depends is
+        num_components x num_features x num_features.
         """
-        if self.covariance_type in ("tied", "full"):
-            choleksy_covars = torch.linalg.inv(self.precisions_cholesky)
-            if self.covariance_type == "tied":
-                return torch.matmul(choleksy_covars.T, choleksy_covars)
-            return torch.bmm(choleksy_covars.transpose(1, 2), choleksy_covars)
-
-        # "Simple" kind of covariance
-        return (self.precisions_cholesky**2).reciprocal()
-        # return covariance(self.precisions_cholesky, self.covariance_type)
+        choleksy_covars = torch.linalg.inv(self.precisions_cholesky)
+        return torch.bmm(choleksy_covars.transpose(1, 2), choleksy_covars)
 
     def reset_parameters(self) -> None:
         """
@@ -97,8 +89,7 @@ class GaussianMixtureModel(nn.Module):
         nn.init.normal_(self.means)
 
         nn.init.uniform_(self.precisions_cholesky)
-        if self.covariance_type in ("full", "tied"):
-            self.precisions_cholesky.tril_()
+        self.precisions_cholesky.tril_()
 
     def forward(self, data: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -118,56 +109,20 @@ class GaussianMixtureModel(nn.Module):
                 each datapoint.
         """
 
-        if self.covariance_type == "full":
-            # Precision shape is `[num_components, dim, dim]`.
-            log_prob = data.new_empty((data.size(0), self.means.size(0)))
-            # We loop here to not blow up the size of intermediate matrices
-            for k, (mu, prec_chol) in enumerate(
-                zip(self.means, self.precisions_cholesky)
-            ):
-                inner = data.matmul(prec_chol) - mu.matmul(prec_chol)
-                log_prob[:, k] = inner.square().sum(1)
-        elif self.covariance_type == "tied":
-            # Precision shape is `[dim, dim]`.
-            a = data.matmul(self.precisions_cholesky)  # [N, D]
-            b = self.means.matmul(self.precisions_cholesky)  # [K, D]
-            log_prob = (a.unsqueeze(1) - b).square().sum(-1)
-        else:
-            precisions = self.precisions_cholesky.square()
-            if self.covariance_type == "diag":
-                # Precision shape is `[num_components, dim]`.
-                x_prob = torch.matmul(data * data, precisions.t())
-                m_prob = torch.einsum(
-                    "ij,ij,ij->i", self.means, self.means, precisions
-                )
-                xm_prob = torch.matmul(data, (self.means * precisions).t())
-            else:  # covariance_type == "spherical"
-                # Precision shape is `[num_components]`
-                x_prob = torch.ger(
-                    torch.einsum("ij,ij->i", data, data), precisions
-                )
-                m_prob = (
-                    torch.einsum("ij,ij->i", self.means, self.means)
-                    * precisions
-                )
-                xm_prob = torch.matmul(data, self.means.t() * precisions)
-
-            log_prob = x_prob - 2 * xm_prob + m_prob
+        # Precision shape is `[num_components, dim, dim]`.
+        log_prob = data.new_empty((data.size(0), self.means.size(0)))
+        # We loop here to not blow up the size of intermediate matrices
+        for k, (mu, prec_chol) in enumerate(
+            zip(self.means, self.precisions_cholesky)
+        ):
+            inner = data.matmul(prec_chol) - mu.matmul(prec_chol)
+            log_prob[:, k] = inner.square().sum(1)
 
         num_features = data.size(1)
 
-        if self.covariance_type == "full":
-            logdet = (
-                self.precisions_cholesky.diagonal(dim1=-2, dim2=-1)
-                .log()
-                .sum(-1)
-            )
-        elif self.covariance_type == "tied":
-            logdet = self.precisions_cholesky.diagonal().log().sum(-1)
-        elif self.covariance_type == "diag":
-            logdet = self.precisions_cholesky.log().sum(1)
-        else:
-            logdet = self.precisions_cholesky.log() * num_features
+        logdet = (
+            self.precisions_cholesky.diagonal(dim1=-2, dim2=-1).log().sum(-1)
+        )
 
         constant = math.log(2 * math.pi) * num_features
 
@@ -217,26 +172,17 @@ class GaussianMixtureModel(nn.Module):
 
             cholesky_precisions = self.precisions_cholesky[i]
             # For complex covariance types, invert the
-            if self.covariance_type in ("tied", "full"):
-                num_features = cholesky_precisions.size(-1)
-                target = torch.eye(
-                    num_features,
-                    dtype=cholesky_precisions.dtype,
-                    device=cholesky_precisions.device,
-                )
-                chol_covariance = torch.linalg.solve_triangular(
-                    cholesky_precisions, target, upper=True
-                ).t()
-            # Simple covariance type
-            else:
-                chol_covariance = cholesky_precisions.reciprocal()
+            num_features = cholesky_precisions.size(-1)
+            target = torch.eye(
+                num_features,
+                dtype=cholesky_precisions.dtype,
+                device=cholesky_precisions.device,
+            )
+            chol_covariance = torch.linalg.solve_triangular(
+                cholesky_precisions, target, upper=True
+            ).t()
 
-            if self.covariance_type in ("tied", "full"):
-                scale = chol_covariance.matmul(samples.unsqueeze(-1)).squeeze(
-                    -1
-                )
-            else:
-                scale = chol_covariance * samples
+            scale = chol_covariance.matmul(samples.unsqueeze(-1)).squeeze(-1)
 
             sample = mean + scale
 
@@ -245,8 +191,6 @@ class GaussianMixtureModel(nn.Module):
         return torch.cat(result, dim=0)
 
     def _get_component_precision(self, component: int) -> torch.Tensor:
-        if self.covariance_type == "tied":
-            return self.precisions_cholesky
         return self.precisions_cholesky[component]
 
 

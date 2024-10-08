@@ -95,31 +95,20 @@ class CovarianceAggregator(Metric):
         self,
         num_components: int,
         num_features: int,
-        covariance_type: str,
         reg: float,
     ):
         super().__init__()
 
         self.num_components = num_components
         self.num_features = num_features
-        self.covariance_type = covariance_type
         self.reg = reg
 
         self.covariance_sum: torch.Tensor
 
         # Covariance shape
-        if covariance_type == "full":
-            covariance_shape = torch.Size(
-                [self.num_components, self.num_features, self.num_features]
-            )
-        if covariance_type == "tied":
-            covariance_shape = torch.Size(
-                [self.num_features, self.num_features]
-            )
-        if covariance_type == "diag":
-            covariance_shape = torch.Size(
-                [self.num_components, self.num_features]
-            )
+        covariance_shape = torch.Size(
+            [self.num_components, self.num_features, self.num_features]
+        )
 
         self.add_state(
             "covariance_sum",
@@ -143,56 +132,22 @@ class CovarianceAggregator(Metric):
         data_component_weights = responsibilities.sum(0)
         self.component_weights.add_(data_component_weights)
 
-        if self.covariance_type in ("spherical", "diag"):
-            x_prob = torch.matmul(responsibilities.t(), data.square())
-            m_prob = data_component_weights.unsqueeze(-1) * means.square()
-            xm_prob = means * torch.matmul(responsibilities.t(), data)
-            covars = x_prob - 2 * xm_prob + m_prob
-            if self.covariance_type == "diag":
-                self.covariance_sum.add_(covars)
-            else:  # covariance_type == "spherical"
-                self.covariance_sum.add_(covars.mean(1))
-        elif self.covariance_type == "tied":
-            # This is taken from
-            # https://github.com/scikit-learn/scikit-learn/blob/
-            # 844b4be24d20fc42cc13b957374c718956a0db39/sklearn/mixture/
-            # _gaussian_mixture.py#L183
-            x_sq = data.T.matmul(data)
-            mean_sq = (data_component_weights * means.T).matmul(means)
-            self.covariance_sum.add_(x_sq - mean_sq)
-        else:  # covariance_type == "full":
-            # We iterate over each component since this is typically faster...
-            for i in range(self.num_components):
-                component_diff = data - means[i]
-                covars = (
-                    responsibilities[:, i].unsqueeze(1) * component_diff
-                ).T.matmul(component_diff)
+        # We iterate over each component since this is typically faster...
+        for i in range(self.num_components):
+            component_diff = data - means[i]
+            covars = (
+                responsibilities[:, i].unsqueeze(1) * component_diff
+            ).T.matmul(component_diff)
 
-                # Add regularization to the diagonal of the covariance matrix
-                regularization = self.reg * torch.eye(
-                    self.num_features, device=covars.device
-                )
-                covars_regularized = covars + regularization
+            # Add regularization to the diagonal of the covariance matrix
+            regularization = self.reg * torch.eye(
+                self.num_features, device=covars.device
+            )
+            covars_regularized = covars + regularization
 
-                self.covariance_sum[i].add_(covars_regularized)
+            self.covariance_sum[i].add_(covars_regularized)
 
     def compute(self) -> torch.Tensor:
-        if self.covariance_type == "diag":
-            return (
-                self.covariance_sum / self.component_weights.unsqueeze(-1)
-                + self.reg
-            )
-        if self.covariance_type == "spherical":
-            return (
-                self.covariance_sum / self.component_weights
-                + self.reg * self.num_features
-            )
-        if self.covariance_type == "tied":
-            result = self.covariance_sum / self.component_weights.sum()
-            shape = result.size()
-            result = result.flatten()
-            result[:: self.num_features + 1].add_(self.reg)
-            return result.view(shape)
         # covariance_type == "full"
         result = self.covariance_sum / self.component_weights.unsqueeze(
             -1

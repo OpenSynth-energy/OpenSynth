@@ -33,36 +33,6 @@ def fit_kmeans(
     Returns:
         torch.Tensor: k-means centroids
     """
-    # Initiate K-means model
-    # kmeans_model_ = KMeansModel(
-    #     num_clusters=num_components, num_features=input_dim
-    # )
-
-    # # Use uniform distribution to get initial centroids
-    # init_module = KmeansRandomInitLightningModule(
-    #     kmeans_model_, vae_module, num_components, input_dim
-    # )
-    # trainer = pl.Trainer(
-    #     max_epochs=1, accelerator=accelerator, devices=devices, logger=logger
-    # )  # setting initial values - run for 1 epoch
-    # trainer.fit(init_module, data)
-
-    # # Fit K-means
-    # kmeans_module = KMeansLightningModule(
-    #     kmeans_model_,
-    #     vae_module,
-    #     num_components,
-    #     input_dim,
-    #     convergence_tolerance,
-    # )
-    # trainer = pl.Trainer(
-    #     max_epochs=max_epochs,
-    #     accelerator=accelerator,
-    #     devices=devices,
-    #     logger=logger,
-    # )
-    # trainer.fit(kmeans_module, data)
-
     # TODO : perform k-means on a random subsample of the training dataset to
     # speed up convergence. This is necessary when working with large datasets.
     kmeans_model_ = KMeans(n_clusters=num_components)

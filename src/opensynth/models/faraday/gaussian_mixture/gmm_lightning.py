@@ -40,7 +40,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         vae_module: FaradayVAE,
         num_components: int,
         num_features: int,
-        covariance_type: str = "full",
         convergence_tolerance: float = 1e-6,
         covariance_regularization: float = 1e-6,
         is_batch_training: bool = False,
@@ -49,7 +48,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.model = model
         self.num_components = num_components
         self.num_features = num_features
-        self.covariance_type = covariance_type
         self.convergence_tolerance = convergence_tolerance
         self.covariance_regularization = covariance_regularization
         self.is_batch_training = is_batch_training
@@ -57,7 +55,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.save_hyperparameters(
             "num_components",
             "num_features",
-            "covariance_type",
             "convergence_tolerance",
             "is_batch_training",
         )
@@ -66,7 +63,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         # responsibilities
         if self.is_batch_training:
             self.model_copy = GaussianMixtureModel(
-                self.covariance_type, self.num_components, self.num_features
+                self.num_components, self.num_features
             )
             self.model_copy.load_state_dict(self.model.state_dict())
 
@@ -81,7 +78,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.covar_aggregator = CovarianceAggregator(
             num_components=self.num_components,
             num_features=self.num_features,
-            covariance_type=self.covariance_type,
             reg=self.covariance_regularization,
         )
         # Initialize metrics
@@ -172,9 +168,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
 
         if self._should_update_covars:
             covars = self.covar_aggregator.compute()
-            self.model.precisions_cholesky.copy_(
-                cholesky_precision(covars, self.covariance_type)
-            )
+            self.model.precisions_cholesky.copy_(cholesky_precision(covars))
 
     def test_step(self, batch: torch.Tensor, _batch_idx: int) -> None:
         _, log_probs = self.model.forward(
@@ -235,7 +229,6 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
         num_components: int,
         num_features: int,
         init_method: str = "kmeans",
-        covariance_type: str = "full",
         covariance_regularization: float = 1e-6,
         is_batch_training: bool = True,
     ):
@@ -253,7 +246,6 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
         self.num_components = num_components
         self.num_features = num_features
         self.init_method = init_method
-        self.covariance_type = covariance_type
         self.is_batch_training = is_batch_training
         self.vae_module = vae_module
         self.save_hyperparameters("init_method")
@@ -265,7 +257,6 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
         self.covar_aggregator = CovarianceAggregator(
             num_components=self.num_components,
             num_features=self.num_features,
-            covariance_type=self.covariance_type,
             reg=covariance_regularization,
         )
 
@@ -278,7 +269,6 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
                 # For batch training, we store a model copy such that we can
                 # "replay" responsibilities
                 self.model_copy = GaussianMixtureModel(
-                    self.covariance_type,
                     self.num_components,
                     self.num_features,
                 )
@@ -357,9 +347,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
             self.model.component_probs.copy_(priors)
 
             covars = self.covar_aggregator.compute()
-            self.model.precisions_cholesky.copy_(
-                cholesky_precision(covars, self.covariance_type)
-            )
+            self.model.precisions_cholesky.copy_(cholesky_precision(covars))
 
         elif self.init_method == "rand":
             if self.current_epoch == 0 and self.is_batch_training:
@@ -377,7 +365,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
             ) or self.current_epoch == 1:
                 covars = self.covar_aggregator.compute()
                 self.model.precisions_cholesky.copy_(
-                    cholesky_precision(covars, self.covariance_type)
+                    cholesky_precision(covars)
                 )
 
     def _one_hot_responsibilities(
@@ -394,7 +382,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
 
 
 def cholesky_precision(
-    covariances: torch.Tensor, covariance_type: str
+    covariances: torch.Tensor,
 ) -> torch.Tensor:
     """
     Computes the Cholesky decompositions of the precision matrices induced by
@@ -402,42 +390,31 @@ def cholesky_precision(
 
     Args:
         covariances: A tensor of shape
-            ``[num_components, dim, dim]``, ``[dim, dim]``,
-            ``[num_components, dim]``, ``[dim]`` or
-            ``[num_components]`` depending on the
-            ``covariance_type``. These are the covariance matrices of
-            multivariate Normal distributions.
-        covariance_type: The type of covariance for the covariance matrices
-            given.
+            ``[num_components, dim, dim]`` containing the covariance matrices.
 
     Returns:
         A tensor of the same shape as ``covariances``, providing the
         lower-triangular Cholesky decompositions of the precision matrices.
     """
-    if covariance_type in ("tied", "full"):
-        # Compute Cholesky decomposition
-        try:
-            cholesky = torch.linalg.cholesky(covariances)
-        except torch.linalg.LinAlgError:
-            raise ValueError(
-                """
-                Covariance matrix is not positive definite.
-                This is likely due to some of the components having singular
-                covariance matrices. Try reducing the number of components, or
-                increasing the gmm_covariance_reg parameter.
-                """
-            )
-        # Invert
-        num_features = covariances.size(-1)
-        target = torch.eye(
-            num_features, dtype=covariances.dtype, device=covariances.device
+    # Compute Cholesky decomposition
+    try:
+        cholesky = torch.linalg.cholesky(covariances)
+    except torch.linalg.LinAlgError:
+        raise ValueError(
+            """
+            Covariance matrix is not positive definite.
+            This is likely due to some of the components having singular
+            covariance matrices. Try reducing the number of components, or
+            increasing the gmm_covariance_reg parameter.
+            """
         )
-        if covariance_type == "full":
-            num_components = covariances.size(0)
-            target = target.unsqueeze(0).expand(num_components, -1, -1)
-        return torch.linalg.solve_triangular(
-            cholesky, target, upper=False
-        ).transpose(-2, -1)
-
-    # "Simple" kind of covariance
-    return covariances.sqrt().reciprocal()
+    # Invert
+    num_features = covariances.size(-1)
+    target = torch.eye(
+        num_features, dtype=covariances.dtype, device=covariances.device
+    )
+    num_components = covariances.size(0)
+    target = target.unsqueeze(0).expand(num_components, -1, -1)
+    return torch.linalg.solve_triangular(
+        cholesky, target, upper=False
+    ).transpose(-2, -1)
