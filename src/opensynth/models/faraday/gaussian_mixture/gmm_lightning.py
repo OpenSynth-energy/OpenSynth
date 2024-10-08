@@ -13,13 +13,13 @@ from pytorch_lightning.callbacks import EarlyStopping
 from torch import nn
 from torchmetrics import MeanMetric
 
+from opensynth.models.faraday.gaussian_mixture.gmm_model import (
+    GaussianMixtureModel,
+)
 from opensynth.models.faraday.gaussian_mixture.metrics import (
     CovarianceAggregator,
     MeanAggregator,
     PriorAggregator,
-)
-from opensynth.models.faraday.gaussian_mixture.model import (
-    GaussianMixtureModel,
 )
 from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
     prepare_data_for_model,

@@ -18,7 +18,7 @@ from opensynth.models.faraday.gaussian_mixture.gmm_lightning import (
     GaussianMixtureInitLightningModule,
     GaussianMixtureLightningModule,
 )
-from opensynth.models.faraday.gaussian_mixture.model import (
+from opensynth.models.faraday.gaussian_mixture.gmm_model import (
     GaussianMixtureModel,
 )
 from opensynth.models.faraday.vae_model import FaradayVAE

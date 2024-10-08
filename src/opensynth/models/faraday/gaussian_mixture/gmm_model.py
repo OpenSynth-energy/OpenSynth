@@ -67,7 +67,7 @@ class GaussianMixtureModel(nn.Module):
         """
         The covariance matrices learnt for the GMM's components.
 
-        The shape of the tensor depends is
+        The shape of the tensor is
         num_components x num_features x num_features.
         """
         choleksy_covars = torch.linalg.inv(self.precisions_cholesky)
@@ -192,68 +192,3 @@ class GaussianMixtureModel(nn.Module):
 
     def _get_component_precision(self, component: int) -> torch.Tensor:
         return self.precisions_cholesky[component]
-
-
-# -----------------------------------------------------------------------------
-# K-Means Model
-# -----------------------------------------------------------------------------
-class KMeansModel(nn.Module):
-    """
-    PyTorch module for the K-Means model.
-
-    The centroids managed by this model are non-trainable parameters.
-    """
-
-    def __init__(self, num_clusters, num_features):
-        """
-        Args:
-            config: The configuration to use for initializing the module's
-            buffers.
-        """
-        super().__init__()
-
-        #: The centers of all clusters, buffer of shape
-        # ``[num_clusters, num_features].``
-        self.centroids: torch.Tensor
-
-        self.num_clusters = num_clusters
-        self.num_features = num_features
-
-        self.register_buffer(
-            "centroids", torch.empty(self.num_clusters, self.num_features)
-        )
-
-        self.reset_parameters()
-
-    def reset_parameters(self) -> None:
-        """
-        Resets the parameters of the KMeans model.
-
-        It samples all cluster centers from a standard Normal.
-        """
-        nn.init.normal_(self.centroids)
-
-    def forward(
-        self, data: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Computes the distance of each datapoint to each centroid as well as the
-            "inertia", the squared distance of each datapoint to its closest
-                centroid.
-
-        Args:
-            data: A tensor of shape ``[num_datapoints, num_features]`` for
-            which to compute the distances and inertia.
-
-        Returns:
-            - A tensor of shape ``[num_datapoints, num_centroids]`` with the
-                distance from each datapoint to each centroid.
-            - A tensor of shape ``[num_datapoints]`` with the assignments, i.e.
-                the indices of each datapoint's closest centroid.
-            - A tensor of shape ``[num_datapoints]`` with the inertia
-                (squared distance to the closest centroid) of each datapoint.
-        """
-        distances = torch.cdist(data, self.centroids)
-        assignments = distances.min(1, keepdim=True).indices
-        inertias = distances.gather(1, assignments).square()
-        return distances, assignments.squeeze(1), inertias.squeeze(1)
