@@ -21,7 +21,6 @@ class FaradayModel:
         self,
         vae_module: FaradayVAE,
         n_components: int,
-        covariance_type: str = "full",
         tol: float = 1e-3,
         is_batch_training: bool = True,
         accelerator: str = "cpu",
@@ -41,8 +40,6 @@ class FaradayModel:
         Args:
             vae_module (FaradayVAE): Trained VAE component.
             n_components (int): GMM clusters.
-            covariance_type (str, optional): scikit-learn gmm covariance types.
-                Defaults to "full".
             tol (float, optional): Tolerance for GMM. Defaults to 1e-3.
             is_batch_training (bool, optional): Batch training for GMM.
                 Defaults to True.
@@ -60,7 +57,6 @@ class FaradayModel:
                 at the cost of higher regularization.
         """
         self.n_components = n_components
-        self.covariance_type = covariance_type
         self.vae_module = vae_module
         self.tol = tol
         self.is_batch_training = is_batch_training
@@ -243,7 +239,6 @@ class FaradayModel:
             + len(obtained_feature_list),
             gmm_convergence_tolerance=self.tol,
             covariance_regularization=self.gmm_covariance_reg,
-            covariance_type=self.covariance_type,
             init_method="kmeans",
             gmm_max_epochs=self.gmm_max_epochs,
             is_batch_training=self.is_batch_training,

@@ -10,6 +10,9 @@ from pytorch_lightning.loggers import CSVLogger
 from sklearn.cluster import KMeans
 from torch.utils.data import DataLoader
 
+from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
+    encode_data_for_gmm,
+)
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 logger = CSVLogger("lightning_logs", name="kmeans_logs")
@@ -33,47 +36,12 @@ def fit_kmeans(
     Returns:
         torch.Tensor: k-means centroids
     """
-    # Initiate K-means model
-    # kmeans_model_ = KMeansModel(
-    #     num_clusters=num_components, num_features=input_dim
-    # )
-
-    # # Use uniform distribution to get initial centroids
-    # init_module = KmeansRandomInitLightningModule(
-    #     kmeans_model_, vae_module, num_components, input_dim
-    # )
-    # trainer = pl.Trainer(
-    #     max_epochs=1, accelerator=accelerator, devices=devices, logger=logger
-    # )  # setting initial values - run for 1 epoch
-    # trainer.fit(init_module, data)
-
-    # # Fit K-means
-    # kmeans_module = KMeansLightningModule(
-    #     kmeans_model_,
-    #     vae_module,
-    #     num_components,
-    #     input_dim,
-    #     convergence_tolerance,
-    # )
-    # trainer = pl.Trainer(
-    #     max_epochs=max_epochs,
-    #     accelerator=accelerator,
-    #     devices=devices,
-    #     logger=logger,
-    # )
-    # trainer.fit(kmeans_module, data)
-
-    # TODO : perform k-means on a random subsample of the training dataset to
-    # speed up convergence. This is necessary when working with large datasets.
+    # k-means fitting is done on the first batch in the DataLoader
+    # (see next_batch=next(iter(data)). the first batch should be  a random
+    # subsample of the dataset provided the dataset has been pre-shuffled.
     kmeans_model_ = KMeans(n_clusters=num_components)
     next_batch = next(iter(data))
-    kwh = next_batch["kwh"]
-    features = next_batch["features"]
-    vae_input = vae_module.reshape_data(kwh, features)
-    vae_output = vae_module.encode(vae_input)
-    model_input = (
-        vae_module.reshape_data(vae_output, features).detach().numpy()
-    )
+    model_input = encode_data_for_gmm(next_batch, vae_module).detach().numpy()
     kmeans_fit = kmeans_model_.fit(model_input)
 
     return torch.tensor(kmeans_fit.cluster_centers_)

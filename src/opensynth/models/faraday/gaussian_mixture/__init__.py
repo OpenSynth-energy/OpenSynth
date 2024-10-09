@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from opensynth.models.faraday.gaussian_mixture.fit_gmm import fit_gmm
-from opensynth.models.faraday.gaussian_mixture.model import (
+from opensynth.models.faraday.gaussian_mixture.gmm_model import (
     GaussianMixtureModel,
 )
 

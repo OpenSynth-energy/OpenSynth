@@ -18,7 +18,7 @@ from opensynth.models.faraday.gaussian_mixture.gmm_lightning import (
     GaussianMixtureInitLightningModule,
     GaussianMixtureLightningModule,
 )
-from opensynth.models.faraday.gaussian_mixture.model import (
+from opensynth.models.faraday.gaussian_mixture.gmm_model import (
     GaussianMixtureModel,
 )
 from opensynth.models.faraday.vae_model import FaradayVAE
@@ -31,7 +31,6 @@ def fit_gmm(
     num_components: int,
     vae_module: FaradayVAE,
     num_features: int,
-    covariance_type: str = "full",
     gmm_max_epochs: int = 10000,
     gmm_convergence_tolerance: float = 1e-6,
     covariance_regularization: float = 1e-6,
@@ -49,8 +48,6 @@ def fit_gmm(
         vae_module (FaradayVAE): trained VAE model.
         num_features (int): number of features in latent space
             (size of latent space + number of non encoded features)
-        covariance_type (str, optional): GMM covariance type.
-            Defaults to "full".
         gmm_max_epochs (int, optional): maximum epochs to run GMM fitting.
             Defaults to 10000.
         gmm_convergence_tolerance (float, optional): convergence tolerance for
@@ -78,9 +75,7 @@ def fit_gmm(
     start_time = time.time()
 
     # Initialize the GMM model
-    model_ = GaussianMixtureModel(
-        covariance_type, num_components, num_features
-    )
+    model_ = GaussianMixtureModel(num_components, num_features)
 
     if init_method == "kmeans":
         print("Running K-Means initialisation")
@@ -107,7 +102,6 @@ def fit_gmm(
         num_components=num_components,
         num_features=num_features,
         init_method=init_method,
-        covariance_type=covariance_type,
         covariance_regularization=covariance_regularization,
         is_batch_training=is_batch_training,
     )
@@ -126,7 +120,6 @@ def fit_gmm(
         num_components,
         num_features,
         is_batch_training=is_batch_training,
-        covariance_type=covariance_type,
         covariance_regularization=covariance_regularization,
         convergence_tolerance=gmm_convergence_tolerance,
     )
