@@ -216,6 +216,7 @@ class MembershipInferenceDataModule(pl.LightningDataModule):
         dm_train: LCLDataModule,
         dm_holdout: LCLDataModule,
         batch_size: int,
+        n_samples: int = 20000,
         mean_factor: int = 20,
     ):
         """
@@ -226,18 +227,20 @@ class MembershipInferenceDataModule(pl.LightningDataModule):
             dm_train (LCLDataModule): Train data module with outliers injected
             dm_holdout (LCLDataModule): Holdout data module
             batch_size (int): Batch size for MIA.
+            n_samples (int): Number of training/ holdout samples to train MIA
             mean_factor (int): Mean factor for outliers. Defaults to 20.
         """
 
         super().__init__()
         self.model = model
         self.dm_train = dm_train
-        self.df_holdout = dm_holdout
+        self.dm_holdout = dm_holdout
         self.samples = _create_attack_samples(
             model=model,
             dm_train=dm_train,
             dm_holdout=dm_holdout,
             mean_factor=mean_factor,
+            n_samples=n_samples,
         )
         self.batch_size = batch_size
 
