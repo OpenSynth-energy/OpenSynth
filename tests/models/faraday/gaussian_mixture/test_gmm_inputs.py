@@ -24,16 +24,16 @@ class TestGMMDataPreparation:
 
     unweighted_batch = TrainingData(kwh=kwh, features=features)
 
-    def check_data_size(self):
+    def test_check_data_size(self):
 
-        model_input = prepare_data_for_model(self.vae_module, self.batch)
+        model_input = prepare_data_for_model(self.vae_module, self.batch, True)
 
         assert model_input.shape[0] == self.batch["weights"].sum()
         assert model_input.shape[1] == self.vae_module.latent_dim + len(
             self.batch["features"].keys()
         )
 
-    def check_weights(self):
+    def test_check_weights(self):
         # Check weights > 1 have been incorporated correctly
         # If sample weight = 3, expect 3 rows of the same data in final tensor
         # Expect these rows to be shuffled into random positions in the final
