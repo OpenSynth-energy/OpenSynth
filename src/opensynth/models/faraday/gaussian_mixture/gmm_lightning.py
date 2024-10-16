@@ -43,6 +43,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         convergence_tolerance: float = 1e-6,
         covariance_regularization: float = 1e-6,
         is_batch_training: bool = False,
+        train_sample_weights: bool = False,
     ):
         super().__init__()
         self.model = model
@@ -52,6 +53,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.covariance_regularization = covariance_regularization
         self.is_batch_training = is_batch_training
         self.vae_module = vae_module
+        self.train_sample_weights = train_sample_weights
         self.save_hyperparameters(
             "num_components",
             "num_features",
@@ -111,7 +113,11 @@ class GaussianMixtureLightningModule(pl.LightningModule):
     def training_step(self, batch: torch.Tensor) -> None:
 
         # Encode the batch
-        encoded_batch = prepare_data_for_model(self.vae_module, batch)
+        encoded_batch = prepare_data_for_model(
+            self.vae_module,
+            batch,
+            train_sample_weights=self.train_sample_weights,
+        )
 
         if self._computes_responsibilities_on_live_model:
             log_responsibilities, log_probs = self.model.forward(encoded_batch)
@@ -172,7 +178,9 @@ class GaussianMixtureLightningModule(pl.LightningModule):
 
     def test_step(self, batch: torch.Tensor, _batch_idx: int) -> None:
         _, log_probs = self.model.forward(
-            prepare_data_for_model(self.vae_module, batch)
+            prepare_data_for_model(
+                self.vae_module, batch, self.train_sample_weights
+            )
         )
         self.metric_nll.update(-log_probs)
         self.log("nll", self.metric_nll)
@@ -181,7 +189,9 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self, batch: torch.Tensor, batch_idx: int
     ) -> tuple[torch.Tensor, torch.Tensor]:
         log_responsibilities, log_probs = self.model.forward(
-            prepare_data_for_model(self.vae_module, batch)
+            prepare_data_for_model(
+                self.vae_module, batch, self.train_sample_weights
+            )
         )
         return log_responsibilities.exp(), -log_probs
 
@@ -231,6 +241,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
         init_method: str = "kmeans",
         covariance_regularization: float = 1e-6,
         is_batch_training: bool = True,
+        train_sample_weights: bool = False,
     ):
         """
         Args:
@@ -248,6 +259,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
         self.init_method = init_method
         self.is_batch_training = is_batch_training
         self.vae_module = vae_module
+        self.train_sample_weights = train_sample_weights
         self.save_hyperparameters("init_method")
 
         self.prior_aggregator = PriorAggregator(
@@ -291,7 +303,9 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> None:
 
         # Encode the batch
-        encoded_batch = prepare_data_for_model(self.vae_module, batch)
+        encoded_batch = prepare_data_for_model(
+            self.vae_module, batch, self.train_sample_weights
+        )
 
         if self.init_method == "kmeans":
             # Just like for k-means, responsibilities are one-hot assignments
