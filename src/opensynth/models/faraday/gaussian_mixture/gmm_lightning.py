@@ -40,10 +40,10 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         vae_module: FaradayVAE,
         num_components: int,
         num_features: int,
+        train_sample_weights: bool,
         convergence_tolerance: float = 1e-6,
         covariance_regularization: float = 1e-6,
         is_batch_training: bool = False,
-        train_sample_weights: bool = False,
     ):
         super().__init__()
         self.model = model
@@ -238,10 +238,10 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
         vae_module: FaradayVAE,
         num_components: int,
         num_features: int,
+        train_sample_weights: bool,
         init_method: str = "kmeans",
         covariance_regularization: float = 1e-6,
         is_batch_training: bool = True,
-        train_sample_weights: bool = False,
     ):
         """
         Args:

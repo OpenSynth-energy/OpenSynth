@@ -74,8 +74,6 @@ def fit_gmm(
         GaussianMixtureLightningModule: GMM lightning module
         pl.Trainer: Pytorch Lightning Trainer for GMM
     """
-    # TODO: Figure out how to take in sample weights and
-    # pass it in to prepare_data_for_gmm
     start_time = time.time()
 
     # Initialize the GMM model
@@ -108,6 +106,7 @@ def fit_gmm(
         init_method=init_method,
         covariance_regularization=covariance_regularization,
         is_batch_training=is_batch_training,
+        train_sample_weights=train_sample_weights,
     )
 
     pl.Trainer(
@@ -126,6 +125,7 @@ def fit_gmm(
         is_batch_training=is_batch_training,
         covariance_regularization=covariance_regularization,
         convergence_tolerance=gmm_convergence_tolerance,
+        train_sample_weights=train_sample_weights,
     )
     trainer = pl.Trainer(
         max_epochs=gmm_max_epochs,

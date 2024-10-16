@@ -48,7 +48,7 @@ def expand_weights(data: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
 def prepare_data_for_model(
     vae_module: FaradayVAE,
     data: torch.Tensor,
-    train_sample_weights: bool = False,
+    train_sample_weights: bool,
 ) -> torch.Tensor:
     """Prepare data for the GMM by encoding it with the VAE.
      If sample weights are used, then expand the repeat based on the weights
@@ -57,7 +57,7 @@ def prepare_data_for_model(
     Args:
         data (torch.Tensor): data for GMM training.
         vae_module (FaradayVAE): VAE module used for encoding.
-        train_sample_weights (bool): flag whether to train with sample weights.
+        train_sample_weights: flag whether to train with sample weights.
         Defaults to false
     Returns:
         torch.Tensor: model inputs consisting of encoded consumption data and

@@ -85,7 +85,7 @@ class TestGMMDataPreparation:
 
     def test_no_weights(self):
         model_input = prepare_data_for_model(
-            self.vae_module, self.unweighted_batch
+            self.vae_module, self.unweighted_batch, False
         )
 
         assert model_input.size(0) == 100
