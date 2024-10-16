@@ -31,6 +31,7 @@ def fit_gmm(
     num_components: int,
     vae_module: FaradayVAE,
     num_features: int,
+    train_sample_weights: bool = False,
     gmm_max_epochs: int = 10000,
     gmm_convergence_tolerance: float = 1e-6,
     covariance_regularization: float = 1e-6,
@@ -48,6 +49,8 @@ def fit_gmm(
         vae_module (FaradayVAE): trained VAE model.
         num_features (int): number of features in latent space
             (size of latent space + number of non encoded features)
+        train_sample_weights (bool, optional): flag whether to train with
+            sample weights. Defaults to False.
         gmm_max_epochs (int, optional): maximum epochs to run GMM fitting.
             Defaults to 10000.
         gmm_convergence_tolerance (float, optional): convergence tolerance for
@@ -71,7 +74,6 @@ def fit_gmm(
         GaussianMixtureLightningModule: GMM lightning module
         pl.Trainer: Pytorch Lightning Trainer for GMM
     """
-
     start_time = time.time()
 
     # Initialize the GMM model
@@ -104,6 +106,7 @@ def fit_gmm(
         init_method=init_method,
         covariance_regularization=covariance_regularization,
         is_batch_training=is_batch_training,
+        train_sample_weights=train_sample_weights,
     )
 
     pl.Trainer(
@@ -122,6 +125,7 @@ def fit_gmm(
         is_batch_training=is_batch_training,
         covariance_regularization=covariance_regularization,
         convergence_tolerance=gmm_convergence_tolerance,
+        train_sample_weights=train_sample_weights,
     )
     trainer = pl.Trainer(
         max_epochs=gmm_max_epochs,
