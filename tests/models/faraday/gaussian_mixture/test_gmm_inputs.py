@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from opensynth.data_modules.lcl_data_module import TrainingData
@@ -15,11 +16,13 @@ class TestGMMDataPreparation:
         class_dim=2, latent_dim=16, learning_rate=0.001, mse_weight=3
     )
 
-    batch = TrainingData(
-        kwh=torch.rand(100, 48),
-        features={"feature_1": torch.rand(100), "feature_2": torch.rand(100)},
-        weights=torch.randint(low=1, high=5, size=(100,)),
-    )
+    kwh = torch.rand(100, 48)
+    features = {"feature_1": torch.rand(100), "feature_2": torch.rand(100)}
+    weights = torch.randint(low=1, high=5, size=(100,))
+
+    batch = TrainingData(kwh=kwh, features=features, weights=weights)
+
+    unweighted_batch = TrainingData(kwh=kwh, features=features)
 
     def check_data_size(self):
 
@@ -59,18 +62,33 @@ class TestGMMDataPreparation:
             ),
         )
 
-    def test_no_weights(self):
-
-        batch_no_weight = TrainingData(
-            kwh=torch.rand(100, 48),
-            features={
-                "feature_1": torch.rand(100),
-                "feature_2": torch.rand(100),
-            },
+    @pytest.mark.parametrize(
+        "batch_data, train_sample_weights",
+        [
+            # Exact tensor should return quantile loss of 0
+            pytest.param(batch, True),
+            pytest.param(unweighted_batch, False),
+            pytest.param(
+                unweighted_batch,
+                True,
+                marks=pytest.mark.xfail(raises=KeyError, strict=True),
+            ),
+        ],
+    )
+    def test_expect_weight_if_train_sample_weights_is_true(
+        self, batch_data, train_sample_weights
+    ):
+        model_input = prepare_data_for_model(
+            self.vae_module, batch_data, train_sample_weights
         )
-        model_input = prepare_data_for_model(self.vae_module, batch_no_weight)
+        assert len(model_input) > 0
+
+    def test_no_weights(self):
+        model_input = prepare_data_for_model(
+            self.vae_module, self.unweighted_batch
+        )
 
         assert model_input.size(0) == 100
         assert model_input.size(1) == self.vae_module.latent_dim + len(
-            batch_no_weight["features"].keys()
+            self.unweighted_batch["features"].keys()
         )
