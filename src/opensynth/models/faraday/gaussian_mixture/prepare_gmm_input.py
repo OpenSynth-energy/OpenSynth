@@ -58,7 +58,6 @@ def prepare_data_for_model(
         data (torch.Tensor): data for GMM training.
         vae_module (FaradayVAE): VAE module used for encoding.
         train_sample_weights: flag whether to train with sample weights.
-        Defaults to false
     Returns:
         torch.Tensor: model inputs consisting of encoded consumption data and
         features.
