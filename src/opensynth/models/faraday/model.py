@@ -27,7 +27,7 @@ class FaradayModel:
         devices: int = 1,
         gmm_max_epochs: int = 1000,
         gmm_covariance_reg: float = 1e-6,
-        train_sample_weights: bool = False,
+        sample_weight_col: str = "",
     ):
         """
         Faraday Model. Note:
@@ -56,8 +56,9 @@ class FaradayModel:
                 ensure that it is positive semi-definite. Higher values will
                 make the algorithm more robust to singular covariance matrices,
                 at the cost of higher regularization.
-            train_sample_weights (bool, optional): Train with sample weights.
-                Defaults to False.
+            sample_weight_col (str, optional): Column name of sample weights.
+                If provided, the model will train with sample weights.
+                Defaults to "".
         """
         self.n_components = n_components
         self.vae_module = vae_module
@@ -67,7 +68,7 @@ class FaradayModel:
         self.devices = devices
         self.gmm_max_epochs = gmm_max_epochs
         self.gmm_covariance_reg = gmm_covariance_reg
-        self.train_sample_weights = train_sample_weights
+        self.sample_weight_col = sample_weight_col
 
     @staticmethod
     def parse_samples(
@@ -238,7 +239,7 @@ class FaradayModel:
         gmm_module, _, _ = fit_gmm(
             data=dl,
             vae_module=self.vae_module,
-            train_sample_weights=self.train_sample_weights,
+            sample_weight_col=self.sample_weight_col,
             num_components=self.n_components,
             num_features=self.vae_module.latent_dim
             + len(obtained_feature_list),
