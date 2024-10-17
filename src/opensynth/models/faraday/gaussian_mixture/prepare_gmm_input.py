@@ -60,7 +60,7 @@ def prepare_data_for_model(
     Args:
         data (TrainingData): data for GMM training.
         vae_module (FaradayVAE): VAE module used for encoding.
-        sample_weight_col: Name of sample weight column. Defaults to "".
+        sample_weight_col(str): Name of sample weight column. Defaults to "".
     Returns:
         torch.Tensor: model inputs consisting of encoded consumption data and
         features.

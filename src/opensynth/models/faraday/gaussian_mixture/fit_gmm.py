@@ -49,8 +49,8 @@ def fit_gmm(
         vae_module (FaradayVAE): trained VAE model.
         num_features (int): number of features in latent space
             (size of latent space + number of non encoded features)
-        train_sample_weights (bool, optional): flag whether to train with
-            sample weights. Defaults to False.
+        sample_weight_col (str, optional): Column name of sample weights.
+        If provided, the model will train with sample weights. Defaults to "".
         gmm_max_epochs (int, optional): maximum epochs to run GMM fitting.
             Defaults to 10000.
         gmm_convergence_tolerance (float, optional): convergence tolerance for
