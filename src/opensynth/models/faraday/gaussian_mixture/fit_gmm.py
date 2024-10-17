@@ -31,7 +31,7 @@ def fit_gmm(
     num_components: int,
     vae_module: FaradayVAE,
     num_features: int,
-    train_sample_weights: bool = False,
+    sample_weight_col: str = "",
     gmm_max_epochs: int = 10000,
     gmm_convergence_tolerance: float = 1e-6,
     covariance_regularization: float = 1e-6,
@@ -106,7 +106,7 @@ def fit_gmm(
         init_method=init_method,
         covariance_regularization=covariance_regularization,
         is_batch_training=is_batch_training,
-        train_sample_weights=train_sample_weights,
+        sample_weight_col=sample_weight_col,
     )
 
     pl.Trainer(
@@ -125,7 +125,7 @@ def fit_gmm(
         is_batch_training=is_batch_training,
         covariance_regularization=covariance_regularization,
         convergence_tolerance=gmm_convergence_tolerance,
-        train_sample_weights=train_sample_weights,
+        sample_weight_col=sample_weight_col,
     )
     trainer = pl.Trainer(
         max_epochs=gmm_max_epochs,
