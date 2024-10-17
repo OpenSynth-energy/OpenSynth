@@ -2,17 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 import torch
 
+from opensynth.data_modules.lcl_data_module import TrainingData
 from opensynth.models.faraday.losses import _expand_samples
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 
 def encode_data_for_gmm(
-    data: torch.Tensor, vae_module: FaradayVAE
+    data: TrainingData, vae_module: FaradayVAE
 ) -> torch.Tensor:
     """Prepare data for the GMM by encoding it with the VAE.
 
     Args:
-        data (torch.Tensor): data for training GMM
+        data (TrainingData): data for training GMM
         vae_module (FaradayVAE): trained VAE model
 
     Returns:
@@ -26,7 +27,9 @@ def encode_data_for_gmm(
     return model_input
 
 
-def expand_weights(data: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
+def expand_weights(
+    data_tensor: torch.Tensor, weights: torch.Tensor
+) -> torch.Tensor:
     """Expand the repeat based on the training weights and shuffle the
      expanded dataset.
      Shuffling prevents consecutive samples from being the same to prevent
@@ -40,14 +43,14 @@ def expand_weights(data: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
     Returns:
         torch.Tensor:
     """
-    model_input = _expand_samples(data, weights)
+    model_input = _expand_samples(data_tensor, weights)
     model_input = model_input[torch.randperm(model_input.size(dim=0))]
     return model_input
 
 
 def prepare_data_for_model(
     vae_module: FaradayVAE,
-    data: torch.Tensor,
+    data: TrainingData,
     train_sample_weights: bool,
 ) -> torch.Tensor:
     """Prepare data for the GMM by encoding it with the VAE.
@@ -55,7 +58,7 @@ def prepare_data_for_model(
      and shuffle the expanded dataset.
 
     Args:
-        data (torch.Tensor): data for GMM training.
+        data (TrainingData): data for GMM training.
         vae_module (FaradayVAE): VAE module used for encoding.
         train_sample_weights: flag whether to train with sample weights.
     Returns:

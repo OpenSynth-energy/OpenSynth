@@ -10,6 +10,10 @@ from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
 )
 
 
+class TrainingDataWithWeights(TrainingData):
+    weights: torch.Tensor
+
+
 class TestGMMDataPreparation:
 
     vae_module = FaradayVAE(
@@ -20,17 +24,20 @@ class TestGMMDataPreparation:
     features = {"feature_1": torch.rand(100), "feature_2": torch.rand(100)}
     weights = torch.randint(low=1, high=5, size=(100,))
 
-    batch = TrainingData(kwh=kwh, features=features, weights=weights)
-
+    weighted_batch = TrainingDataWithWeights(
+        kwh=kwh, features=features, weights=weights
+    )
     unweighted_batch = TrainingData(kwh=kwh, features=features)
 
     def test_check_data_size(self):
 
-        model_input = prepare_data_for_model(self.vae_module, self.batch, True)
+        model_input = prepare_data_for_model(
+            self.vae_module, self.weighted_batch, True
+        )
 
-        assert model_input.shape[0] == self.batch["weights"].sum()
+        assert model_input.shape[0] == self.weighted_batch["weights"].sum()
         assert model_input.shape[1] == self.vae_module.latent_dim + len(
-            self.batch["features"].keys()
+            self.weighted_batch["features"].keys()
         )
 
     def test_check_weights(self):
@@ -39,9 +46,13 @@ class TestGMMDataPreparation:
         # Expect these rows to be shuffled into random positions in the final
         # tensor, not just repreated on consecutive rows.
 
-        test_idx = torch.where(self.batch["weights"] > 1)[0][0]
-        encoded_batch = encode_data_for_gmm(self.batch, self.vae_module)
-        model_input = expand_weights(encoded_batch, self.batch["weights"])
+        test_idx = torch.where(self.weighted_batch["weights"] > 1)[0][0]
+        encoded_batch = encode_data_for_gmm(
+            self.weighted_batch, self.vae_module
+        )
+        model_input = expand_weights(
+            encoded_batch, self.weighted_batch["weights"]
+        )
 
         assert (
             torch.Tensor(
@@ -52,13 +63,16 @@ class TestGMMDataPreparation:
                     for i in range(model_input.size(0))
                 ]
             ).sum()
-            == self.batch["weights"][test_idx]
+            == self.weighted_batch["weights"][test_idx]
         )
 
         assert not torch.equal(
             torch.where(model_input == encoded_batch[test_idx, :])[0].unique(),
             torch.Tensor(
-                [test_idx + i for i in range(self.batch["weights"][test_idx])]
+                [
+                    test_idx + i
+                    for i in range(self.weighted_batch["weights"][test_idx])
+                ]
             ),
         )
 
@@ -66,7 +80,7 @@ class TestGMMDataPreparation:
         "batch_data, train_sample_weights",
         [
             # Exact tensor should return quantile loss of 0
-            pytest.param(batch, True),
+            pytest.param(weighted_batch, True),
             pytest.param(unweighted_batch, False),
             pytest.param(
                 unweighted_batch,
