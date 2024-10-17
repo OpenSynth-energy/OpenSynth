@@ -32,7 +32,9 @@ class TestGMMDataPreparation:
     def test_check_data_size(self):
 
         model_input = prepare_data_for_model(
-            self.vae_module, self.weighted_batch, True
+            vae_module=self.vae_module,
+            data=self.weighted_batch,
+            sample_weight_col="weights",
         )
 
         assert model_input.shape[0] == self.weighted_batch["weights"].sum()
@@ -77,32 +79,53 @@ class TestGMMDataPreparation:
         )
 
     @pytest.mark.parametrize(
-        "batch_data, train_sample_weights",
+        "batch_data, sample_weight_col",
         [
             # Exact tensor should return quantile loss of 0
-            pytest.param(weighted_batch, True),
-            pytest.param(unweighted_batch, False),
+            pytest.param(weighted_batch, "weights"),
+            pytest.param(unweighted_batch, ""),
             pytest.param(
-                unweighted_batch,
-                True,
+                weighted_batch,
+                True,  # Not string
+                marks=pytest.mark.xfail(raises=TypeError, strict=True),
+            ),
+            pytest.param(
+                weighted_batch,
+                "different_column",  # Column not found
                 marks=pytest.mark.xfail(raises=KeyError, strict=True),
             ),
         ],
     )
-    def test_expect_weight_if_train_sample_weights_is_true(
-        self, batch_data, train_sample_weights
+    def test_expect_weight_if_train_sample_weights_provided(
+        self, batch_data, sample_weight_col
     ):
         model_input = prepare_data_for_model(
-            self.vae_module, batch_data, train_sample_weights
+            self.vae_module, batch_data, sample_weight_col
         )
         assert len(model_input) > 0
 
     def test_no_weights(self):
         model_input = prepare_data_for_model(
-            self.vae_module, self.unweighted_batch, False
+            self.vae_module, self.unweighted_batch
         )
 
         assert model_input.size(0) == 100
         assert model_input.size(1) == self.vae_module.latent_dim + len(
             self.unweighted_batch["features"].keys()
         )
+
+    def test_bespoke_weight_col(self):
+
+        class BespokeData(TrainingData):
+            bespoke_weights: torch.Tensor
+
+        bespoke_batch = BespokeData(
+            kwh=self.kwh, features=self.features, bespoke_weights=self.weights
+        )
+
+        model_inputs = prepare_data_for_model(
+            vae_module=self.vae_module,
+            data=bespoke_batch,
+            sample_weight_col="bespoke_weights",
+        )
+        assert len(model_inputs) > 0

@@ -51,7 +51,7 @@ def expand_weights(
 def prepare_data_for_model(
     vae_module: FaradayVAE,
     data: TrainingData,
-    train_sample_weights: bool,
+    sample_weight_col: str = "",
 ) -> torch.Tensor:
     """Prepare data for the GMM by encoding it with the VAE.
      If sample weights are used, then expand the repeat based on the weights
@@ -60,20 +60,23 @@ def prepare_data_for_model(
     Args:
         data (TrainingData): data for GMM training.
         vae_module (FaradayVAE): VAE module used for encoding.
-        train_sample_weights: flag whether to train with sample weights.
+        sample_weight_col: Name of sample weight column. Defaults to "".
     Returns:
         torch.Tensor: model inputs consisting of encoded consumption data and
         features.
     """
     model_input = encode_data_for_gmm(data, vae_module)
 
-    if train_sample_weights:
+    if not isinstance(sample_weight_col, str):
+        raise TypeError(
+            "sample_weight_col should be a string, "
+            f"not {type(sample_weight_col)}"
+        )
+
+    if sample_weight_col != "":
         try:
-            model_input = expand_weights(model_input, data["weights"])
+            model_input = expand_weights(model_input, data[sample_weight_col])
         except KeyError:
-            raise KeyError(
-                f"train_sample_weights set to {train_sample_weights} but"
-                "weights not found in data."
-            )
+            raise KeyError(f"{sample_weight_col} not found in data")
 
     return model_input
