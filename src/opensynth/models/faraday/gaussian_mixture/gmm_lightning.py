@@ -178,7 +178,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         _, log_probs = self.model.forward(
             prepare_data_for_model(
                 vae_module=self.vae_module,
-                batch=batch,
+                data=batch,
                 sample_weight_col=self.sample_weight_col,
             )
         )
@@ -191,7 +191,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         log_responsibilities, log_probs = self.model.forward(
             prepare_data_for_model(
                 vae_module=self.vae_module,
-                batch=batch,
+                data=batch,
                 sample_weight_col=self.sample_weight_col,
             )
         )
@@ -307,7 +307,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
         # Encode the batch
         encoded_batch = prepare_data_for_model(
             vae_module=self.vae_module,
-            batch=batch,
+            data=batch,
             sample_weight_col=self.sample_weight_col,
         )
 
