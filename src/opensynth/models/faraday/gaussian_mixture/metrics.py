@@ -121,6 +121,24 @@ class CovarianceAggregator(Metric):
             dist_reduce_fx="sum",
         )
 
+    def regularise(self, covars: torch.Tensor) -> torch.Tensor:
+        good_list = []
+        bad_list = []
+        fixed_covars = covars.detach().clone()
+
+        for i in range(len(covars)):
+            covar = covars[i]
+            try:
+                torch.linalg.cholesky(covar)
+                good_list.append(i)
+            except torch.torch._C._LinAlgError:
+                bad_list.append(i)
+                fixed_covars[i] = (
+                    torch.eye(covar.size(0)) * 1e3 + fixed_covars[i]
+                )
+
+        return fixed_covars
+
     def update(
         self,
         data: torch.Tensor,
@@ -137,17 +155,9 @@ class CovarianceAggregator(Metric):
                 responsibilities[:, i].unsqueeze(1) * component_diff
             ).T.matmul(component_diff)
 
-            # Add regularization to the diagonal of the covariance matrix
-            # Only do this for covars that needs regularising
-            try:
-                torch.linalg.cholesky(covars)
-            except torch._C._LinAlgError:
-                regularization = self.reg * torch.eye(
-                    self.num_features, device=covars.device
-                )
-                covars_regularized = covars + regularization
-                self.covariance_sum[i].add_(covars_regularized)
-                print(f"Regularising Covar: {i}")
+            self.covariance_sum[i].add_(covars)
+
+        self.covariance_sum = self.regularise(self.covariance_sum)
 
     def compute(self) -> torch.Tensor:
         # covariance_type == "full"
