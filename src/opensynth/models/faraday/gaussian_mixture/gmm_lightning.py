@@ -172,7 +172,11 @@ class GaussianMixtureLightningModule(pl.LightningModule):
 
         if self._should_update_covars:
             covars = self.covar_aggregator.compute()
-            self.model.precisions_cholesky.copy_(cholesky_precision(covars))
+            self.model.precisions_cholesky.copy_(
+                cholesky_precision(
+                    covars, regularisation_param=self.covariance_regularization
+                )
+            )
 
     def test_step(self, batch: torch.Tensor, _batch_idx: int) -> None:
         _, log_probs = self.model.forward(
@@ -365,7 +369,11 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
             self.model.component_probs.copy_(priors)
 
             covars = self.covar_aggregator.compute()
-            self.model.precisions_cholesky.copy_(cholesky_precision(covars))
+            self.model.precisions_cholesky.copy_(
+                cholesky_precision(
+                    covars, regularisation_param=self.covariance_regularization
+                )
+            )
 
         elif self.init_method == "rand":
             if self.current_epoch == 0 and self.is_batch_training:
@@ -383,7 +391,10 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
             ) or self.current_epoch == 1:
                 covars = self.covar_aggregator.compute()
                 self.model.precisions_cholesky.copy_(
-                    cholesky_precision(covars)
+                    cholesky_precision(
+                        covars,
+                        regularisation_param=self.covariance_regularization,
+                    )
                 )
 
     def _one_hot_responsibilities(
@@ -401,6 +412,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
 
 def cholesky_precision(
     covariances: torch.Tensor,
+    regularisation_param: float = 1e-6,
 ) -> torch.Tensor:
     """
     Computes the Cholesky decompositions of the precision matrices induced by
@@ -415,8 +427,27 @@ def cholesky_precision(
         lower-triangular Cholesky decompositions of the precision matrices.
     """
     # Compute Cholesky decomposition
+
+    # Only regularise non-positive definite matrices
+    good_list = []
+    bad_list = []
+    fixed_covars = covariances.detach().clone()
+
+    for i in range(len(covariances)):
+        covar = covariances[i]
+        try:
+            torch.linalg.cholesky(covar)
+            good_list.append(i)
+        except torch.torch._C._LinAlgError:
+            bad_list.append(i)
+            fixed_covars[i] = (
+                torch.eye(covar.size(0)) * regularisation_param
+                + fixed_covars[i]
+            )
+
+    # Final checking
     try:
-        cholesky = torch.linalg.cholesky(covariances)
+        cholesky = torch.linalg.cholesky(fixed_covars)
     except torch.linalg.LinAlgError:
         raise ValueError(
             """
