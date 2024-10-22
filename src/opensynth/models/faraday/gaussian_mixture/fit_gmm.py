@@ -97,6 +97,8 @@ def fit_gmm(
         max_epochs_init = 1 + int(is_batch_training)
 
     print("Beginning GMM Training")
+
+    print("Initialising GMM")
     # Initialise GMM model using InitLightningModule
     init_module = GaussianMixtureInitLightningModule(
         model_,
@@ -115,7 +117,7 @@ def fit_gmm(
         accelerator=accelerator,
         devices=devices,
     ).fit(init_module, data)
-
+    print("Fitting GMM")
     # Run GMM fitting
     gmm_module = GaussianMixtureLightningModule(
         model_,  # init_module.model,
