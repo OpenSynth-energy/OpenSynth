@@ -266,6 +266,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
         self.is_batch_training = is_batch_training
         self.vae_module = vae_module
         self.sample_weight_col = sample_weight_col
+        self.covariance_regularization = covariance_regularization
         self.save_hyperparameters("init_method")
 
         self.prior_aggregator = PriorAggregator(
@@ -275,7 +276,7 @@ class GaussianMixtureInitLightningModule(pl.LightningModule):
         self.covar_aggregator = CovarianceAggregator(
             num_components=self.num_components,
             num_features=self.num_features,
-            reg=covariance_regularization,
+            reg=self.covariance_regularization,
         )
 
         if self.init_method == "rand":
