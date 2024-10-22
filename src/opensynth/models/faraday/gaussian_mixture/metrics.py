@@ -146,8 +146,8 @@ class CovarianceAggregator(Metric):
                     self.num_features, device=covars.device
                 )
                 covars_regularized = covars + regularization
-
                 self.covariance_sum[i].add_(covars_regularized)
+                print(f"Regularising Covar: {i}")
 
     def compute(self) -> torch.Tensor:
         # covariance_type == "full"
