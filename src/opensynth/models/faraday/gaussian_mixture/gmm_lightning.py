@@ -444,6 +444,8 @@ def cholesky_precision(
                 torch.eye(covar.size(0)) * regularisation_param
                 + fixed_covars[i]
             )
+    print(f"Fixed {len(bad_list)} singular covariance matrices:.")
+    print(bad_list)
 
     # Final checking
     try:
