@@ -138,12 +138,16 @@ class CovarianceAggregator(Metric):
             ).T.matmul(component_diff)
 
             # Add regularization to the diagonal of the covariance matrix
-            regularization = self.reg * torch.eye(
-                self.num_features, device=covars.device
-            )
-            covars_regularized = covars + regularization
+            # Only do this for covars that needs regularising
+            try:
+                torch.linalg.cholesky(covars)
+            except torch._C._LinAlgError:
+                regularization = self.reg * torch.eye(
+                    self.num_features, device=covars.device
+                )
+                covars_regularized = covars + regularization
 
-            self.covariance_sum[i].add_(covars_regularized)
+                self.covariance_sum[i].add_(covars_regularized)
 
     def compute(self) -> torch.Tensor:
         # covariance_type == "full"
