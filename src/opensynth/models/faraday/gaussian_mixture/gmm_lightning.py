@@ -424,7 +424,6 @@ def cholesky_precision(
         good_list = []
         bad_list = []
         fixed_covars = covariances.detach().clone()
-
         for i in range(len(covariances)):
             covar = covariances[i]
             constant = fixed_covars[i].mean() * 0.01  # 1% of mean
