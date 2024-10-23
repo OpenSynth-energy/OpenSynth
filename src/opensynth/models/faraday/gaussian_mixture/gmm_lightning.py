@@ -416,29 +416,8 @@ def cholesky_precision(
         lower-triangular Cholesky decompositions of the precision matrices.
     """
     # Compute Cholesky decomposition
-
-    # Only regularise non-positive definite matrices
-    good_list = []
-    bad_list = []
-    fixed_covars = covariances.detach().clone()
-
-    for i in range(len(covariances)):
-        covar = covariances[i]
-        constant = fixed_covars[i].mean() * 0.01  # 1% of mean
-        try:
-            torch.linalg.cholesky(covar)
-            good_list.append(i)
-        except torch._C._LinAlgError:
-            bad_list.append(i)
-            fixed_covars[i] = (
-                torch.eye(covar.size(0)) * constant + fixed_covars[i]
-            )
-    print(f"Fixed {len(bad_list)} singular covariance matrices:.")
-    print(bad_list)
-
-    # Final checking
     try:
-        cholesky = torch.linalg.cholesky(fixed_covars)
+        cholesky = torch.linalg.cholesky(covariances)
     except torch.linalg.LinAlgError:
         # If fail due to non-positive definite matrix, add constant to diagonal
         # Only to covariance matrices that failed
