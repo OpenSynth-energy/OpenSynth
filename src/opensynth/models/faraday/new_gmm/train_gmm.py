@@ -1,5 +1,5 @@
+import numpy as np
 import torch
-from torch.utils.data import DataLoader
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule
 from opensynth.models.faraday import FaradayVAE
@@ -10,7 +10,7 @@ from opensynth.models.faraday.new_gmm import gmm_utils
 
 
 def initialise_gmm_params(
-    data_loader: DataLoader, vae_module: FaradayVAE, n_components: int
+    X: np.array, n_components: int
 ) -> dict[str, torch.Tensor]:
     """
     Initialise Gaussian Mixture Parameters. This works
@@ -19,29 +19,24 @@ def initialise_gmm_params(
     of computing cholesky precision and covariances.
 
     Args:
-        data_loader (DataLoader): Data loader
-        vae_module (FaradayVAE): VAE Module
+        X (np.array): Input data
         n_components (int): Number of components
 
     Returns:
         dict[str, torch.Tensor]: GMM params
     """
-
-    first_batch = next(iter(data_loader))
-
-    input_data = (
-        encode_data_for_gmm(data=first_batch, vae_module=vae_module)
-        .detach()
-        .numpy()
-    )
-
     labels_, means_, responsibilities_ = gmm_utils.initialise_centroids(
-        dataloader=data_loader,
-        vae_module=vae_module,
-        n_components=n_components,
+        X=X, n_components=n_components
     )
     weights_, covariances_ = gmm_utils.torch_estimate_gaussian_parameters(
-        X=input_data, means=means_
+        X=X,
+        means=means_,
+        responsibilities=responsibilities_,
+        reg_covar=1e-6,
+    )
+
+    precision_cholesky_ = gmm_utils.torch_compute_precision_cholesky(
+        covariances=covariances_
     )
 
     init_params: dict[str, torch.Tensor] = {
@@ -50,15 +45,24 @@ def initialise_gmm_params(
         "responsibilities": responsibilities_,
         "weights": weights_,
         "covariances": covariances_,
+        "precision_cholesky": precision_cholesky_,
     }
 
     return init_params
 
 
 def train_gmm(dm: LCLDataModule, vae_module: FaradayVAE, n_components: int):
+
+    first_batch = next(iter(dm.train_dataloader()))
+    vae_module.eval()
+    input_data = (
+        encode_data_for_gmm(data=first_batch, vae_module=vae_module)
+        .detach()
+        .numpy()
+    )
+
     init_params = initialise_gmm_params(
-        data_loader=dm.train_dataloader(),
-        vae_module=vae_module,
+        X=input_data,
         n_components=n_components,
     )
     return init_params

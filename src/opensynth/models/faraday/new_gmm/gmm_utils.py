@@ -82,7 +82,7 @@ def torch_estimate_gaussian_parameters(
     means_eps = means + torch.finfo(means.dtype).eps
 
     for k in range(n_components):
-        diff = X - means_eps[k]
+        diff = torch.from_numpy(X).float() - means_eps[k]
         covariances[k] = (
             torch.matmul(responsibilities[:, k].float() * diff.T, diff)
             / weights[k]
