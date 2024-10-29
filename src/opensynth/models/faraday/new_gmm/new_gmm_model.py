@@ -21,11 +21,14 @@ class GaussianMixtureModel(nn.Module):
     means: torch.Tensor
     precisions_cholesky: torch.Tensor
 
-    def __init__(self, num_components: int, num_features: int):
+    def __init__(
+        self, num_components: int, num_features: int, reg_covar: float = 1e-6
+    ):
 
         super().__init__()
         self.num_components = num_components
         self.num_features = num_features
+        self.reg_covar = reg_covar
 
         # Initialise model params
         weights_shape = torch.Size([self.num_components])
@@ -70,7 +73,7 @@ class GaussianMixtureModel(nn.Module):
             ),
             dim=1,
         )
-        return log_det_chol
+        return log_det_chol.double()
 
     def _estimate_log_gaussian_prob(
         self,
@@ -180,12 +183,12 @@ class GaussianMixtureModel(nn.Module):
             gmm_utils.torch_estimate_gaussian_parameters(
                 X,
                 responsibilities=torch.exp(log_reponsibilities),
-                reg_covar=1e-6,
+                reg_covar=self.reg_covar,
             )
         )
 
         precision_cholesky_ = gmm_utils.torch_compute_precision_cholesky(
-            covariances=covariances_
+            covariances=covariances_, reg=self.reg_covar
         )
 
         # Update state
@@ -195,5 +198,8 @@ class GaussianMixtureModel(nn.Module):
 
         return precision_cholesky_, weights_, means_
 
-    def forward(self):
-        pass
+    def forward(self, X: torch.Tensor):
+        return self.e_step(X)
+
+    def predict(self, X: torch.Tensor):
+        return self._estimate_weighted_log_prob(X).argmax(dim=1)
