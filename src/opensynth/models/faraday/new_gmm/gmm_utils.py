@@ -46,7 +46,7 @@ def initialise_centroids(
         responsibilities = np.zeros((n_samples, n_components))
         responsibilities[np.arange(n_samples), labels] = 1
         responsibilities = torch.from_numpy(responsibilities)
-        return labels, means, responsibilities
+        return labels.double(), means.double(), responsibilities.double()
     else:
         raise NotImplementedError("Only kmeans is supported for now")
 
@@ -84,7 +84,6 @@ def torch_estimate_gaussian_parameters(
     covariances = torch.empty((n_components, n_features, n_features))
     # Avoid division by zero error
     means_eps = means + torch.finfo(means.dtype).eps
-
     for k in range(n_components):
         diff = X - means_eps[k]
         covariances[k] = (
@@ -98,7 +97,7 @@ def torch_estimate_gaussian_parameters(
 
 
 def torch_compute_precision_cholesky(
-    covariances: torch.Tensor,
+    covariances: torch.Tensor, reg: float = 1e-6
 ) -> torch.Tensor:
     """
     Pytorch implmentation of sklearn's
@@ -124,11 +123,13 @@ def torch_compute_precision_cholesky(
     n_components, n_features, _ = covariances.shape
     precisions_chol = torch.empty((n_components, n_features, n_features))
     for k, covariance in enumerate(covariances):
+        covariance = covariance + torch.eye(n_features) * reg
         try:
             cov_chol = torch.linalg.cholesky(covariance, upper=False)
         except torch.linalg.LinAlgError:
+            print(f"Failed for {k}th covariance with reg_covar: {reg}.")
             raise ValueError(estimate_precision_error_message)
         precisions_chol[k] = torch.linalg.solve_triangular(
             cov_chol, torch.eye(n_features), upper=False
         ).T
-    return precisions_chol
+    return precisions_chol.double()

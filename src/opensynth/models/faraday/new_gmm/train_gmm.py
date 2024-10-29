@@ -10,7 +10,7 @@ from opensynth.models.faraday.new_gmm import gmm_utils, new_gmm_model
 
 
 def initialise_gmm_params(
-    X: np.array, n_components: int
+    X: np.array, n_components: int, reg_covar=1e-6, method: str = "torch"
 ) -> new_gmm_model.GMMInitParams:
     """
     Initialise Gaussian Mixture Parameters. This works
@@ -21,6 +21,7 @@ def initialise_gmm_params(
     Args:
         X (np.array): Input data
         n_components (int): Number of components
+        reg_covar (float): Regularisation for covariance matrix
 
     Returns:
         dict[str, torch.Tensor]: GMM params
@@ -31,14 +32,14 @@ def initialise_gmm_params(
 
     weights_, means_, covariances_ = (
         gmm_utils.torch_estimate_gaussian_parameters(
-            X=torch.from_numpy(X).float(),
-            responsibilities=responsibilities_.float(),
-            reg_covar=1e-6,
+            X=torch.from_numpy(X).double(),
+            responsibilities=responsibilities_.double(),
+            reg_covar=reg_covar,
         )
     )
 
     precision_cholesky_ = gmm_utils.torch_compute_precision_cholesky(
-        covariances=covariances_
+        covariances=covariances_, reg=reg_covar
     )
 
     init_params = new_gmm_model.GMMInitParams(
