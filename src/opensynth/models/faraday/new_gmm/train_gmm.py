@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule
 from opensynth.models.faraday import FaradayVAE
@@ -30,9 +31,8 @@ def initialise_gmm_params(
 
     weights_, means_, covariances_ = (
         gmm_utils.torch_estimate_gaussian_parameters(
-            X=X,
-            means=means_,
-            responsibilities=responsibilities_,
+            X=torch.from_numpy(X).float(),
+            responsibilities=responsibilities_.float(),
             reg_covar=1e-6,
         )
     )
