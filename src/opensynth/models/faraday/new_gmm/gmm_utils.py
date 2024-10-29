@@ -56,7 +56,7 @@ def torch_estimate_gaussian_parameters(
     responsibilities: torch.Tensor,
     means: torch.Tensor,
     reg_covar: float,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Pytorch port of SK Learn's method to estimate gaussian parameters:
     https://github.com/scikit-learn/scikit-learn/blob/f106177572c031d0b5c574f02a139a6a050b9343/sklearn/mixture/_gaussian_mixture.py#L152
@@ -69,8 +69,9 @@ def torch_estimate_gaussian_parameters(
         reg_covar (float): Covariance regularisor
 
     Returns:
-        Tuple[torch.Tensor, torch.Tensor]: 1) cluster weights i.e. number
-        of samples in each cluster and 2) covariances
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: 1) cluster weights
+        i.e. number of samples in each cluster and 2) cluster proba:
+        % of samples in each cluster 3) covariances
 
     """
     n_components, n_features = means.shape
@@ -90,7 +91,8 @@ def torch_estimate_gaussian_parameters(
 
     # Add small regularisation
     covariances += reg_covar
-    return weights, covariances
+    components_probability = weights / weights.sum()
+    return weights, components_probability, covariances
 
 
 def torch_compute_precision_cholesky(
