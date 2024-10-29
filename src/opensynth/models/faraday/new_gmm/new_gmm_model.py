@@ -13,12 +13,11 @@ class GMMInitParams(TypedDict):
     weights: torch.Tensor
     covariances: torch.Tensor
     precision_cholesky: torch.Tensor
-    components_probability: torch.Tensor
 
 
 class GaussianMixtureModel(nn.Module):
 
-    components_probability: torch.Tensor
+    weights: torch.Tensor
     means: torch.Tensor
     precisions_cholesky: torch.Tensor
 
@@ -28,28 +27,25 @@ class GaussianMixtureModel(nn.Module):
         self.num_components = num_components
         self.num_features = num_features
 
-        self.register_buffer(
-            "component_probs", torch.empty(self.num_components)
-        )
-        self.register_buffer(
-            "means", torch.empty(self.num_components, self.num_features)
-        )
-
+        # Initialise model params
+        weights_shape = torch.Size([self.num_components])
+        means_shape = torch.Size([self.num_components, self.num_features])
         precision_cholesky_shape = torch.Size(
             [self.num_components, self.num_features, self.num_features]
         )
+        self.register_buffer("weights", torch.empty(weights_shape))
+        self.register_buffer("means", torch.empty(means_shape))
         self.register_buffer(
             "precisions_cholesky", torch.empty(precision_cholesky_shape)
         )
-
         self.means = None
         self.precision_cholesky = None
-        self.components_probability = None
+        self.weights = None
 
     def initialise(self, init_params: GMMInitParams):
         self.means = init_params["means"]
         self.precision_cholesky = init_params["precision_cholesky"]
-        self.components_probability = init_params["components_probability"]
+        self.weights = init_params["weights"]
 
     @staticmethod
     def _compute_log_det_cholesky(
@@ -115,17 +111,17 @@ class GaussianMixtureModel(nn.Module):
 
     def _estimate_log_weights(self: torch.Tensor) -> torch.Tensor:
         """
-        Estimate log of component_proba.
+        Estimate log of weights.
         Pytorch implementation of sklearns's
         sklearn.mixture._base.BaseMixture._estimate_log_weights
 
         Returns:
             torch.Tensor: Log of weights
         """
-        if self.components_probability is None:
+        if self.weights is None:
             raise AttributeError("Model is not initialised.")
 
-        return torch.log(self.components_probability)
+        return torch.log(self.weights)
 
     def _estimate_weighted_log_prob(
         self,
@@ -183,20 +179,21 @@ class GaussianMixtureModel(nn.Module):
         weights_, means_, covariances_ = (
             gmm_utils.torch_estimate_gaussian_parameters(
                 X,
-                means=self.means,
                 responsibilities=torch.exp(log_reponsibilities),
                 reg_covar=1e-6,
             )
         )
 
-        precision_cholesky = gmm_utils.torch_compute_precision_cholesky(
-            covariances_=covariances_
+        precision_cholesky_ = gmm_utils.torch_compute_precision_cholesky(
+            covariances=covariances_
         )
 
         # Update state
-        self.precisions_cholesky = precision_cholesky
-        self.weights_ = weights_
+        self.precisions_cholesky = precision_cholesky_
+        self.weights = weights_
         self.means = means_
+
+        return precision_cholesky_, weights_, means_
 
     def forward(self):
         pass

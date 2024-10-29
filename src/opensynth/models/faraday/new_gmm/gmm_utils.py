@@ -73,21 +73,22 @@ def torch_estimate_gaussian_parameters(
         % of samples in each cluster 3) covariances
 
     """
-    n_components, n_features = X.shape
+    # n_components, n_features = X.shape
     weights = (
-        responsibilities.sum(axis=0) + torch.finfo(responsibilities.dtype).eps
+        responsibilities.sum(dim=0) + torch.finfo(responsibilities.dtype).eps
     )
     # Compute new means usint updated responsibilities
     means = torch.matmul(responsibilities.T, X) / weights.reshape(-1, 1)
+
+    n_components, n_features = means.shape
     covariances = torch.empty((n_components, n_features, n_features))
     # Avoid division by zero error
     means_eps = means + torch.finfo(means.dtype).eps
 
     for k in range(n_components):
-        diff = torch.from_numpy(X).float() - means_eps[k]
+        diff = X - means_eps[k]
         covariances[k] = (
-            torch.matmul(responsibilities[:, k].float() * diff.T, diff)
-            / weights[k]
+            torch.matmul(responsibilities[:, k] * diff.T, diff) / weights[k]
         )
 
     # Add small regularisation
