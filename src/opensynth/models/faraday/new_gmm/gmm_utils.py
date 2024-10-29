@@ -54,12 +54,11 @@ def initialise_centroids(
 def torch_estimate_gaussian_parameters(
     X: torch.Tensor,
     responsibilities: torch.Tensor,
-    means: torch.Tensor,
     reg_covar: float,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    Pytorch port of SK Learn's method to estimate gaussian parameters:
-    https://github.com/scikit-learn/scikit-learn/blob/f106177572c031d0b5c574f02a139a6a050b9343/sklearn/mixture/_gaussian_mixture.py#L152
+    Pytorch implmentation of sklearn's
+    sklearn.mixture._gaussian_mixture._estimate_gaussian_parameters
 
     Args:
         X (torch.Tensor): Input data
@@ -74,10 +73,12 @@ def torch_estimate_gaussian_parameters(
         % of samples in each cluster 3) covariances
 
     """
-    n_components, n_features = means.shape
+    n_components, n_features = X.shape
     weights = (
         responsibilities.sum(axis=0) + torch.finfo(responsibilities.dtype).eps
     )
+    # Compute new means usint updated responsibilities
+    means = torch.matmul(responsibilities.T, X) / weights.reshape(-1, 1)
     covariances = torch.empty((n_components, n_features, n_features))
     # Avoid division by zero error
     means_eps = means + torch.finfo(means.dtype).eps
@@ -91,16 +92,17 @@ def torch_estimate_gaussian_parameters(
 
     # Add small regularisation
     covariances += reg_covar
-    components_probability = weights / weights.sum()
-    return weights, components_probability, covariances
+    weights = weights / weights.sum()
+    return weights, means, covariances
 
 
 def torch_compute_precision_cholesky(
     covariances: torch.Tensor,
 ) -> torch.Tensor:
     """
-    Pytorch port of SK Learn's compute precision cholesky:
-    https://github.com/scikit-learn/scikit-learn/blob/f106177572c031d0b5c574f02a139a6a050b9343/sklearn/mixture/_gaussian_mixture.py#L323
+    Pytorch implmentation of sklearn's
+    sklearn.mixture._gaussian_mixture._compute_precision_cholesky
+    _compute_precision_cholesky
 
     Args:
         covariances (torch.Tensor): Covariance matrix

@@ -3,6 +3,8 @@ from typing import Tuple, TypedDict
 import torch
 import torch.nn as nn
 
+from opensynth.models.faraday.new_gmm import gmm_utils
+
 
 class GMMInitParams(TypedDict):
     labels: torch.Tensor
@@ -11,12 +13,12 @@ class GMMInitParams(TypedDict):
     weights: torch.Tensor
     covariances: torch.Tensor
     precision_cholesky: torch.Tensor
-    components_probabilty: torch.Tensor
+    components_probability: torch.Tensor
 
 
 class GaussianMixtureModel(nn.Module):
 
-    components_proba: torch.Tensor
+    components_probability: torch.Tensor
     means: torch.Tensor
     precisions_cholesky: torch.Tensor
 
@@ -33,21 +35,21 @@ class GaussianMixtureModel(nn.Module):
             "means", torch.empty(self.num_components, self.num_features)
         )
 
-        precision_cholesky_chape = torch.Size(
+        precision_cholesky_shape = torch.Size(
             [self.num_components, self.num_features, self.num_features]
         )
         self.register_buffer(
-            "precisions_cholesky", torch.empty(precision_cholesky_chape)
+            "precisions_cholesky", torch.empty(precision_cholesky_shape)
         )
 
         self.means = None
         self.precision_cholesky = None
-        self.components_proba = None
+        self.components_probability = None
 
     def initialise(self, init_params: GMMInitParams):
         self.means = init_params["means"]
         self.precision_cholesky = init_params["precision_cholesky"]
-        self.components_proba = init_params["components_probabilty"]
+        self.components_probability = init_params["components_probability"]
 
     @staticmethod
     def _compute_log_det_cholesky(
@@ -120,10 +122,10 @@ class GaussianMixtureModel(nn.Module):
         Returns:
             torch.Tensor: Log of weights
         """
-        if self.components_proba is None:
+        if self.components_probability is None:
             raise AttributeError("Model is not initialised.")
 
-        return torch.log(self.components_proba)
+        return torch.log(self.components_probability)
 
     def _estimate_weighted_log_prob(
         self,
@@ -144,7 +146,7 @@ class GaussianMixtureModel(nn.Module):
         p = self._estimate_log_gaussian_prob(X)
         return p + w
 
-    def estimate_log_prob_and_responsibilities(
+    def _estimate_log_prob_and_responsibilities(
         self,
         X: torch.tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -171,13 +173,30 @@ class GaussianMixtureModel(nn.Module):
         self,
         X,
     ):
-        log_prob_norm, log_resp = self.estimate_log_prob_and_responsibilities(
+        log_prob_norm, log_resp = self._estimate_log_prob_and_responsibilities(
             X
         )
         return torch.mean(log_prob_norm), log_resp
 
-    def m_step(self):
-        pass
+    def m_step(self, X: torch.Tensor, log_reponsibilities: torch.Tensor):
+
+        weights_, means_, covariances_ = (
+            gmm_utils.torch_estimate_gaussian_parameters(
+                X,
+                means=self.means,
+                responsibilities=torch.exp(log_reponsibilities),
+                reg_covar=1e-6,
+            )
+        )
+
+        precision_cholesky = gmm_utils.torch_compute_precision_cholesky(
+            covariances_=covariances_
+        )
+
+        # Update state
+        self.precisions_cholesky = precision_cholesky
+        self.weights_ = weights_
+        self.means = means_
 
     def forward(self):
         pass
