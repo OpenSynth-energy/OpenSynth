@@ -198,5 +198,8 @@ class GaussianMixtureModel(nn.Module):
 
         return precision_cholesky_, weights_, means_
 
-    def forward(self):
-        pass
+    def forward(self, X: torch.Tensor):
+        return self.e_step(X)
+
+    def predict(self, X: torch.Tensor):
+        return self._estimate_weighted_log_prob(X).argmax(dim=1)
