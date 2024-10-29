@@ -27,7 +27,8 @@ def initialise_gmm_params(
     labels_, means_, responsibilities_ = gmm_utils.initialise_centroids(
         X=X, n_components=n_components
     )
-    weights_, components_proba_, covariances_ = (
+
+    weights_, means_, covariances_ = (
         gmm_utils.torch_estimate_gaussian_parameters(
             X=X,
             means=means_,
@@ -41,15 +42,12 @@ def initialise_gmm_params(
     )
 
     init_params = new_gmm_model.GMMInitParams(
-        labels=labels_,
+        init_labels=labels_,
         means=means_,
-        responsibilities=responsibilities_,
         weights=weights_,
         covariances=covariances_,
         precision_cholesky=precision_cholesky_,
-        components_probabilty=components_proba_,
     )
-
     return init_params
 
 
@@ -63,7 +61,6 @@ def train_gmm(dm: LCLDataModule, vae_module: FaradayVAE, n_components: int):
         .detach()
         .numpy()
     )
-
     init_params = initialise_gmm_params(
         X=input_data,
         n_components=n_components,
