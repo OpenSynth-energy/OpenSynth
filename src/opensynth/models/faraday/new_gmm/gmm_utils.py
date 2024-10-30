@@ -34,6 +34,7 @@ def initialise_centroids(
     """
 
     n_samples = len(X)
+    dtype = torch.tensor(X).dtype
 
     if init_method == "kmeans":
         kmeans_model = KMeans(
@@ -46,7 +47,11 @@ def initialise_centroids(
         responsibilities = np.zeros((n_samples, n_components))
         responsibilities[np.arange(n_samples), labels] = 1
         responsibilities = torch.from_numpy(responsibilities)
-        return labels.double(), means.double(), responsibilities.double()
+        return (
+            labels.type(dtype),
+            means.type(dtype),
+            responsibilities.type(dtype),
+        )
     else:
         raise NotImplementedError("Only kmeans is supported for now")
 
@@ -123,13 +128,17 @@ def torch_compute_precision_cholesky(
     n_components, n_features, _ = covariances.shape
     precisions_chol = torch.empty((n_components, n_features, n_features))
     for k, covariance in enumerate(covariances):
-        covariance = covariance + torch.eye(n_features) * reg
+        # covariance = covariance + torch.eye(n_features) * reg
         try:
             cov_chol = torch.linalg.cholesky(covariance, upper=False)
         except torch.linalg.LinAlgError:
-            print(f"Failed for {k}th covariance with reg_covar: {reg}.")
-            raise ValueError(estimate_precision_error_message)
+            try:
+                covariance_fixed = covariance + torch.eye(n_features) * reg
+                cov_chol = torch.linalg.cholesky(covariance_fixed, upper=False)
+            except torch.linalg.LinAlgError:
+                print(f"Failed for {k}th covariance with reg_covar: {reg}.")
+                raise ValueError(estimate_precision_error_message)
         precisions_chol[k] = torch.linalg.solve_triangular(
             cov_chol, torch.eye(n_features), upper=False
         ).T
-    return precisions_chol.double()
+    return precisions_chol.type(covariances.dtype)

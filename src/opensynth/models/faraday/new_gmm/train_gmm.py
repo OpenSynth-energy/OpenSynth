@@ -33,8 +33,8 @@ def initialise_gmm_params(
 
     weights_, means_, covariances_ = (
         gmm_utils.torch_estimate_gaussian_parameters(
-            X=torch.from_numpy(X).double(),
-            responsibilities=responsibilities_.double(),
+            X=torch.from_numpy(X),
+            responsibilities=responsibilities_,
             reg_covar=reg_covar,
         )
     )
@@ -77,9 +77,9 @@ def train_gmm(
     )
     gmm_module.initialise(init_params=init_params)
 
-    training_data = first_batch.double()
+    training_data = first_batch
     for i in tqdm(range(max_iter)):
-        log_prob_norm, log_resp = gmm_module.e_step(training_data)
+        _, log_resp = gmm_module.e_step(training_data)
         _, _, _ = gmm_module.m_step(training_data, log_resp)
 
     return init_params
