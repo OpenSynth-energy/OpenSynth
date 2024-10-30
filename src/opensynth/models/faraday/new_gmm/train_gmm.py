@@ -90,7 +90,7 @@ def training_loop(
     data: torch.Tensor,
     max_iter: int,
 ):
-    for i in tqdm(range(max_iter)):
-        log_prob_norm, log_resp = model.e_step(data)
+    for _ in tqdm(range(max_iter)):
+        _, log_resp = model.e_step(data)
         _, _, _ = model.m_step(data, log_resp)
     return model
