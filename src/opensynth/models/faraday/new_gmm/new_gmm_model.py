@@ -22,13 +22,18 @@ class GaussianMixtureModel(nn.Module):
     precisions_cholesky: torch.Tensor
 
     def __init__(
-        self, num_components: int, num_features: int, reg_covar: float = 1e-6
+        self,
+        num_components: int,
+        num_features: int,
+        reg_covar: float = 1e-6,
+        print_idx: int = 0,
     ):
 
         super().__init__()
         self.num_components = num_components
         self.num_features = num_features
         self.reg_covar = reg_covar
+        self.print_idx = print_idx
 
         # Initialise model params
         weights_shape = torch.Size([self.num_components])
@@ -39,16 +44,15 @@ class GaussianMixtureModel(nn.Module):
         self.register_buffer("weights", torch.empty(weights_shape))
         self.register_buffer("means", torch.empty(means_shape))
         self.register_buffer(
-            "precisions_cholesky", torch.empty(precision_cholesky_shape)
+            "precision_cholesky", torch.empty(precision_cholesky_shape)
         )
-        self.means = None
-        self.precision_cholesky = None
-        self.weights = None
+        self.initialised = False
 
     def initialise(self, init_params: GMMInitParams):
-        self.means = init_params["means"]
-        self.precision_cholesky = init_params["precision_cholesky"]
-        self.weights = init_params["weights"]
+        self.means.data = init_params["means"]
+        self.precision_cholesky.data = init_params["precision_cholesky"]
+        self.weights.data = init_params["weights"]
+        self.initialised = True
 
     @staticmethod
     def _compute_log_det_cholesky(
@@ -90,7 +94,7 @@ class GaussianMixtureModel(nn.Module):
         Returns:
             torch.Tensor: Log probabability
         """
-        if self.precision_cholesky is None or self.means is None:
+        if self.initialised is False:
             raise AttributeError("Model is not initialised.")
 
         n_samples, n_features = X.shape
@@ -121,7 +125,7 @@ class GaussianMixtureModel(nn.Module):
         Returns:
             torch.Tensor: Log of weights
         """
-        if self.weights is None:
+        if self.initialised is False:
             raise AttributeError("Model is not initialised.")
 
         return torch.log(self.weights)
@@ -178,7 +182,6 @@ class GaussianMixtureModel(nn.Module):
         return torch.mean(log_prob_norm), log_resp
 
     def m_step(self, X: torch.Tensor, log_reponsibilities: torch.Tensor):
-
         weights_, means_, covariances_ = (
             gmm_utils.torch_estimate_gaussian_parameters(
                 X,
@@ -191,9 +194,9 @@ class GaussianMixtureModel(nn.Module):
         )
 
         # Update state
-        self.precisions_cholesky = precision_cholesky_
-        self.weights = weights_
-        self.means = means_
+        self.precision_cholesky.data = precision_cholesky_
+        self.weights.data = weights_
+        self.means.data = means_
         return precision_cholesky_, weights_, means_
 
     def forward(self, X: torch.Tensor):

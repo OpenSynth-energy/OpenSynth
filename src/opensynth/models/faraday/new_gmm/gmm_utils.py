@@ -128,7 +128,6 @@ def torch_compute_precision_cholesky(
     n_components, n_features, _ = covariances.shape
     precisions_chol = torch.empty((n_components, n_features, n_features))
     for k, covariance in enumerate(covariances):
-        # covariance = covariance + torch.eye(n_features) * reg
         try:
             cov_chol = torch.linalg.cholesky(covariance, upper=False)
         except torch.linalg.LinAlgError:
