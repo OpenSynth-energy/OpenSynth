@@ -56,6 +56,40 @@ def initialise_centroids(
         raise NotImplementedError("Only kmeans is supported for now")
 
 
+def torch_compute_covariance(
+    X: torch.tensor,
+    means: torch.Tensor,
+    responsibilities: torch.Tensor,
+    weights: torch.Tensor,
+    reg_covar: float,
+) -> torch.Tensor:
+    """
+    Compute the covariance matrix for each cluster.
+
+    Args:
+        X (torch.tensor): Input data
+        means (torch.Tensor): Means or centroids
+        responsibilities (torch.Tensor): Responsibilities
+        weights (torch.Tensor): Weights
+        reg_covar (float): Regularisation
+
+    Returns:
+        torch.Tensor: Covariance matrix
+    """
+    n_components, n_features = means.shape
+    covariances = torch.empty((n_components, n_features, n_features))
+    # Avoid division by zero error
+    means_eps = means + torch.finfo(means.dtype).eps
+    for k in range(n_components):
+        diff = X - means_eps[k]
+        covariances[k] = (
+            torch.matmul(responsibilities[:, k] * diff.T, diff) / weights[k]
+        )
+    # Add small regularisation
+    covariances += reg_covar
+    return covariances
+
+
 def torch_estimate_gaussian_parameters(
     X: torch.Tensor,
     responsibilities: torch.Tensor,
@@ -85,18 +119,14 @@ def torch_estimate_gaussian_parameters(
     # Compute new means usint updated responsibilities
     means = torch.matmul(responsibilities.T, X) / weights.reshape(-1, 1)
 
-    n_components, n_features = means.shape
-    covariances = torch.empty((n_components, n_features, n_features))
-    # Avoid division by zero error
-    means_eps = means + torch.finfo(means.dtype).eps
-    for k in range(n_components):
-        diff = X - means_eps[k]
-        covariances[k] = (
-            torch.matmul(responsibilities[:, k] * diff.T, diff) / weights[k]
-        )
+    covariances = torch_compute_covariance(
+        X=X,
+        means=means,
+        responsibilities=responsibilities,
+        weights=weights,
+        reg_covar=reg_covar,
+    )
 
-    # Add small regularisation
-    covariances += reg_covar
     weights = weights / weights.sum()
     return weights, means, covariances
 
