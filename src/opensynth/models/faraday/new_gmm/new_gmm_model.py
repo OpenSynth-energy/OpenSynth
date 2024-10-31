@@ -1,8 +1,10 @@
 from typing import Tuple, TypedDict
 
+import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 
+from opensynth.models.faraday import FaradayVAE
 from opensynth.models.faraday.new_gmm import gmm_utils
 
 
@@ -96,7 +98,6 @@ class GaussianMixtureModel(nn.Module):
         """
         if self.initialised is False:
             raise AttributeError("Model is not initialised.")
-
         n_samples, n_features = X.shape
         # Log determinant of cholesky matrix
         log_det = self._compute_log_det_cholesky(
@@ -192,15 +193,70 @@ class GaussianMixtureModel(nn.Module):
         precision_cholesky_ = gmm_utils.torch_compute_precision_cholesky(
             covariances=covariances_, reg=self.reg_covar
         )
-
-        # Update state
-        self.precision_cholesky.data = precision_cholesky_
-        self.weights.data = weights_
-        self.means.data = means_
         return precision_cholesky_, weights_, means_
+
+    def update_params(
+        self,
+        weights: torch.Tensor,
+        means: torch.Tensor,
+        precision_cholesky: torch.Tensor,
+    ):
+        self.weights.data = weights
+        self.means.data = means
+        self.precision_cholesky.data = precision_cholesky
+        return self
 
     def forward(self, X: torch.Tensor):
         return self.e_step(X)
 
     def predict(self, X: torch.Tensor):
         return self._estimate_weighted_log_prob(X).argmax(dim=1)
+
+
+class GaussianMixtureLightningModule(pl.LightningModule):
+
+    def __init__(
+        self,
+        gmm_module: GaussianMixtureModel,
+        vae_module: FaradayVAE,
+        num_components: int,
+        num_features: int,
+        reg_covar: float = 1e-6,
+    ):
+        super().__init__()
+        self.gmm_module = gmm_module
+        self.vae_module = vae_module
+        self.num_components = num_components
+        self.num_features = num_features
+        self.reg_covar = reg_covar
+
+        self.automatic_optimization = False
+        # self.register_parameter("__ddp_dummy__",
+        #  nn.Parameter(torch.empty(1)))
+
+    def configure_optimizers(self) -> None:
+        return None
+
+    def training_step(self, batch) -> None:
+        # encoded_batch = encode_data_for_gmm(
+        #     data=batch, vae_module=self.vae_module
+        # )
+        # print(batch["kwh"][0][0], encoded_batch[0][0])
+        encoded_batch = batch
+        # Run e-step
+        _, log_resp = self.gmm_module.e_step(encoded_batch)
+        # Run m-step
+        precision_cholesky, weights, means = self.gmm_module.m_step(
+            encoded_batch, log_resp
+        )
+        # Update model params
+        self.gmm_module.update_params(
+            weights=weights, means=means, precision_cholesky=precision_cholesky
+        )
+        print(
+            f"Encoded batch: {encoded_batch[0][0]},"
+            f"Means: {self.gmm_module.means[0][0]}"
+        )
+
+    def on_training_epoch_end(self) -> None:
+        pass
