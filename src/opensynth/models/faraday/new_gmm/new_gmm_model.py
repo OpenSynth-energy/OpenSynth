@@ -114,11 +114,9 @@ class GaussianMixtureModel(nn.Module):
             y = torch.matmul(X, prec_chol) - torch.matmul(mu, prec_chol)
             log_prob[:, k] = torch.sum(torch.square(y), dim=1)
         # log gaussian likelihood
-        return (
-            -0.5
-            * (n_features * torch.log(2 * torch.tensor(torch.pi)) + log_prob)
-            + log_det
-        )
+
+        pi = torch.tensor(torch.pi, device=log_prob.device)
+        return -0.5 * (n_features * torch.log(2 * pi) + log_prob) + log_det
 
     def _estimate_log_weights(self: torch.Tensor) -> torch.Tensor:
         """
