@@ -82,6 +82,7 @@ class GaussianMixtureModel(nn.Module):
             ),
             dim=1,
         )
+        log_det_chol = log_det_chol.to(matrix_chol.device)
         return log_det_chol
 
     def _estimate_log_gaussian_prob(
