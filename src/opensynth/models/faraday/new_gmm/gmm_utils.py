@@ -57,7 +57,7 @@ def initialise_centroids(
 
 
 def torch_compute_covariance(
-    X: torch.tensor,
+    X: torch.Tensor,
     means: torch.Tensor,
     responsibilities: torch.Tensor,
     weights: torch.Tensor,
@@ -77,7 +77,9 @@ def torch_compute_covariance(
         torch.Tensor: Covariance matrix
     """
     n_components, n_features = means.shape
-    covariances = torch.empty((n_components, n_features, n_features))
+    covariances = torch.empty(
+        (n_components, n_features, n_features), device=X.device
+    )
     # Avoid division by zero error
     means_eps = means + torch.finfo(means.dtype).eps
     for k in range(n_components):
@@ -87,6 +89,7 @@ def torch_compute_covariance(
         )
     # Add small regularisation
     covariances += reg_covar
+    covariances = covariances.to(device=X.device)
     return covariances
 
 
@@ -154,20 +157,35 @@ def torch_compute_precision_cholesky(
         "or collapsed samples). Try to decrease the number of components, "
         "or increase reg_covar."
     )
+    original_device = covariances.device
+    if torch.device.type == "mps":
+        # torch.linalg.cholesky is not supported on MPS
+        # move calculation to CPU and move tensor back to device later
+        covariances = covariances.to(torch.device("cpu"))
 
     n_components, n_features, _ = covariances.shape
-    precisions_chol = torch.empty((n_components, n_features, n_features))
+    precisions_chol = torch.empty(
+        (n_components, n_features, n_features), device=covariances.device
+    )
+
     for k, covariance in enumerate(covariances):
         try:
             cov_chol = torch.linalg.cholesky(covariance, upper=False)
         except torch.linalg.LinAlgError:
             try:
-                covariance_fixed = covariance + torch.eye(n_features) * reg
+                covariance_fixed = (
+                    covariance
+                    + torch.eye(n_features, device=covariances.device) * reg
+                )
                 cov_chol = torch.linalg.cholesky(covariance_fixed, upper=False)
             except torch.linalg.LinAlgError:
                 print(f"Failed for {k}th covariance with reg_covar: {reg}.")
                 raise ValueError(estimate_precision_error_message)
         precisions_chol[k] = torch.linalg.solve_triangular(
-            cov_chol, torch.eye(n_features), upper=False
+            cov_chol,
+            torch.eye(n_features, device=covariances.device),
+            upper=False,
         ).T
+
+    precisions_chol = precisions_chol.to(device=original_device)
     return precisions_chol.type(covariances.dtype)
