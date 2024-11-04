@@ -170,4 +170,6 @@ def torch_compute_precision_cholesky(
         precisions_chol[k] = torch.linalg.solve_triangular(
             cov_chol, torch.eye(n_features), upper=False
         ).T
+
+    precisions_chol = precisions_chol.to(device=covariances.device)
     return precisions_chol.type(covariances.dtype)
