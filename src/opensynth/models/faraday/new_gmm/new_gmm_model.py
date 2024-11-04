@@ -6,7 +6,7 @@ import torch.nn as nn
 from pytorch_lightning.callbacks import EarlyStopping
 
 from opensynth.models.faraday import FaradayVAE
-from opensynth.models.faraday.new_gmm import gmm_utils
+from opensynth.models.faraday.new_gmm import gmm_metrics, gmm_utils
 
 
 class GMMInitParams(TypedDict):
@@ -239,24 +239,36 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         # self.register_parameter("__ddp_dummy__",
         #  nn.Parameter(torch.empty(1)))
 
-        self.convergence_tolerance = convergence_tolerance
+        # GMM params to sync across processes
+        self.weight_metric = gmm_metrics.WeightsMetric(self.num_components)
+        self.mean_metric = gmm_metrics.MeansMetric(
+            self.num_components, self.num_features
+        )
+        self.precision_cholesky_metric = gmm_metrics.PrecisionCholeskyMetric(
+            self.num_components, self.num_features
+        )
 
     def configure_optimizers(self) -> None:
         return None
 
+    def on_train_epoch_start(self) -> None:
+        # At the start of epoch, reset metrics
+        self.mean_metric.reset()
+        self.weight_metric.reset()
+        self.precision_cholesky_metric.reset()
+
     def training_step(self, batch) -> None:
-        # encoded_batch = encode_data_for_gmm(
-        #     data=batch, vae_module=self.vae_module
-        # )
-        # print(batch["kwh"][0][0], encoded_batch[0][0])
+
         encoded_batch = batch
+
         # Run e-step
         log_prob, log_resp = self.gmm_module.e_step(encoded_batch)
         # Run m-step
         precision_cholesky, weights, means, covar = self.gmm_module.m_step(
             encoded_batch, log_resp
         )
-        # Update model params
+        # Update model params. This only updates the params
+        # on the current device
         self.gmm_module.update_params(
             weights=weights,
             means=means,
@@ -264,14 +276,35 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             covariances=covar,
         )
         self.log("abs_log_prob", abs(log_prob))
+
+    def on_train_epoch_end(self) -> None:
+        # At the end of epoch, update metrics and sync across
+        # multiple devices using torchmetrics.Metric.compute
+        # Then update model params using the synced values
+
+        weights = self.gmm_module.weights
+        means = self.gmm_module.means
+        precision_cholesky = self.gmm_module.precision_cholesky
+
+        print(f"Local weights, means: {weights[0]:.4f}, {means[0][0]:.4f}")
+        self.weight_metric.update(weights)
+        self.mean_metric.update(means)
+        self.precision_cholesky_metric.update(precision_cholesky)
+
+        weights_reduced = self.weight_metric.compute()
+        means_reduced = self.mean_metric.compute()
+        prec_chol_reduced = self.precision_cholesky_metric.compute()
         print(
-            f"Encoded batch: {encoded_batch[0][0]},"
-            f"Means: {self.gmm_module.means[0][0]}"
+            f"Reduced weights, means: {weights_reduced[0]:.4f}, "
+            f"{means_reduced[0][0]:.4f}"
         )
-
     def on_training_epoch_end(self) -> None:
-        pass
-
+        self.gmm_module.update_params(
+          weights=weights_reduced,
+          means=means_reduced,
+          precision_cholesky=prec_chol_reduced,
+        )
+        
     def configure_callbacks(self) -> list[pl.Callback]:
         early_stopping = EarlyStopping(
             "abs_log_prob",
@@ -279,3 +312,4 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             patience=1,
         )
         return [early_stopping]
+
