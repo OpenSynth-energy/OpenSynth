@@ -108,7 +108,9 @@ class GaussianMixtureModel(nn.Module):
             self.precision_cholesky, n_features
         )
         # Log of probabilities
-        log_prob = torch.empty((n_samples, self.num_components))
+        log_prob = torch.empty(
+            (n_samples, self.num_components), device=X.device
+        )
         for k, (mu, prec_chol) in enumerate(
             zip(self.means, self.precision_cholesky)
         ):
