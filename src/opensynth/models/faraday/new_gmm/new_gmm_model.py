@@ -22,7 +22,8 @@ class GaussianMixtureModel(nn.Module):
 
     weights: torch.Tensor
     means: torch.Tensor
-    precisions_cholesky: torch.Tensor
+    precision_cholesky: torch.Tensor
+    covariances: torch.Tensor
 
     def __init__(
         self,
@@ -194,17 +195,19 @@ class GaussianMixtureModel(nn.Module):
         precision_cholesky_ = gmm_utils.torch_compute_precision_cholesky(
             covariances=covariances_, reg=self.reg_covar
         )
-        return precision_cholesky_, weights_, means_
+        return precision_cholesky_, weights_, means_, covariances_
 
     def update_params(
         self,
         weights: torch.Tensor,
         means: torch.Tensor,
         precision_cholesky: torch.Tensor,
+        covariances: torch.Tensor,
     ):
         self.weights.data = weights
         self.means.data = means
         self.precision_cholesky.data = precision_cholesky
+        self.covariances = covariances
         return self
 
     def forward(self, X: torch.Tensor):
@@ -250,12 +253,15 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         # Run e-step
         log_prob, log_resp = self.gmm_module.e_step(encoded_batch)
         # Run m-step
-        precision_cholesky, weights, means = self.gmm_module.m_step(
+        precision_cholesky, weights, means, covar = self.gmm_module.m_step(
             encoded_batch, log_resp
         )
         # Update model params
         self.gmm_module.update_params(
-            weights=weights, means=means, precision_cholesky=precision_cholesky
+            weights=weights,
+            means=means,
+            precision_cholesky=precision_cholesky,
+            covariances=covar,
         )
         self.log("abs_log_prob", abs(log_prob))
         print(

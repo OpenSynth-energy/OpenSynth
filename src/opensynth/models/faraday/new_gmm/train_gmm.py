@@ -63,9 +63,14 @@ def training_loop(
         prev_lower_bound = lower_bound
 
         log_prob, log_resp = model.e_step(data)
-        precision_cholesky, weights, means = model.m_step(data, log_resp)
+        precision_cholesky, weights, means, covariances = model.m_step(
+            data, log_resp
+        )
         model.update_params(
-            weights=weights, means=means, precision_cholesky=precision_cholesky
+            weights=weights,
+            means=means,
+            precision_cholesky=precision_cholesky,
+            covariances=covariances,
         )
         # Converegence
         lower_bound = log_prob
