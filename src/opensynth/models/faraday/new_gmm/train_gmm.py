@@ -53,12 +53,27 @@ def training_loop(
     # vae_module: FaradayVAE,
     data: torch.Tensor,
     max_iter: int,
+    convergence_tol: float = 1e-2,
 ):
+    converged = False
+    lower_bound = -np.inf
+
     # encoded_batch = encode_data_for_gmm(data=data, vae_module=vae_module)
-    for _ in tqdm(range(max_iter)):
-        _, log_resp = model.e_step(data)
+    for i in tqdm(range(max_iter)):
+        prev_lower_bound = lower_bound
+
+        log_prob, log_resp = model.e_step(data)
         precision_cholesky, weights, means = model.m_step(data, log_resp)
         model.update_params(
             weights=weights, means=means, precision_cholesky=precision_cholesky
         )
+        # Converegence
+        lower_bound = log_prob
+        change = abs(lower_bound - prev_lower_bound)
+        if change < convergence_tol:
+            converged = True
+            break
+
+    print(f"Converged: {converged}. Number of iterations: {i}")
+
     return model

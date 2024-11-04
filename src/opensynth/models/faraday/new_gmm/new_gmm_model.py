@@ -3,6 +3,7 @@ from typing import Tuple, TypedDict
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
+from pytorch_lightning.callbacks import EarlyStopping
 
 from opensynth.models.faraday import FaradayVAE
 from opensynth.models.faraday.new_gmm import gmm_utils
@@ -222,6 +223,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         num_components: int,
         num_features: int,
         reg_covar: float = 1e-6,
+        convergence_tolerance: float = 1e-2,
     ):
         super().__init__()
         self.gmm_module = gmm_module
@@ -234,6 +236,8 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         # self.register_parameter("__ddp_dummy__",
         #  nn.Parameter(torch.empty(1)))
 
+        self.convergence_tolerance = convergence_tolerance
+
     def configure_optimizers(self) -> None:
         return None
 
@@ -244,7 +248,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         # print(batch["kwh"][0][0], encoded_batch[0][0])
         encoded_batch = batch
         # Run e-step
-        _, log_resp = self.gmm_module.e_step(encoded_batch)
+        log_prob, log_resp = self.gmm_module.e_step(encoded_batch)
         # Run m-step
         precision_cholesky, weights, means = self.gmm_module.m_step(
             encoded_batch, log_resp
@@ -253,6 +257,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.gmm_module.update_params(
             weights=weights, means=means, precision_cholesky=precision_cholesky
         )
+        self.log("abs_log_prob", abs(log_prob))
         print(
             f"Encoded batch: {encoded_batch[0][0]},"
             f"Means: {self.gmm_module.means[0][0]}"
@@ -260,3 +265,11 @@ class GaussianMixtureLightningModule(pl.LightningModule):
 
     def on_training_epoch_end(self) -> None:
         pass
+
+    def configure_callbacks(self) -> list[pl.Callback]:
+        early_stopping = EarlyStopping(
+            "abs_log_prob",
+            min_delta=self.convergence_tolerance,
+            patience=1,
+        )
+        return [early_stopping]
