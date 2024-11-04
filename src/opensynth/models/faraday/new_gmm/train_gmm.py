@@ -75,6 +75,7 @@ def training_loop(
         # Converegence
         lower_bound = log_prob
         change = abs(lower_bound - prev_lower_bound)
+        print(f"Change: {change}")
         if change < convergence_tol:
             converged = True
             break

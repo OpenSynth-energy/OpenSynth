@@ -3,10 +3,11 @@ from typing import Tuple, TypedDict
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-from pytorch_lightning.callbacks import EarlyStopping
 
 from opensynth.models.faraday import FaradayVAE
 from opensynth.models.faraday.new_gmm import gmm_metrics, gmm_utils
+
+# from pytorch_lightning.callbacks import EarlyStopping
 
 
 class GMMInitParams(TypedDict):
@@ -236,6 +237,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.reg_covar = reg_covar
 
         self.automatic_optimization = False
+        self.convergence_tolerance = convergence_tolerance
         # self.register_parameter("__ddp_dummy__",
         #  nn.Parameter(torch.empty(1)))
 
@@ -247,6 +249,9 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.precision_cholesky_metric = gmm_metrics.PrecisionCholeskyMetric(
             self.num_components, self.num_features
         )
+        self.covariance_metric = gmm_metrics.CovarianceMetric(
+            self.num_components, self.num_features
+        )
 
     def configure_optimizers(self) -> None:
         return None
@@ -256,6 +261,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.mean_metric.reset()
         self.weight_metric.reset()
         self.precision_cholesky_metric.reset()
+        self.covariance_metric.reset()
 
     def training_step(self, batch) -> None:
 
@@ -285,31 +291,37 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         weights = self.gmm_module.weights
         means = self.gmm_module.means
         precision_cholesky = self.gmm_module.precision_cholesky
+        covariances = self.gmm_module.covariances
 
         print(f"Local weights, means: {weights[0]:.4f}, {means[0][0]:.4f}")
         self.weight_metric.update(weights)
         self.mean_metric.update(means)
         self.precision_cholesky_metric.update(precision_cholesky)
+        self.covariance_metric.update(covariances)
 
         weights_reduced = self.weight_metric.compute()
         means_reduced = self.mean_metric.compute()
         prec_chol_reduced = self.precision_cholesky_metric.compute()
+        covar_reduced = self.covariance_metric.compute()
+
         print(
             f"Reduced weights, means: {weights_reduced[0]:.4f}, "
             f"{means_reduced[0][0]:.4f}"
         )
-    def on_training_epoch_end(self) -> None:
-        self.gmm_module.update_params(
-          weights=weights_reduced,
-          means=means_reduced,
-          precision_cholesky=prec_chol_reduced,
-        )
-        
-    def configure_callbacks(self) -> list[pl.Callback]:
-        early_stopping = EarlyStopping(
-            "abs_log_prob",
-            min_delta=self.convergence_tolerance,
-            patience=1,
-        )
-        return [early_stopping]
 
+        self.gmm_module.update_params(
+            weights=weights_reduced,
+            means=means_reduced,
+            precision_cholesky=prec_chol_reduced,
+            covariances=covar_reduced,
+        )
+
+    # def configure_callbacks(self) -> list[pl.Callback]:
+    #     # TODO: Make this run on epoch end rather than
+    #     # within batch
+    #     early_stopping = EarlyStopping(
+    #         "abs_log_prob",
+    #         min_delta=self.convergence_tolerance,
+    #         patience=1,
+    #     )
+    #     return [early_stopping]
