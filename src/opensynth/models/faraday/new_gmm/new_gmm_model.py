@@ -3,6 +3,7 @@ from typing import Tuple, TypedDict
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
+from pytorch_lightning.callbacks import EarlyStopping
 
 from opensynth.models.faraday import FaradayVAE
 from opensynth.models.faraday.new_gmm import gmm_metrics, gmm_utils
@@ -21,7 +22,8 @@ class GaussianMixtureModel(nn.Module):
 
     weights: torch.Tensor
     means: torch.Tensor
-    precisions_cholesky: torch.Tensor
+    precision_cholesky: torch.Tensor
+    covariances: torch.Tensor
 
     def __init__(
         self,
@@ -193,17 +195,19 @@ class GaussianMixtureModel(nn.Module):
         precision_cholesky_ = gmm_utils.torch_compute_precision_cholesky(
             covariances=covariances_, reg=self.reg_covar
         )
-        return precision_cholesky_, weights_, means_
+        return precision_cholesky_, weights_, means_, covariances_
 
     def update_params(
         self,
         weights: torch.Tensor,
         means: torch.Tensor,
         precision_cholesky: torch.Tensor,
+        covariances: torch.Tensor,
     ):
         self.weights.data = weights
         self.means.data = means
         self.precision_cholesky.data = precision_cholesky
+        self.covariances = covariances
         return self
 
     def forward(self, X: torch.Tensor):
@@ -222,6 +226,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         num_components: int,
         num_features: int,
         reg_covar: float = 1e-6,
+        convergence_tolerance: float = 1e-2,
     ):
         super().__init__()
         self.gmm_module = gmm_module
@@ -257,16 +262,20 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         encoded_batch = batch
 
         # Run e-step
-        _, log_resp = self.gmm_module.e_step(encoded_batch)
+        log_prob, log_resp = self.gmm_module.e_step(encoded_batch)
         # Run m-step
-        precision_cholesky, weights, means = self.gmm_module.m_step(
+        precision_cholesky, weights, means, covar = self.gmm_module.m_step(
             encoded_batch, log_resp
         )
         # Update model params. This only updates the params
         # on the current device
         self.gmm_module.update_params(
-            weights=weights, means=means, precision_cholesky=precision_cholesky
+            weights=weights,
+            means=means,
+            precision_cholesky=precision_cholesky,
+            covariances=covar,
         )
+        self.log("abs_log_prob", abs(log_prob))
 
     def on_train_epoch_end(self) -> None:
         # At the end of epoch, update metrics and sync across
@@ -289,9 +298,18 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             f"Reduced weights, means: {weights_reduced[0]:.4f}, "
             f"{means_reduced[0][0]:.4f}"
         )
-
+    def on_training_epoch_end(self) -> None:
         self.gmm_module.update_params(
-            weights=weights_reduced,
-            means=means_reduced,
-            precision_cholesky=prec_chol_reduced,
+          weights=weights_reduced,
+          means=means_reduced,
+          precision_cholesky=prec_chol_reduced,
         )
+        
+    def configure_callbacks(self) -> list[pl.Callback]:
+        early_stopping = EarlyStopping(
+            "abs_log_prob",
+            min_delta=self.convergence_tolerance,
+            patience=1,
+        )
+        return [early_stopping]
+
