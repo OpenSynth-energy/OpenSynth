@@ -22,7 +22,7 @@ class GaussianMixtureModel(nn.Module):
 
     weights: torch.Tensor
     means: torch.Tensor
-    precisions_cholesky: torch.Tensor
+    precision_cholesky: torch.Tensor
     covariances: torch.Tensor
 
     def __init__(
