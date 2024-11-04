@@ -293,7 +293,10 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         precision_cholesky = self.gmm_module.precision_cholesky
         covariances = self.gmm_module.covariances
 
-        print(f"Local weights, means: {weights[0]:.4f}, {means[0][0]:.4f}")
+        print(
+            f"Local weights at rank: {self.local_rank} -",
+            f"means: {weights[0]:.4f}, {means[0][0]:.4f}",
+        )
         self.weight_metric.update(weights)
         self.mean_metric.update(means)
         self.precision_cholesky_metric.update(precision_cholesky)
@@ -304,10 +307,11 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         prec_chol_reduced = self.precision_cholesky_metric.compute()
         covar_reduced = self.covariance_metric.compute()
 
-        print(
-            f"Reduced weights, means: {weights_reduced[0]:.4f}, "
-            f"{means_reduced[0][0]:.4f}"
-        )
+        if self.local_rank == 0:
+            print(
+                f"Reduced weights, means: {weights_reduced[0]:.4f}, "
+                f"{means_reduced[0][0]:.4f}"
+            )
 
         self.gmm_module.update_params(
             weights=weights_reduced,
