@@ -3,11 +3,10 @@ from typing import Tuple, TypedDict
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
+from pytorch_lightning.callbacks import EarlyStopping
 
 from opensynth.models.faraday import FaradayVAE
 from opensynth.models.faraday.new_gmm import gmm_metrics, gmm_utils
-
-# from pytorch_lightning.callbacks import EarlyStopping
 
 
 class GMMInitParams(TypedDict):
@@ -282,7 +281,13 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             precision_cholesky=precision_cholesky,
             covariances=covar,
         )
-        self.log("abs_log_prob", abs(log_prob))
+        self.log(
+            "abs_log_prob",
+            abs(log_prob),
+            on_step=False,
+            on_epoch=True,
+        )  # uses mean-reduction (default) to accumulate the metrics across
+        # the current epoch
 
     def on_train_epoch_end(self) -> None:
         # At the end of epoch, update metrics and sync across
@@ -321,12 +326,11 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             covariances=covar_reduced,
         )
 
-    # def configure_callbacks(self) -> list[pl.Callback]:
-    #     # TODO: Make this run on epoch end rather than
-    #     # within batch
-    #     early_stopping = EarlyStopping(
-    #         "abs_log_prob",
-    #         min_delta=self.convergence_tolerance,
-    #         patience=1,
-    #     )
-    #     return [early_stopping]
+    def configure_callbacks(self) -> list[pl.Callback]:
+        early_stopping = EarlyStopping(
+            "abs_log_prob",
+            min_delta=self.convergence_tolerance,
+            patience=1,
+            check_on_train_epoch_end=True,
+        )
+        return [early_stopping]
