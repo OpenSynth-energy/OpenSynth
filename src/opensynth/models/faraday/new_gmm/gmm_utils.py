@@ -59,7 +59,8 @@ def initialise_centroids(
 def is_symmetric_positive_definite(tensor):
     # Check if the tensor is symmetric
     is_symmetric = all(
-        torch.allclose(tensor[i], tensor[i].T) for i in range(tensor.shape[0])
+        torch.allclose(tensor[i], tensor[i].T, atol=1e-5)
+        for i in range(tensor.shape[0])
     )
 
     # Check if the tensor is positive definite by checking eigenvalues
@@ -68,7 +69,7 @@ def is_symmetric_positive_definite(tensor):
     ).real  # Use only the real part of eigenvalues
     is_positive_definite = torch.all(eigenvalues > 0)
 
-    return is_symmetric, is_positive_definite
+    return is_symmetric and is_positive_definite
 
 
 def torch_compute_covariance(
@@ -108,7 +109,8 @@ def torch_compute_covariance(
     covariances = covariances.to(device=X.device)
 
     check_covar = is_symmetric_positive_definite(covariances)
-    print(f"Valid covariance: {check_covar}")
+    if not check_covar:
+        raise ValueError("Covariance matrix is not positive definite.")
     return covariances
 
 
