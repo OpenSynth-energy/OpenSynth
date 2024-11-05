@@ -297,7 +297,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             log_prob=log_prob,
         )
 
-    def on_train_batch_end(self) -> None:
+    def on_train_batch_end(self, *args, **kwargs) -> None:
         if self.compute_on_batch:
             weights = self.gmm_module.weights
             means = self.gmm_module.means
