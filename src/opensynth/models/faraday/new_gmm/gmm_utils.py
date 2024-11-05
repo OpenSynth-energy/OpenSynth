@@ -103,9 +103,13 @@ def torch_compute_covariance(
         covariances[k] = (
             torch.matmul(responsibilities[:, k] * diff.T, diff) / weights[k]
         )
-        covariances[k].view(-1)[
-            :: n_features + 1
-        ] += reg_covar  # Add small regularisation
+
+        # Add small regularisation
+        covariances[k] = (
+            covariances[k]
+            + torch.eye(n_features, device=covariances.device) * reg_covar
+        )
+
     covariances = covariances.to(device=X.device)
 
     check_covar = is_symmetric_positive_definite(covariances)

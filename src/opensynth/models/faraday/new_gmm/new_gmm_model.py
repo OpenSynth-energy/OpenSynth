@@ -46,11 +46,17 @@ class GaussianMixtureModel(nn.Module):
         precision_cholesky_shape = torch.Size(
             [self.num_components, self.num_features, self.num_features]
         )
+        covariances_shape = torch.Size(
+            [self.num_components, self.num_features, self.num_features]
+        )
+        log_prob_shape = torch.Size([1])
         self.register_buffer("weights", torch.empty(weights_shape))
         self.register_buffer("means", torch.empty(means_shape))
         self.register_buffer(
             "precision_cholesky", torch.empty(precision_cholesky_shape)
         )
+        self.register_buffer("covariances", torch.empty(covariances_shape))
+        self.register_buffer("log_prob", torch.empty(log_prob_shape))
         self.initialised = False
 
     def initialise(self, init_params: GMMInitParams):
