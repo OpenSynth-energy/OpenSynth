@@ -78,3 +78,22 @@ class CovarianceMetric(Metric):
 
     def compute(self) -> None:
         return self.covariances
+
+
+class LogProbMetric(Metric):
+    full_state_update = False
+
+    def __init__(self):
+        super().__init__()
+        self.log_prob: torch.Tensor
+        self.add_state(
+            "log_prob",
+            torch.zeros(1),
+            dist_reduce_fx="mean",
+        )
+
+    def update(self, log_prob: torch.Tensor) -> None:
+        self.log_prob.add_(torch.abs(log_prob))
+
+    def compute(self) -> None:
+        return self.log_prob

@@ -71,6 +71,7 @@ def training_loop(
             means=means,
             precision_cholesky=precision_cholesky,
             covariances=covariances,
+            log_prob=log_prob,
         )
         # Converegence
         lower_bound = log_prob
