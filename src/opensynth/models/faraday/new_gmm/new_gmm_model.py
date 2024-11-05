@@ -326,6 +326,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             log_prob_reduced,
             on_step=False,
             on_epoch=True,
+            prog_bar=True,
         )  # uses mean-reduction (default) to accumulate the metrics
 
         if self.local_rank == 0:
