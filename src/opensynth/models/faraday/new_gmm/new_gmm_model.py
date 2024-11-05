@@ -299,11 +299,21 @@ class GaussianMixtureLightningModule(pl.LightningModule):
 
         if self.compute_on_batch:
             # forward performs update, compute and reset metrics
-            self.weight_metric.forward(weights)
-            self.mean_metric.forward(means)
-            self.precision_cholesky_metric.forward(precision_cholesky)
-            self.covariance_metric.forward(covariances)
-            self.log_prob.forward(log_prob)
+            weights_reduced = self.weight_metric.forward(weights)
+            means_reduced = self.mean_metric.forward(means)
+            prec_chol_reduced = self.precision_cholesky_metric.forward(
+                precision_cholesky
+            )
+            covar_reduced = self.covariance_metric.forward(covariances)
+            log_prob_reduced = self.log_prob.forward(log_prob)
+
+            self.gmm_module.update_params(
+                weights=weights_reduced,
+                means=means_reduced,
+                precision_cholesky=prec_chol_reduced,
+                covariances=covar_reduced,
+                log_prob=log_prob_reduced,
+            )
 
     def on_train_epoch_end(self) -> None:
         # At the end of epoch, update metrics and sync across
