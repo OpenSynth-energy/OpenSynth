@@ -56,6 +56,22 @@ def initialise_centroids(
         raise NotImplementedError("Only kmeans is supported for now")
 
 
+def is_symmetric_positive_definite(tensor):
+    # Check if the tensor is symmetric
+    is_symmetric = all(
+        torch.allclose(tensor[i], tensor[i].T, atol=1e-5)
+        for i in range(tensor.shape[0])
+    )
+
+    # Check if the tensor is positive definite by checking eigenvalues
+    eigenvalues = torch.linalg.eigvals(
+        tensor
+    ).real  # Use only the real part of eigenvalues
+    is_positive_definite = torch.all(eigenvalues > 0)
+
+    return is_symmetric and is_positive_definite
+
+
 def torch_compute_covariance(
     X: torch.Tensor,
     means: torch.Tensor,
@@ -87,9 +103,18 @@ def torch_compute_covariance(
         covariances[k] = (
             torch.matmul(responsibilities[:, k] * diff.T, diff) / weights[k]
         )
-    # Add small regularisation
-    covariances += reg_covar
+
+        # Add small regularisation
+        covariances[k] = (
+            covariances[k]
+            + torch.eye(n_features, device=covariances.device) * reg_covar
+        )
+
     covariances = covariances.to(device=X.device)
+
+    check_covar = is_symmetric_positive_definite(covariances)
+    if not check_covar:
+        raise ValueError("Covariance matrix is not positive definite.")
     return covariances
 
 
