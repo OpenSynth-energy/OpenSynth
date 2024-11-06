@@ -216,8 +216,8 @@ class GaussianMixtureModel(nn.Module):
         self.weights.data = weights
         self.means.data = means
         self.precision_cholesky.data = precision_cholesky
-        self.covariances = covariances
-        self.log_prob = log_prob
+        self.covariances.data = covariances
+        self.log_prob.data = log_prob
         return self
 
     def forward(self, X: torch.Tensor):
