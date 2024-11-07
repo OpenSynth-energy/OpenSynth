@@ -353,8 +353,9 @@ class GaussianMixtureLightningModule(pl.LightningModule):
 
         if self.local_rank == 0:
             print(
-                f"Reduced weights, means: {weights_reduced[0]:.4f}, "
-                f"{means_reduced[0][0]:.4f}"
+                f"Reduced weights, means, covar: {weights_reduced[0]:.4f}, "
+                f"{means_reduced[0][0]:.4f}, "
+                f"{covar_reduced[0][0][0]:.4f}"
             )
 
         print("log prob: ", nll_reduced)
