@@ -24,7 +24,7 @@ class GaussianMixtureModel(nn.Module):
     means: torch.Tensor
     precision_cholesky: torch.Tensor
     covariances: torch.Tensor
-    log_prob: torch.Tensor
+    nll: torch.Tensor
 
     def __init__(
         self,
@@ -49,14 +49,14 @@ class GaussianMixtureModel(nn.Module):
         covariances_shape = torch.Size(
             [self.num_components, self.num_features, self.num_features]
         )
-        log_prob_shape = torch.Size([1])
+        nll_shape = torch.Size([1])
         self.register_buffer("weights", torch.empty(weights_shape))
         self.register_buffer("means", torch.empty(means_shape))
         self.register_buffer(
             "precision_cholesky", torch.empty(precision_cholesky_shape)
         )
         self.register_buffer("covariances", torch.empty(covariances_shape))
-        self.register_buffer("log_prob", torch.empty(log_prob_shape))
+        self.register_buffer("nll", torch.empty(nll_shape))
         self.initialised = False
 
     def initialise(self, init_params: GMMInitParams):
@@ -211,13 +211,13 @@ class GaussianMixtureModel(nn.Module):
         means: torch.Tensor,
         precision_cholesky: torch.Tensor,
         covariances: torch.Tensor,
-        log_prob: torch.Tensor,
+        nll: torch.Tensor,
     ):
         self.weights.data = weights
         self.means.data = means
         self.precision_cholesky.data = precision_cholesky
         self.covariances.data = covariances
-        self.log_prob.data = log_prob
+        self.nll.data = nll
         return self
 
     def forward(self, X: torch.Tensor):
@@ -262,7 +262,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.covariance_metric = gmm_metrics.CovarianceMetric(
             self.num_components, self.num_features
         )
-        self.log_prob = gmm_metrics.LogProbMetric()
+        self.nll = gmm_metrics.NLLMetric()
 
         self.compute_on_batch = compute_on_batch
 
@@ -275,7 +275,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.weight_metric.reset()
         self.precision_cholesky_metric.reset()
         self.covariance_metric.reset()
-        self.log_prob.reset()
+        self.nll.reset()
 
     def training_step(self, batch) -> None:
 
@@ -294,7 +294,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             means=means,
             precision_cholesky=precision_cholesky,
             covariances=covariances,
-            log_prob=log_prob,
+            nll=torch.neg(log_prob),
         )
 
     def on_train_batch_end(self, *args, **kwargs) -> None:
@@ -303,7 +303,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             means = self.gmm_module.means
             precision_cholesky = self.gmm_module.precision_cholesky
             covariances = self.gmm_module.covariances
-            log_prob = self.gmm_module.log_prob
+            nll = self.gmm_module.nll
 
             # forward performs update, compute and reset metrics
             weights_reduced = self.weight_metric.forward(weights)
@@ -312,14 +312,14 @@ class GaussianMixtureLightningModule(pl.LightningModule):
                 precision_cholesky
             )
             covar_reduced = self.covariance_metric.forward(covariances)
-            log_prob_reduced = self.log_prob.forward(log_prob)
+            nll_reduced = self.nll.forward(nll)
 
             self.gmm_module.update_params(
                 weights=weights_reduced,
                 means=means_reduced,
                 precision_cholesky=prec_chol_reduced,
                 covariances=covar_reduced,
-                log_prob=log_prob_reduced,
+                nll=nll_reduced,
             )
 
     def on_train_epoch_end(self) -> None:
@@ -332,19 +332,19 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             means = self.gmm_module.means
             precision_cholesky = self.gmm_module.precision_cholesky
             covariances = self.gmm_module.covariances
-            log_prob = self.gmm_module.log_prob
+            nll = self.gmm_module.nll
 
             self.weight_metric.update(weights)
             self.mean_metric.update(means)
             self.precision_cholesky_metric.update(precision_cholesky)
             self.covariance_metric.update(covariances)
-            self.log_prob.update(log_prob)
+            self.nll.update(nll)
 
         weights_reduced = self.weight_metric.compute()
         means_reduced = self.mean_metric.compute()
         prec_chol_reduced = self.precision_cholesky_metric.compute()
         covar_reduced = self.covariance_metric.compute()
-        log_prob_reduced = self.log_prob.compute()
+        nll_reduced = self.nll.compute()
 
         print(
             f"Local weights at rank: {self.local_rank} -",
@@ -357,9 +357,10 @@ class GaussianMixtureLightningModule(pl.LightningModule):
                 f"{means_reduced[0][0]:.4f}"
             )
 
+        print("log prob: ", nll_reduced)
         self.log(
-            "abs_log_prob",
-            log_prob_reduced,
+            "nll",
+            nll_reduced,
             on_step=False,
             on_epoch=True,
         )  # uses mean-reduction (default) to accumulate the metrics
@@ -369,14 +370,15 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             means=means_reduced,
             precision_cholesky=prec_chol_reduced,
             covariances=covar_reduced,
-            log_prob=log_prob_reduced,
+            nll=nll_reduced,
         )
 
     def configure_callbacks(self) -> list[pl.Callback]:
         early_stopping = EarlyStopping(
-            "abs_log_prob",
+            "nll",
             min_delta=self.convergence_tolerance,
             patience=1,
             check_on_train_epoch_end=True,
+            mode="min",
         )
         return [early_stopping]

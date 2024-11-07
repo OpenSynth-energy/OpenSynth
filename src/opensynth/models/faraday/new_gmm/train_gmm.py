@@ -58,6 +58,8 @@ def training_loop(
     converged = False
     lower_bound = -np.inf
 
+    log_prob_epochs = []
+
     # encoded_batch = encode_data_for_gmm(data=data, vae_module=vae_module)
     for i in tqdm(range(max_iter)):
         prev_lower_bound = lower_bound
@@ -71,16 +73,17 @@ def training_loop(
             means=means,
             precision_cholesky=precision_cholesky,
             covariances=covariances,
-            log_prob=log_prob,
+            nll=-log_prob,
         )
         # Converegence
-        lower_bound = log_prob
+        lower_bound = -log_prob
         change = abs(lower_bound - prev_lower_bound)
-        print(f"Change: {change}")
+        print("log prob: ", change)
+        log_prob_epochs.append(lower_bound)
         if change < convergence_tol:
             converged = True
             break
 
     print(f"Converged: {converged}. Number of iterations: {i}")
 
-    return model
+    return model, log_prob_epochs

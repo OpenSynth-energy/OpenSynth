@@ -80,7 +80,7 @@ class CovarianceMetric(Metric):
         return self.covariances
 
 
-class LogProbMetric(Metric):
+class NLLMetric(Metric):
     full_state_update = False
 
     def __init__(self):
