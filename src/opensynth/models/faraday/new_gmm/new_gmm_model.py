@@ -297,6 +297,13 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             nll=torch.neg(log_prob),
         )
 
+        self.log(
+            "nll",
+            torch.neg(log_prob),
+            on_step=True,
+            on_epoch=False,
+        )  # uses mean-reduction (default) to accumulate the metrics
+
     def on_train_batch_end(self, *args, **kwargs) -> None:
         if self.compute_on_batch:
             weights = self.gmm_module.weights
@@ -357,14 +364,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
                 f"{means_reduced[0][0]:.4f}, "
                 f"{covar_reduced[0][0][0]:.4f}"
             )
-
         print("log prob: ", nll_reduced)
-        self.log(
-            "nll",
-            nll_reduced,
-            on_step=False,
-            on_epoch=True,
-        )  # uses mean-reduction (default) to accumulate the metrics
 
         self.gmm_module.update_params(
             weights=weights_reduced,
@@ -379,7 +379,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             "nll",
             min_delta=self.convergence_tolerance,
             patience=1,
-            check_on_train_epoch_end=True,
+            # check_on_train_epoch_end=True,
             mode="min",
         )
         return [early_stopping]
