@@ -78,7 +78,7 @@ def training_loop(
         # Converegence
         lower_bound = -log_prob
         change = abs(lower_bound - prev_lower_bound)
-        print("log prob: ", change)
+        print("log prob: ", lower_bound)
         log_prob_epochs.append(lower_bound)
         if change < convergence_tol:
             converged = True
