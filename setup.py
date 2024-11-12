@@ -27,6 +27,8 @@ install_requires = (
     "seaborn>=0.13.2",
     "torchmetrics>=1.4.1",
     "pandas>=1.2",
+    "litdata==0.2.30",
+    "zstd==1.5.5.1",
 )
 
 setup(
