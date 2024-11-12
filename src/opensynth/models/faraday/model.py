@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -16,6 +16,7 @@ from torch.optim import lr_scheduler
 from tqdm import tqdm
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule, TrainingData
+from opensynth.data_modules.streaming_data_module import StreamDataModule
 from opensynth.models.faraday.losses import calculate_training_loss
 
 logger = logging.getLogger(__name__)
@@ -492,12 +493,12 @@ class FaradayModel:
             ][mask]
         return sampled_data
 
-    def train_gmm(self, dm: LCLDataModule):
+    def train_gmm(self, dm: Union[StreamDataModule, LCLDataModule]):
         """
         Train Gaussian Mixture Module
 
         Args:
-            dm (LCLDataModule): Training data
+            dm (StreamDataModule, LCLDataModule): Training data
         """
         dl = dm.train_dataloader()
         next_batch = next(iter(dl))
