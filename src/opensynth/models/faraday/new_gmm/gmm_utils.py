@@ -1,3 +1,4 @@
+import warnings
 from typing import Tuple
 
 import numpy as np
@@ -114,7 +115,7 @@ def torch_compute_covariance(
 
     check_covar = is_symmetric_positive_definite(covariances)
     if not check_covar:
-        raise ValueError("Covariance matrix is not positive definite.")
+        warnings.warn("Covariance matrix is not positive definite.")
     return covariances
 
 
