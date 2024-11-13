@@ -80,7 +80,7 @@ class CovarianceMetric(Metric):
         return self.covariances
 
 
-class LogProbMetric(Metric):
+class NLLMetric(Metric):
     full_state_update = False
 
     def __init__(self):
@@ -93,7 +93,7 @@ class LogProbMetric(Metric):
         )
 
     def update(self, log_prob: torch.Tensor) -> None:
-        self.log_prob.add_(torch.abs(log_prob))
+        self.log_prob.add_(log_prob)
 
     def compute(self) -> None:
         return self.log_prob
