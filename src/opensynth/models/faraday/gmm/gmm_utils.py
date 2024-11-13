@@ -1,4 +1,3 @@
-import warnings
 from typing import Tuple
 
 import numpy as np
@@ -153,10 +152,6 @@ def torch_compute_covariance(
 
     covariances = covariances.to(device=X.device)
 
-    # TODO remove check when merge into GMM feature branch
-    check_covar = is_symmetric_positive_definite(covariances)
-    if not check_covar:
-        warnings.warn("Covariance matrix is not positive definite.")
     return covariances
 
 

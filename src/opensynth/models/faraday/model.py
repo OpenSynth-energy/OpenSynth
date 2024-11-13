@@ -6,10 +6,15 @@ from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
+import pytorch_lightning as pl
 import torch
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule, TrainingData
-from opensynth.models.faraday.gaussian_mixture import fit_gmm
+from opensynth.models.faraday.gmm.gmm_init import initialise_gmm_params
+from opensynth.models.faraday.gmm.gmm_model import (
+    GaussianMixtureLightningModule,
+    GaussianMixtureModel,
+)
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 logger = logging.getLogger(__name__)
@@ -227,6 +232,8 @@ class FaradayModel:
         # when training the VAE
         features = next_batch["features"]
         obtained_feature_list = list(features.keys())
+        num_features = self.vae_module.latent_dim + len(obtained_feature_list)
+
         expected_feature_list = self.vae_module.feature_list
         if obtained_feature_list != expected_feature_list:
             logger.error(
@@ -235,21 +242,43 @@ class FaradayModel:
                 """
             )
 
-        gmm_module, _, _ = fit_gmm(
-            data=dl,
+        # Fit GMM
+        gmm_init_params = initialise_gmm_params(
+            dl,
+            n_components=self.n_components,
             vae_module=self.vae_module,
-            train_sample_weights=self.train_sample_weights,
-            num_components=self.n_components,
-            num_features=self.vae_module.latent_dim
-            + len(obtained_feature_list),
-            gmm_convergence_tolerance=self.tol,
-            covariance_regularization=self.gmm_covariance_reg,
-            init_method="kmeans",
-            gmm_max_epochs=self.gmm_max_epochs,
-            is_batch_training=self.is_batch_training,
-            accelerator=self.accelerator,
-            devices=self.devices,
+            reg_covar=self.gmm_covariance_reg,
         )
+
+        sum_weights = round(gmm_init_params["weights"].sum().item(), 3)
+        assert sum_weights == 1.0
+
+        gmm_module = GaussianMixtureModel(
+            num_components=self.n_components,
+            num_features=num_features,
+            reg_covar=self.gmm_covariance_reg,
+        )
+        gmm_module.initialise(gmm_init_params)
+        print(
+            f"Initial prec chol: {gmm_module.precision_cholesky[0][0][0]}. \
+                Initial mean: {gmm_module.means[0][0]}"
+        )
+
+        gmm_lightning_module = GaussianMixtureLightningModule(
+            gmm_module=gmm_module,
+            vae_module=self.vae_module,
+            num_components=gmm_module.num_components,
+            num_features=gmm_module.num_features,
+            reg_covar=gmm_module.reg_covar,
+            convergence_tolerance=self.tol,
+            sync_on_batch=False,
+        )
+        trainer = pl.Trainer(
+            max_epochs=self.gmm_max_epochs,
+            accelerator="cpu",
+            deterministic=True,
+        )
+        trainer.fit(gmm_lightning_module, dl)
 
         # Record the ranges of features seen during training
         # Assuming that batches are random, than this should

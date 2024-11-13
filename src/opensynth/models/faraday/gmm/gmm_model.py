@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 from pytorch_lightning.callbacks import EarlyStopping
 
-from opensynth.models.faraday import FaradayVAE
-from opensynth.models.faraday.new_gmm import gmm_metrics, gmm_utils
+from opensynth.models.faraday.gmm import gmm_metrics, gmm_utils
+from opensynth.models.faraday.vae_model import FaradayVAE
 
 
 class GMMInitParams(TypedDict):
@@ -31,14 +31,12 @@ class GaussianMixtureModel(nn.Module):
         num_components: int,
         num_features: int,
         reg_covar: float = 1e-6,
-        print_idx: int = 0,
     ):
 
         super().__init__()
         self.num_components = num_components
         self.num_features = num_features
         self.reg_covar = reg_covar
-        self.print_idx = print_idx
 
         # Initialise model params
         weights_shape = torch.Size([self.num_components])

@@ -14,12 +14,12 @@ from opensynth.data_modules.lcl_data_module import LCLDataModule
 from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
     encode_data_for_gmm,
 )
-from opensynth.models.faraday.new_gmm import gmm_utils
-from opensynth.models.faraday.new_gmm.new_gmm_model import (
+from opensynth.models.faraday.gmm import gmm_utils
+from opensynth.models.faraday.gmm.gmm_init import initialise_gmm_params
+from opensynth.models.faraday.gmm.gmm_model import (
     GaussianMixtureLightningModule,
     GaussianMixtureModel,
 )
-from opensynth.models.faraday.new_gmm.train_gmm import initialise_gmm_params
 
 torch.set_default_dtype(torch.float32)
 
