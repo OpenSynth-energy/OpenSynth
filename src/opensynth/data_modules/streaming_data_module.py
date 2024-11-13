@@ -89,13 +89,9 @@ class StreamData(ld.StreamingDataset):
     def __getitem__(self, idx):
         data: dict = super().__getitem__(idx)
         standardised_kwh: torch.tensor = self.standardise(data["kwh"])
-        features: dict[str, torch.Tensor] = {
-            "month": self.month[idx],
-            "dayofweek": self.dayofweek[idx],
-        }
         return TrainingData(
             kwh=standardised_kwh,
-            features=features,
+            features=data["features"],
         )
 
 
