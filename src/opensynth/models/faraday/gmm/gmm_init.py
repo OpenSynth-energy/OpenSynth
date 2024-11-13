@@ -11,7 +11,7 @@ def initialise_gmm_params(
     dl: torch.utils.data.DataLoader,
     n_components: int,
     vae_module: FaradayVAE,
-    reg_covar=1e-6,
+    reg_covar: float = 1e-6,
 ) -> gmm_model.GMMInitParams:
     """
     Initialise Gaussian Mixture Parameters. This works

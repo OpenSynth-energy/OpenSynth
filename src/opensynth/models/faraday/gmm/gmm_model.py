@@ -241,8 +241,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
 
         self.automatic_optimization = False
         self.convergence_tolerance = convergence_tolerance
-        # self.register_parameter("__ddp_dummy__",
-        #  nn.Parameter(torch.empty(1)))
 
         # GMM params to sync across processes
         self.weight_metric = gmm_metrics.WeightsMetric(self.num_components)
@@ -345,19 +343,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
                 on_step=False,
                 on_epoch=True,
             )  # uses mean-reduction (default) to accumulate the metrics
-
-            # TODO remove print statements
-            print(
-                f"Local weights at rank: {self.local_rank} -",
-                f"means: {weights_reduced[0]:.4f}, {means_reduced[0][0]:.4f}",
-            )
-
-            if self.local_rank == 0:
-                print(
-                    f"Reduced weights, means: {weights_reduced[0]:.4f},"
-                    f"{means_reduced[0][0]:.4f}, "
-                )
-                print("NLL: ", nll_reduced)
 
             self.gmm_module.update_params(
                 weights=weights_reduced,
