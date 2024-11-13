@@ -1,9 +1,10 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
 
-from pathlib import Path
-
 import ast
+from pathlib import Path
+from typing import Union
+
 import litdata as ld
 import numpy as np
 import pandas as pd
@@ -35,7 +36,7 @@ class StreamData(ld.StreamingDataset):
         self,
         data_path: Path,
         stats_path: Path,
-        storage_options: dict = None,
+        storage_options: Union[dict, None] = None,
         subsample: float = 1.0,
         shuffle: bool = False,
         drop_last: bool = True,
@@ -44,15 +45,19 @@ class StreamData(ld.StreamingDataset):
     ):
         """
         Args:
-            data_path (str): Path to stream data from (can be GCS URI or local path)
+            data_path (str): Path to stream data from (can be GCS URI or local
+                path)
             stats_path (Path): Stats path. Note when loading evaluation
                 dataset, the stats path point to the stats of training data,
                 rather than evaluation data to avoid data leakage!
             storage_options (dict): Storage options metadata (e.g. GCS project)
-            feature_mean (float): Mean of consumption data (kWh), used for standardisation
-            feature_std (float): STD of consumption data (kWh), used for standardisation
-            shuffle (bool, optional): Whether to shuffle the data - DO NOT ENABLE, DOES NOT GIVE GOOD RESULTS
-            drop_last (bool, optional): Drop last items so processes return same amount of data
+            feature_mean (float): Mean of consumption data (kWh), used for
+                standardisation
+            feature_std (float): STD of consumption data (kWh), used for
+                standardisation
+            shuffle (bool, optional): Whether to shuffle the data
+            drop_last (bool, optional): Drop last items so processes return
+                same amount of data
         """
         super().__init__(
             input_dir=data_path,
@@ -89,12 +94,12 @@ class StreamData(ld.StreamingDataset):
         return (xhat * self.feature_std) + self.feature_mean
 
     def __getitem__(self, idx):
-        data: dict = super().__getitem__(idx)
+        data = super().__getitem__(idx)
 
         # Parse kwh
         kwh = ast.literal_eval(data["kwh"])
         kwh = torch.from_numpy(np.array(kwh)).float()
-        standardised_kwh: torch.tensor = self.standardise(kwh)
+        standardised_kwh = self.standardise(kwh)
 
         return TrainingData(
             kwh=standardised_kwh,
@@ -107,12 +112,12 @@ class StreamDataModule(pl.LightningDataModule):
         self,
         data_path: Path,
         stats_path: Path,
-        storage_options: dict = None,
+        storage_options: Union[dict, None] = None,
         num_workers: int = 0,
         batch_size: int = 5000,
         subsample: float = 1.0,
         max_cache_size: str = "100GB",
-        profile_batches: int = None,
+        profile_batches: Union[int, None] = None,
         shuffle: bool = False,
         drop_last: bool = True,
         persistent_workers: bool = False,
@@ -121,7 +126,8 @@ class StreamDataModule(pl.LightningDataModule):
         """
         Faraday Streaming Lightning Data Module.
 
-        For more information on the attributes used for the StreamingDataLoader, see:
+        For more information on the attributes used for the
+        StreamingDataLoader, see:
         https://github.com/Lightning-AI/litdata/blob/main/src/litdata/streaming/dataloader.py#L494
 
         Args:
@@ -130,15 +136,23 @@ class StreamDataModule(pl.LightningDataModule):
                 dataset, the stats path point to the stats of training data,
                 rather than evaluation data to avoid data leakage!
             storage_options (dict): Storage options metadata (e.g. GCS project)
-            num_workers (int, optional): How many subprocesses to use for dataloading
+            num_workers (int, optional): How many subprocesses to use for
+                dataloading
             batch_size (int, optional): Samples per batch. Defaults to 5000
-            subsample (float, optional): Float representing fraction of the dataset to be randomly sampled
-            profile_batches (int, optional): Whether to record data loading profile and generate a result.json file (for debugging). Value is the number of batches to profile. Defaults to None.
-            max_cache_size (str, optional): The maximum cache size used by the StreamingDataset
-            shuffle (bool, optional): Whether to shuffle the data - DO NOT ENABLE, DOES NOT GIVE GOOD RESULTS
-            drop_last (bool, optional): Drop last items so processes return same amount of data
-            persistent_workers (bool, optional): Whether to keep workers alive between epochs. Defaults to False
-            pin_memory (bool, optional): Whether to pin memory in DataLoader. Defaults to True
+            subsample (float, optional): Float representing fraction of the
+                dataset to be randomly sampled
+            profile_batches (int, optional): Whether to record data loading
+                profile and generate a result.json file (for debugging).
+                Value is the number of batches to profile. Defaults to None.
+            max_cache_size (str, optional): The maximum cache size used by
+                the StreamingDataset
+            shuffle (bool, optional): Whether to shuffle the data
+            drop_last (bool, optional): Drop last items so processes return
+                same amount of data
+            persistent_workers (bool, optional): Whether to keep workers
+                alive between epochs. Defaults to False
+            pin_memory (bool, optional): Whether to pin memory in DataLoader.
+                Defaults to True
         """
         super().__init__()
         self.data_path = data_path
