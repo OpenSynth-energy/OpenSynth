@@ -2,11 +2,16 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
+from opensynth.models.faraday import FaradayVAE
 from opensynth.models.faraday.new_gmm import gmm_utils, new_gmm_model
 
 
 def initialise_gmm_params(
-    X: np.array, n_components: int, reg_covar=1e-6, method: str = "torch"
+    dl: torch.utils.data.DataLoader,
+    n_components: int,
+    vae_module: FaradayVAE,
+    reg_covar=1e-6,
+    method: str = "torch",
 ) -> new_gmm_model.GMMInitParams:
     """
     Initialise Gaussian Mixture Parameters. This works
@@ -22,6 +27,13 @@ def initialise_gmm_params(
     Returns:
         dict[str, torch.Tensor]: GMM params
     """
+
+    # Use data from first batch to initialise centroids
+    # If data is shuffled, this should represent the full dataset
+    X = next(iter(dl))
+    X = gmm_utils.encode_data(X, vae_module)
+    X = X.detach().numpy()
+
     labels_, means_, responsibilities_ = gmm_utils.initialise_centroids(
         X=X, n_components=n_components
     )
@@ -61,7 +73,7 @@ def training_loop(
 
     log_prob_epochs = []
 
-    # encoded_batch = encode_data_for_gmm(data=data, vae_module=vae_module)
+    # encoded_batch = encode_data(data=data, vae_module=vae_module)
     for i in tqdm(range(max_iter)):
         prev_lower_bound = lower_bound
 

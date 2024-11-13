@@ -278,8 +278,13 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.nll.reset()
 
     def training_step(self, batch) -> None:
+        # Encode the batch
+        encoded_batch = gmm_utils.encode_data(batch, self.vae_module)
 
-        encoded_batch = batch
+        if "weights" in list(batch.keys()):
+            encoded_batch = gmm_utils.expand_weights(
+                encoded_batch, batch["weights"]
+            )
 
         # Run e-step
         log_prob, log_resp = self.gmm_module.e_step(encoded_batch)

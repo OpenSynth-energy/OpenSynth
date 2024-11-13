@@ -5,6 +5,46 @@ import numpy as np
 import torch
 from sklearn.cluster import KMeans
 
+from opensynth.models.faraday.losses import _expand_samples
+from opensynth.models.faraday.vae_model import FaradayVAE
+
+
+def encode_data(data: torch.Tensor, vae_module: FaradayVAE) -> torch.Tensor:
+    """Prepare data for the GMM by encoding it with the VAE.
+
+    Args:
+        data (torch.Tensor): data for training GMM
+        vae_module (FaradayVAE): trained VAE model
+
+    Returns:
+        torch.Tensor: encoded data for GMM
+    """
+    kwh = data["kwh"]
+    features = data["features"]
+    vae_input = vae_module.reshape_data(kwh, features)
+    vae_output = vae_module.encode(vae_input)
+    model_input = vae_module.reshape_data(vae_output, features)
+    return model_input
+
+
+def expand_weights(data: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
+    """Expand the repeat based on the training weights and shuffle the
+     expanded dataset.
+     Shuffling prevents consecutive samples from being the same to prevent
+      convergence issues in GMM training.
+
+    Args:
+        data (torch.Tensor): data for training GMM
+        weights (torch.Tensor): number of occurances of each data point in the
+            dataset
+
+    Returns:
+        torch.Tensor:
+    """
+    model_input = _expand_samples(data, weights)
+    model_input = model_input[torch.randperm(model_input.size(dim=0))]
+    return model_input
+
 
 def initialise_centroids(
     X: np.array,
