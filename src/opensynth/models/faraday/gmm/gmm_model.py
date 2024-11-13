@@ -17,7 +17,6 @@ class GMMInitParams(TypedDict):
     means: torch.Tensor
     responsibilities: torch.Tensor
     weights: torch.Tensor
-    covariances: torch.Tensor
     precision_cholesky: torch.Tensor
 
 
@@ -26,7 +25,6 @@ class GaussianMixtureModel(nn.Module):
     weights: torch.Tensor
     means: torch.Tensor
     precision_cholesky: torch.Tensor
-    covariances: torch.Tensor
     nll: torch.Tensor
 
     def __init__(
@@ -47,16 +45,12 @@ class GaussianMixtureModel(nn.Module):
         precision_cholesky_shape = torch.Size(
             [self.num_components, self.num_features, self.num_features]
         )
-        covariances_shape = torch.Size(
-            [self.num_components, self.num_features, self.num_features]
-        )
         nll_shape = torch.Size([1])
         self.register_buffer("weights", torch.empty(weights_shape))
         self.register_buffer("means", torch.empty(means_shape))
         self.register_buffer(
             "precision_cholesky", torch.empty(precision_cholesky_shape)
         )
-        self.register_buffer("covariances", torch.empty(covariances_shape))
         self.register_buffer("nll", torch.empty(nll_shape))
         self.initialised = False
 
@@ -211,13 +205,11 @@ class GaussianMixtureModel(nn.Module):
         weights: torch.Tensor,
         means: torch.Tensor,
         precision_cholesky: torch.Tensor,
-        covariances: torch.Tensor,
         nll: torch.Tensor,
     ):
         self.weights.data = weights
         self.means.data = means
         self.precision_cholesky.data = precision_cholesky
-        self.covariances.data = covariances
         self.nll.data = nll
         return self
 
@@ -260,9 +252,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.precision_cholesky_metric = gmm_metrics.PrecisionCholeskyMetric(
             self.num_components, self.num_features
         )
-        self.covariance_metric = gmm_metrics.CovarianceMetric(
-            self.num_components, self.num_features
-        )
         self.nll = gmm_metrics.NLLMetric()
 
         self.sync_on_batch = sync_on_batch
@@ -275,7 +264,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.mean_metric.reset()
         self.weight_metric.reset()
         self.precision_cholesky_metric.reset()
-        self.covariance_metric.reset()
         self.nll.reset()
 
     def training_step(self, batch) -> None:
@@ -299,7 +287,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             weights=weights,
             means=means,
             precision_cholesky=precision_cholesky,
-            covariances=covariances,
             nll=torch.neg(log_prob),
         )
 
@@ -308,7 +295,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             weights = self.gmm_module.weights
             means = self.gmm_module.means
             precision_cholesky = self.gmm_module.precision_cholesky
-            covariances = self.gmm_module.covariances
             nll = self.gmm_module.nll
 
             # forward performs update, compute and reset metrics
@@ -317,14 +303,12 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             prec_chol_reduced = self.precision_cholesky_metric.forward(
                 precision_cholesky
             )
-            covar_reduced = self.covariance_metric.forward(covariances)
             nll_reduced = self.nll.forward(nll)
 
             self.gmm_module.update_params(
                 weights=weights_reduced,
                 means=means_reduced,
                 precision_cholesky=prec_chol_reduced,
-                covariances=covar_reduced,
                 nll=nll_reduced,
             )
             self.log(
@@ -343,19 +327,16 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             weights = self.gmm_module.weights
             means = self.gmm_module.means
             precision_cholesky = self.gmm_module.precision_cholesky
-            covariances = self.gmm_module.covariances
             nll = self.gmm_module.nll
 
             self.weight_metric.update(weights)
             self.mean_metric.update(means)
             self.precision_cholesky_metric.update(precision_cholesky)
-            self.covariance_metric.update(covariances)
             self.nll.update(nll)
 
             weights_reduced = self.weight_metric.compute()
             means_reduced = self.mean_metric.compute()
             prec_chol_reduced = self.precision_cholesky_metric.compute()
-            covar_reduced = self.covariance_metric.compute()
             nll_reduced = self.nll.compute()
 
             self.log(
@@ -373,9 +354,8 @@ class GaussianMixtureLightningModule(pl.LightningModule):
 
             if self.local_rank == 0:
                 print(
-                    f"Reduced weights, means, covar: {weights_reduced[0]:.4f},"
+                    f"Reduced weights, means: {weights_reduced[0]:.4f},"
                     f"{means_reduced[0][0]:.4f}, "
-                    f"{covar_reduced[0][0][0]:.4f}"
                 )
                 print("NLL: ", nll_reduced)
 
@@ -383,7 +363,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
                 weights=weights_reduced,
                 means=means_reduced,
                 precision_cholesky=prec_chol_reduced,
-                covariances=covar_reduced,
                 nll=nll_reduced,
             )
 
