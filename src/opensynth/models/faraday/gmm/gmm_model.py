@@ -227,8 +227,17 @@ class GaussianMixtureModel(nn.Module):
     def predict(self, X: torch.Tensor):
         return self._estimate_weighted_log_prob(X).argmax(dim=1)
 
-    def sample(self, n_samples):
-        # Set up the random generator with a specified seed
+    def sample(self, n_samples: int) -> torch.Tensor:
+        """Sample from GMM components
+
+        Args:
+            n_samples (int): number of samples to generate
+
+        Returns:
+            torch.Tensor: samples drawn from GMM size n_samples x n_components
+        """
+
+        # Set up the random generator
         generator = torch.Generator()
         # Sample component counts from the multinomial distribution
         n_samples_comp = torch.multinomial(
@@ -392,20 +401,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
                 on_step=False,
                 on_epoch=True,
             )  # uses mean-reduction (default) to accumulate the metrics
-
-            # TODO remove print statements
-            print(
-                f"Local weights at rank: {self.local_rank} -",
-                f"means: {weights_reduced[0]:.4f}, {means_reduced[0][0]:.4f}",
-            )
-
-            if self.local_rank == 0:
-                print(
-                    f"Reduced weights, means, covar: {weights_reduced[0]:.4f},"
-                    f"{means_reduced[0][0]:.4f}, "
-                    f"{covar_reduced[0][0][0]:.4f}"
-                )
-                print("NLL: ", nll_reduced)
 
             self.gmm_module.update_params(
                 weights=weights_reduced,

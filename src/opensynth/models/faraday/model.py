@@ -27,12 +27,10 @@ class FaradayModel:
         vae_module: FaradayVAE,
         n_components: int,
         tol: float = 1e-3,
-        is_batch_training: bool = True,
         accelerator: str = "cpu",
         devices: int = 1,
-        gmm_max_epochs: int = 1000,
-        gmm_covariance_reg: float = 1e-6,
-        train_sample_weights: bool = False,
+        max_epochs: int = 1000,
+        covariance_reg: float = 1e-6,
     ):
         """
         Faraday Model. Note:
@@ -47,32 +45,26 @@ class FaradayModel:
             vae_module (FaradayVAE): Trained VAE component.
             n_components (int): GMM clusters.
             tol (float, optional): Tolerance for GMM. Defaults to 1e-3.
-            is_batch_training (bool, optional): Batch training for GMM.
-                Defaults to True.
             accelerator (str, optional): Accelerator for GMM training.
                 Defaults to "cpu".
             devices (int, optional): Number of devices for GMM training.
                 Defaults to 1.
-            gmm_max_epochs (int, optional): Max epochs for GMM training.
+            max_epochs (int, optional): Max epochs for GMM training.
                 Defaults to 1000.
-            gmm_covariance_reg (float, optional): Covariance
+            covariance_reg (float, optional): Covariance
                 regularization for GMM. Defaults to 1e-6.
                 This is added to the diagonal of the covariance matrix to
                 ensure that it is positive semi-definite. Higher values will
                 make the algorithm more robust to singular covariance matrices,
                 at the cost of higher regularization.
-            train_sample_weights (bool, optional): Train with sample weights.
-                Defaults to False.
         """
         self.n_components = n_components
         self.vae_module = vae_module
         self.tol = tol
-        self.is_batch_training = is_batch_training
         self.accelerator = accelerator
         self.devices = devices
-        self.gmm_max_epochs = gmm_max_epochs
-        self.gmm_covariance_reg = gmm_covariance_reg
-        self.train_sample_weights = train_sample_weights
+        self.max_epochs = max_epochs
+        self.covariance_reg = covariance_reg
 
     @staticmethod
     def parse_samples(
@@ -244,7 +236,7 @@ class FaradayModel:
             dl,
             n_components=self.n_components,
             vae_module=self.vae_module,
-            reg_covar=self.gmm_covariance_reg,
+            reg_covar=self.covariance_reg,
         )
 
         sum_weights = round(gmm_init_params["weights"].sum().item(), 3)
@@ -253,7 +245,7 @@ class FaradayModel:
         gmm_module = GaussianMixtureModel(
             num_components=self.n_components,
             num_features=num_features,
-            reg_covar=self.gmm_covariance_reg,
+            reg_covar=self.covariance_reg,
         )
         gmm_module.initialise(gmm_init_params)
         print(
@@ -271,7 +263,7 @@ class FaradayModel:
             sync_on_batch=False,
         )
         trainer = pl.Trainer(
-            max_epochs=self.gmm_max_epochs,
+            max_epochs=self.max_epochs,
             accelerator="cpu",
             deterministic=True,
         )
