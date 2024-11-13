@@ -48,6 +48,7 @@ def initialise_gmm_params(
     return init_params
 
 
+# TODO Remove function when merging into GMM feature branch
 def training_loop(
     model: new_gmm_model.GaussianMixtureModel,
     # vae_module: FaradayVAE,
