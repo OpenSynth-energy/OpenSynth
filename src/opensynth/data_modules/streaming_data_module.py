@@ -3,7 +3,9 @@
 
 from pathlib import Path
 
+import ast
 import litdata as ld
+import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
@@ -88,7 +90,12 @@ class StreamData(ld.StreamingDataset):
 
     def __getitem__(self, idx):
         data: dict = super().__getitem__(idx)
-        standardised_kwh: torch.tensor = self.standardise(data["kwh"])
+
+        # Parse kwh
+        kwh = ast.literal_eval(data["kwh"])
+        kwh = torch.from_numpy(np.array(kwh)).float()
+        standardised_kwh: torch.tensor = self.standardise(kwh)
+
         return TrainingData(
             kwh=standardised_kwh,
             features=data["features"],
@@ -105,7 +112,6 @@ class StreamDataModule(pl.LightningDataModule):
         batch_size: int = 5000,
         subsample: float = 1.0,
         max_cache_size: str = "100GB",
-        copy_fuse_to_local: bool = True,
         profile_batches: int = None,
         shuffle: bool = False,
         drop_last: bool = True,
@@ -129,7 +135,6 @@ class StreamDataModule(pl.LightningDataModule):
             subsample (float, optional): Float representing fraction of the dataset to be randomly sampled
             profile_batches (int, optional): Whether to record data loading profile and generate a result.json file (for debugging). Value is the number of batches to profile. Defaults to None.
             max_cache_size (str, optional): The maximum cache size used by the StreamingDataset
-            copy_fuse_to_local (bool, optional): If we have GCS Fuse mounted, copy the files to local. Defaults to True
             shuffle (bool, optional): Whether to shuffle the data - DO NOT ENABLE, DOES NOT GIVE GOOD RESULTS
             drop_last (bool, optional): Drop last items so processes return same amount of data
             persistent_workers (bool, optional): Whether to keep workers alive between epochs. Defaults to False
@@ -144,7 +149,6 @@ class StreamDataModule(pl.LightningDataModule):
         self.subsample = subsample
         self.profile_batches = profile_batches
         self.max_cache_size = max_cache_size
-        self.copy_fuse_to_local = copy_fuse_to_local
         self.shuffle = shuffle
         self.drop_last = drop_last
         self.persistent_workers = persistent_workers
@@ -153,7 +157,7 @@ class StreamDataModule(pl.LightningDataModule):
     def prepare_data(self):
         pass
 
-    def setup(self, stage: str):
+    def setup(self, stage: str = ""):
         self.train_dataset = StreamData(
             data_path=self.data_path,
             stats_path=self.stats_path,
