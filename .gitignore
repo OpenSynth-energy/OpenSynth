@@ -5,6 +5,8 @@
 *.zip
 *.pyc
 *.csv
+*.bin
+index.json
 data/.DS_Store
 .DS_Store
 **/lightning_logs/*
