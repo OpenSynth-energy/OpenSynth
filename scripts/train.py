@@ -1,3 +1,4 @@
+# TODO: consider deleting this script when merging to GMM feature branch
 import random
 from pathlib import Path
 

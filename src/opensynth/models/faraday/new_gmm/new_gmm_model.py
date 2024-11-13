@@ -297,13 +297,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             nll=torch.neg(log_prob),
         )
 
-        self.log(
-            "nll",
-            torch.neg(log_prob),
-            on_step=False,
-            on_epoch=True,
-        )  # uses mean-reduction (default) to accumulate the metrics
-
     def on_train_batch_end(self, *args, **kwargs) -> None:
         if self.sync_on_batch:
             weights = self.gmm_module.weights
@@ -321,8 +314,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             covar_reduced = self.covariance_metric.forward(covariances)
             nll_reduced = self.nll.forward(nll)
 
-            print("Batch NLL: ", nll_reduced)
-
             self.gmm_module.update_params(
                 weights=weights_reduced,
                 means=means_reduced,
@@ -330,6 +321,12 @@ class GaussianMixtureLightningModule(pl.LightningModule):
                 covariances=covar_reduced,
                 nll=nll_reduced,
             )
+            self.log(
+                "nll",
+                nll_reduced,
+                on_step=False,
+                on_epoch=True,
+            )  # uses mean-reduction (default) to accumulate the metrics
 
     def on_train_epoch_end(self) -> None:
         # At the end of epoch, update metrics and sync across
@@ -349,32 +346,40 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             self.covariance_metric.update(covariances)
             self.nll.update(nll)
 
-        weights_reduced = self.weight_metric.compute()
-        means_reduced = self.mean_metric.compute()
-        prec_chol_reduced = self.precision_cholesky_metric.compute()
-        covar_reduced = self.covariance_metric.compute()
-        nll_reduced = self.nll.compute()
+            weights_reduced = self.weight_metric.compute()
+            means_reduced = self.mean_metric.compute()
+            prec_chol_reduced = self.precision_cholesky_metric.compute()
+            covar_reduced = self.covariance_metric.compute()
+            nll_reduced = self.nll.compute()
 
-        print(
-            f"Local weights at rank: {self.local_rank} -",
-            f"means: {weights_reduced[0]:.4f}, {means_reduced[0][0]:.4f}",
-        )
+            self.log(
+                "nll",
+                nll_reduced,
+                on_step=False,
+                on_epoch=True,
+            )  # uses mean-reduction (default) to accumulate the metrics
 
-        if self.local_rank == 0:
+            # TODO remove print statements
             print(
-                f"Reduced weights, means, covar: {weights_reduced[0]:.4f}, "
-                f"{means_reduced[0][0]:.4f}, "
-                f"{covar_reduced[0][0][0]:.4f}"
+                f"Local weights at rank: {self.local_rank} -",
+                f"means: {weights_reduced[0]:.4f}, {means_reduced[0][0]:.4f}",
             )
-        print("NLL: ", nll_reduced)
 
-        self.gmm_module.update_params(
-            weights=weights_reduced,
-            means=means_reduced,
-            precision_cholesky=prec_chol_reduced,
-            covariances=covar_reduced,
-            nll=nll_reduced,
-        )
+            if self.local_rank == 0:
+                print(
+                    f"Reduced weights, means, covar: {weights_reduced[0]:.4f},"
+                    f"{means_reduced[0][0]:.4f}, "
+                    f"{covar_reduced[0][0][0]:.4f}"
+                )
+                print("NLL: ", nll_reduced)
+
+            self.gmm_module.update_params(
+                weights=weights_reduced,
+                means=means_reduced,
+                precision_cholesky=prec_chol_reduced,
+                covariances=covar_reduced,
+                nll=nll_reduced,
+            )
 
     def configure_callbacks(self) -> list[pl.Callback]:
         early_stopping = EarlyStopping(
