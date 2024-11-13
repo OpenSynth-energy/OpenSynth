@@ -61,6 +61,25 @@ class PrecisionCholeskyMetric(Metric):
         return self.precision_cholesky
 
 
+class CovarianceMetric(Metric):
+    full_state_update = False
+
+    def __init__(self, num_components: int, num_features: int):
+        super().__init__()
+        self.covariances: torch.Tensor
+        self.add_state(
+            "covariances",
+            torch.zeros(num_components, num_features, num_features),
+            dist_reduce_fx="mean",
+        )
+
+    def update(self, covariances: torch.Tensor) -> None:
+        self.covariances.add_(covariances)
+
+    def compute(self) -> None:
+        return self.covariances
+
+
 class NLLMetric(Metric):
     full_state_update = False
 
