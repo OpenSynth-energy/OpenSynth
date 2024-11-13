@@ -1,3 +1,6 @@
+# Copyright Contributors to the Opensynth-energy Project.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 
 from opensynth.models.faraday.gmm import gmm_model, gmm_utils

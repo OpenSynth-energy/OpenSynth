@@ -1,8 +1,8 @@
+# Copyright Contributors to the Opensynth-energy Project.
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 from torchmetrics import Metric
-
-# weights=weights, means=means, precision_cholesky=precision_cholesky
-# class Weights(Metric):
 
 
 class WeightsMetric(Metric):
