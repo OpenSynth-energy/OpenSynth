@@ -76,7 +76,7 @@ class FaradayModel:
 
     @staticmethod
     def parse_samples(
-        samples: np.array, latent_dim: int, feature_list: list[str]
+        samples: torch.Tensor, latent_dim: int, feature_list: list[str]
     ) -> TrainingData:
         """
         Abstract the labels and round numerical values to integers
@@ -84,7 +84,7 @@ class FaradayModel:
         it correctly, and is handled by `get_index` method.
 
         Args:
-            samples (np.array): Samples sampled from GMM
+            samples (torch.Tensor): Samples sampled from GMM
             latent_dim (int): Latent Dimension Size
             feature_list (list[str]): List of feature names
 
@@ -93,15 +93,12 @@ class FaradayModel:
             kWh and feature labels
         """
 
-        gmm_tensors: torch.Tensor = torch.from_numpy(samples)
-        kwh: torch.Tensor = gmm_tensors[:, :latent_dim]
+        kwh: torch.Tensor = samples[:, :latent_dim]
         labels: dict[str, torch.Tensor] = {}
 
         for i, feature in enumerate(feature_list):
             index = FaradayModel.get_index(feature_list, i)
-            feature_tensor = torch.round(
-                gmm_tensors[:, index], decimals=0
-            ).int()
+            feature_tensor = torch.round(samples[:, index], decimals=0).int()
             labels[feature] = feature_tensor.reshape(len(kwh), 1)
 
         return TrainingData(kwh=kwh, features=labels)
@@ -298,9 +295,8 @@ class FaradayModel:
         Returns:
             TrainingData: Decoder output (KWH), feature labels
         """
-        gmm_samples: np.array = (
-            self.gmm_module.model.sample(n_samples).detach().numpy()
-        )
+
+        gmm_samples: torch.Tensor = self.gmm_module.sample(n_samples)
 
         # Parse GMM samples
         gmm_samples_parsed: TrainingData = self.parse_samples(

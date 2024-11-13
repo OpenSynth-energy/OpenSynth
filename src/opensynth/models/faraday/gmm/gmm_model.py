@@ -227,6 +227,36 @@ class GaussianMixtureModel(nn.Module):
     def predict(self, X: torch.Tensor):
         return self._estimate_weighted_log_prob(X).argmax(dim=1)
 
+    def sample(self, n_samples):
+        # Set up the random generator with a specified seed
+        generator = torch.Generator()
+        # Sample component counts from the multinomial distribution
+        n_samples_comp = torch.multinomial(
+            self.weights, n_samples, replacement=True, generator=generator
+        ).bincount(minlength=len(self.weights))
+
+        # Initialize lists to collect samples and labels
+        X = []
+        y = []
+
+        # Sample from each component based on the number of samples
+        for j, (mean, covariance, sample_count) in enumerate(
+            zip(self.means, self.covariances, n_samples_comp)
+        ):
+            if (
+                sample_count > 0
+            ):  # Only sample if we need samples from this component
+                dist = torch.distributions.MultivariateNormal(mean, covariance)
+                samples = dist.sample((sample_count,))
+                X.append(samples)
+                y.append(torch.full((sample_count,), j, dtype=torch.int64))
+
+        # Concatenate all samples and labels into single tensors
+        X = torch.vstack(X)
+        y = torch.cat(y)
+
+        return X
+
 
 class GaussianMixtureLightningModule(pl.LightningModule):
 
