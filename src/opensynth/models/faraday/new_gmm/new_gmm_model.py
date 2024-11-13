@@ -237,7 +237,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         num_features: int,
         reg_covar: float = 1e-6,
         convergence_tolerance: float = 1e-2,
-        compute_on_batch: bool = False,
+        sync_on_batch: bool = False,
     ):
         super().__init__()
         self.gmm_module = gmm_module
@@ -264,7 +264,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         )
         self.nll = gmm_metrics.NLLMetric()
 
-        self.compute_on_batch = compute_on_batch
+        self.sync_on_batch = sync_on_batch
 
     def configure_optimizers(self) -> None:
         return None
@@ -305,7 +305,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         )  # uses mean-reduction (default) to accumulate the metrics
 
     def on_train_batch_end(self, *args, **kwargs) -> None:
-        if self.compute_on_batch:
+        if self.sync_on_batch:
             weights = self.gmm_module.weights
             means = self.gmm_module.means
             precision_cholesky = self.gmm_module.precision_cholesky
@@ -336,7 +336,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         # multiple devices using torchmetrics.Metric.compute
         # Then update model params using the synced values
 
-        if not self.compute_on_batch:
+        if not self.sync_on_batch:
             weights = self.gmm_module.weights
             means = self.gmm_module.means
             precision_cholesky = self.gmm_module.precision_cholesky

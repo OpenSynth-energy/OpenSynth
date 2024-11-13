@@ -131,7 +131,7 @@ gmm_lightning_module = GaussianMixtureLightningModule(
     num_features=gmm_module.num_features,
     reg_covar=gmm_module.reg_covar,
     convergence_tolerance=CONVERGENCE_TOL,
-    compute_on_batch=False,
+    sync_on_batch=False,
 )
 trainer = pl.Trainer(max_epochs=EPOCHS, accelerator="cpu", deterministic=True)
 trainer.fit(gmm_lightning_module, custom_dm)
