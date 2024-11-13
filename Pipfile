@@ -32,6 +32,7 @@ typer = "*"
 viztracer = "*"
 db-dtypes = "*"
 google-cloud-bigquery-storage = "*"
+ipywidgets = "*"
 
 [requires]
 python_version = "3.11"
