@@ -266,7 +266,7 @@ class FaradayModel:
             reg_covar=gmm_module.reg_covar,
             convergence_tolerance=self.tol,
             sync_on_batch=False,
-            ample_weights_column=self.sample_weights_column,
+            sample_weights_column=self.sample_weights_column,
         )
         trainer = pl.Trainer(
             max_epochs=self.max_epochs,
