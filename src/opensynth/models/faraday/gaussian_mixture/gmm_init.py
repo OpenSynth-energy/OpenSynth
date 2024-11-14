@@ -5,12 +5,13 @@ from typing import Optional
 
 import torch
 
+from opensynth.data_modules.lcl_data_module import TrainingData
 from opensynth.models.faraday.gaussian_mixture import gmm_model, gmm_utils
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 
 def initialise_gmm_params(
-    data: torch.Tensor,
+    data: TrainingData,
     n_components: int,
     vae_module: FaradayVAE,
     reg_covar: float = 1e-6,
@@ -23,7 +24,7 @@ def initialise_gmm_params(
       covariances.
 
     Args:
-        data (torch.Tensor): Input data
+        data (TrainingData): Input data
         n_components (int): Number of components
         vae_module(FaradayVAE): Trained VAE model
         reg_covar (float): Regularisation for covariance matrix

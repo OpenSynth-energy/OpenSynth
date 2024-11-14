@@ -7,15 +7,16 @@ import numpy as np
 import torch
 from sklearn.cluster import KMeans
 
+from opensynth.data_modules.lcl_data_module import TrainingData
 from opensynth.models.faraday.losses import _expand_samples
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 
-def _encode_data(data: torch.Tensor, vae_module: FaradayVAE) -> torch.Tensor:
+def _encode_data(data: TrainingData, vae_module: FaradayVAE) -> torch.Tensor:
     """Prepare data for the GMM by encoding it with the VAE.
 
     Args:
-        data (torch.Tensor): data for training GMM
+        data (TrainingData): data for training GMM
         vae_module (FaradayVAE): trained VAE model
 
     Returns:
@@ -49,7 +50,7 @@ def _expand_weights(data: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
 
 
 def prepare_data_for_training_step(
-    data: torch.Tensor,
+    data: TrainingData,
     vae_module: FaradayVAE,
     sample_weights_column: Optional[str] = None,
 ) -> torch.Tensor:
