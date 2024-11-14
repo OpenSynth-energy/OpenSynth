@@ -1,8 +1,8 @@
 import torch
 
 from opensynth.data_modules.lcl_data_module import TrainingData
-from opensynth.models.faraday.gaussian_mixture import gmm_utils
-from opensynth.models.faraday.gaussian_mixture.gmm_init import (
+from opensynth.models.faraday.gaussian_mixture import (
+    gmm_utils,
     initialise_gmm_params,
 )
 from opensynth.models.faraday.vae_model import FaradayVAE

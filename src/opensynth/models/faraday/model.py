@@ -10,12 +10,10 @@ import pytorch_lightning as pl
 import torch
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule, TrainingData
-from opensynth.models.faraday.gaussian_mixture.gmm_init import (
-    initialise_gmm_params,
-)
-from opensynth.models.faraday.gaussian_mixture.gmm_model import (
+from opensynth.models.faraday.gaussian_mixture import (
     GaussianMixtureLightningModule,
     GaussianMixtureModel,
+    initialise_gmm_params,
 )
 from opensynth.models.faraday.vae_model import FaradayVAE
 
@@ -235,7 +233,9 @@ class FaradayModel:
                 """
             )
 
-        # Fit GMM
+        # Initialise GMM parameters
+        # Initialising on the first batch of the data only
+        # If data is shuffled, this should represent the full data distribution
         gmm_init_params = initialise_gmm_params(
             next_batch,
             n_components=self.n_components,
@@ -254,6 +254,7 @@ class FaradayModel:
                 Initial mean: {gmm_module.means[0][0]}"
         )
 
+        # Fit GMM
         gmm_lightning_module = GaussianMixtureLightningModule(
             gmm_module=gmm_module,
             vae_module=self.vae_module,

@@ -300,7 +300,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.covariance_metric = gmm_metrics.CovarianceMetric(
             self.num_components, self.num_features
         )
-        self.nll = gmm_metrics.NLLMetric()
+        self.nll = gmm_metrics.NegativeLogLikelihoodMetric()
 
         self.sync_on_batch = sync_on_batch
 
@@ -341,6 +341,10 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         )
 
     def on_train_batch_end(self, *args, **kwargs) -> None:
+        """If `sync_on_batch` is True, sync model parameters across devices at
+        the end of each batch. Otherwise, sync is done at the end of epoch.
+        """
+
         if self.sync_on_batch:
             weights = self.gmm_module.weights
             means = self.gmm_module.means

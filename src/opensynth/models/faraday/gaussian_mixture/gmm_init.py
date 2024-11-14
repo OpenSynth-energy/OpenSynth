@@ -14,13 +14,13 @@ def initialise_gmm_params(
     reg_covar: float = 1e-6,
 ) -> gmm_model.GMMInitParams:
     """
-    Initialise Gaussian Mixture Parameters. This works
-    by only initialising on the first batch of the data
-    using K-means, and porting SKLearn's implementation
-    of computing cholesky precision and covariances.
+    Initialise Gaussian Mixture Parameters.
+    Component means and component assignments are initialised using K-means,
+      and porting SKLearn's implementation of computing cholesky precision and
+      covariances.
 
     Args:
-        X (np.array): Input data
+        X (torch.Tensor): Input data
         n_components (int): Number of components
         reg_covar (float): Regularisation for covariance matrix
 
@@ -28,9 +28,9 @@ def initialise_gmm_params(
         dict[str, torch.Tensor]: GMM params
     """
 
-    # Use data from first batch to initialise centroids
-    # If data is shuffled, this should represent the full dataset
     X = gmm_utils.encode_data(data, vae_module)
+    if "weights" in list(data.keys()):
+        X = gmm_utils.expand_weights(X, data["weights"])
     X = X.detach().numpy()
 
     labels_, means_, responsibilities_ = gmm_utils.initialise_centroids(

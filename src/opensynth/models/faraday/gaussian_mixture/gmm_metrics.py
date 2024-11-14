@@ -80,20 +80,20 @@ class CovarianceMetric(Metric):
         return self.covariances
 
 
-class NLLMetric(Metric):
+class NegativeLogLikelihoodMetric(Metric):
     full_state_update = False
 
     def __init__(self):
         super().__init__()
-        self.log_prob: torch.Tensor
+        self.nll: torch.Tensor
         self.add_state(
-            "log_prob",
+            "nll",
             torch.zeros(1),
             dist_reduce_fx="mean",
         )
 
-    def update(self, log_prob: torch.Tensor) -> None:
-        self.log_prob.add_(log_prob)
+    def update(self, nll: torch.Tensor) -> None:
+        self.nll.add_(nll)
 
     def compute(self) -> None:
-        return self.log_prob
+        return self.nll
