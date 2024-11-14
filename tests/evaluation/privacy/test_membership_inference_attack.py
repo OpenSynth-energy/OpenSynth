@@ -1,6 +1,6 @@
 import torch
 
-from src.opensynth.evaluation.privacy import membership_inference_attack as mia
+from opensynth.evaluation.privacy import membership_inference_attack as mia
 
 
 def mia_sample_fixture() -> mia.MembershipInferenceAttackSamples:
