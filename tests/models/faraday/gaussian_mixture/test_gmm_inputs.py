@@ -2,12 +2,15 @@ import pytest
 import torch
 
 from opensynth.data_modules.lcl_data_module import TrainingData
-from opensynth.models.faraday import FaradayVAE
-from opensynth.models.faraday.gaussian_mixture.prepare_gmm_input import (
-    encode_data_for_gmm,
-    expand_weights,
-    prepare_data_for_model,
+from opensynth.models.faraday.gaussian_mixture import (
+    gmm_utils,
+    initialise_gmm_params,
 )
+from opensynth.models.faraday.vae_model import FaradayVAE
+
+
+class TrainingDataWithWeights(TrainingData):
+    weights: torch.Tensor
 
 
 class TestGMMDataPreparation:
@@ -20,17 +23,26 @@ class TestGMMDataPreparation:
     features = {"feature_1": torch.rand(100), "feature_2": torch.rand(100)}
     weights = torch.randint(low=1, high=5, size=(100,))
 
-    batch = TrainingData(kwh=kwh, features=features, weights=weights)
+    weighted_batch = TrainingDataWithWeights(
+        kwh=kwh, features=features, weights=weights
+    )
 
     unweighted_batch = TrainingData(kwh=kwh, features=features)
 
+    sample_weights_column = "weights"
+
     def test_check_data_size(self):
 
-        model_input = prepare_data_for_model(self.vae_module, self.batch, True)
+        model_input = gmm_utils.prepare_data_for_training_step(
+            self.weighted_batch, self.vae_module, self.sample_weights_column
+        )
 
-        assert model_input.shape[0] == self.batch["weights"].sum()
+        assert (
+            model_input.shape[0]
+            == self.weighted_batch[self.sample_weights_column].sum()
+        )
         assert model_input.shape[1] == self.vae_module.latent_dim + len(
-            self.batch["features"].keys()
+            self.weighted_batch["features"].keys()
         )
 
     def test_check_weights(self):
@@ -39,9 +51,15 @@ class TestGMMDataPreparation:
         # Expect these rows to be shuffled into random positions in the final
         # tensor, not just repreated on consecutive rows.
 
-        test_idx = torch.where(self.batch["weights"] > 1)[0][0]
-        encoded_batch = encode_data_for_gmm(self.batch, self.vae_module)
-        model_input = expand_weights(encoded_batch, self.batch["weights"])
+        test_idx = torch.where(
+            self.weighted_batch[self.sample_weights_column] > 1
+        )[0][0]
+        encoded_batch = gmm_utils._encode_data(
+            self.weighted_batch, self.vae_module
+        )
+        model_input = gmm_utils._expand_weights(
+            encoded_batch, self.weighted_batch[self.sample_weights_column]
+        )
 
         assert (
             torch.Tensor(
@@ -52,43 +70,67 @@ class TestGMMDataPreparation:
                     for i in range(model_input.size(0))
                 ]
             ).sum()
-            == self.batch["weights"][test_idx]
+            == self.weighted_batch[self.sample_weights_column][test_idx]
         )
 
         assert not torch.equal(
             torch.where(model_input == encoded_batch[test_idx, :])[0].unique(),
             torch.Tensor(
-                [test_idx + i for i in range(self.batch["weights"][test_idx])]
+                [
+                    test_idx + i
+                    for i in range(
+                        self.weighted_batch[self.sample_weights_column][
+                            test_idx
+                        ]
+                    )
+                ]
             ),
         )
 
-    @pytest.mark.parametrize(
-        "batch_data, train_sample_weights",
-        [
-            # Exact tensor should return quantile loss of 0
-            pytest.param(batch, True),
-            pytest.param(unweighted_batch, False),
-            pytest.param(
-                unweighted_batch,
-                True,
-                marks=pytest.mark.xfail(raises=KeyError, strict=True),
-            ),
-        ],
-    )
-    def test_expect_weight_if_train_sample_weights_is_true(
-        self, batch_data, train_sample_weights
-    ):
-        model_input = prepare_data_for_model(
-            self.vae_module, batch_data, train_sample_weights
-        )
-        assert len(model_input) > 0
+    def test_no_sample_weights(self):
 
-    def test_no_weights(self):
-        model_input = prepare_data_for_model(
-            self.vae_module, self.unweighted_batch, False
+        model_input = gmm_utils.prepare_data_for_training_step(
+            self.weighted_batch, self.vae_module, sample_weights_column=None
         )
 
         assert model_input.size(0) == 100
         assert model_input.size(1) == self.vae_module.latent_dim + len(
             self.unweighted_batch["features"].keys()
+        )
+
+    def test_gmm_weights_sum_to_one_with_sample_weights(self):
+
+        n_components = 2
+
+        gmm_init_params = initialise_gmm_params(
+            self.weighted_batch,
+            n_components=n_components,
+            vae_module=self.vae_module,
+            sample_weights_column=self.sample_weights_column,
+        )
+
+        sum_weights = gmm_init_params["weights"].sum().numpy().round(2)
+
+        assert sum_weights == 1.0
+
+    def test_gmm_weights_sum_to_one_without_sample_weights(self):
+
+        n_components = 2
+
+        gmm_init_params = initialise_gmm_params(
+            self.weighted_batch,
+            n_components=n_components,
+            vae_module=self.vae_module,
+            sample_weights_column=None,
+        )
+
+        sum_weights = gmm_init_params["weights"].sum().numpy().round(2)
+
+        assert sum_weights == 1.0
+
+    @pytest.mark.xfail(raises=KeyError, strict=True)
+    def test_wrong_weights_column(self):
+
+        gmm_utils.prepare_data_for_training_step(
+            self.weighted_batch, self.vae_module, "wrong_column"
         )

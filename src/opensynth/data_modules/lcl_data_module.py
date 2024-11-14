@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import ast
+import random
 from pathlib import Path
 from typing import Optional, TypedDict
 
@@ -14,6 +15,12 @@ from torch.utils.data import DataLoader, Dataset
 RANDOM_STATE = 0
 g = torch.Generator()
 g.manual_seed(RANDOM_STATE)
+
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
 class TrainingData(TypedDict):
@@ -160,6 +167,7 @@ class LCLDataModule(pl.LightningDataModule):
             drop_last=True,
             shuffle=False,
             generator=g,
+            worker_init_fn=seed_worker,
         )
 
     def outlier_dataloader(self):
@@ -169,6 +177,7 @@ class LCLDataModule(pl.LightningDataModule):
             drop_last=True,
             shuffle=False,
             generator=g,
+            worker_init_fn=seed_worker,
         )
 
     def reconstruct_kwh(self, xhat: torch.Tensor) -> torch.Tensor:

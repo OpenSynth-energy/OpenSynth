@@ -6,10 +6,15 @@ from typing import Optional
 
 import numpy as np
 import numpy.typing as npt
+import pytorch_lightning as pl
 import torch
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule, TrainingData
-from opensynth.models.faraday.gaussian_mixture import fit_gmm
+from opensynth.models.faraday.gaussian_mixture import (
+    GaussianMixtureLightningModule,
+    GaussianMixtureModel,
+    initialise_gmm_params,
+)
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 logger = logging.getLogger(__name__)
@@ -22,12 +27,11 @@ class FaradayModel:
         vae_module: FaradayVAE,
         n_components: int,
         tol: float = 1e-3,
-        is_batch_training: bool = True,
         accelerator: str = "cpu",
         devices: int = 1,
-        gmm_max_epochs: int = 1000,
-        gmm_covariance_reg: float = 1e-6,
-        train_sample_weights: bool = False,
+        max_epochs: int = 1000,
+        covariance_reg: float = 1e-6,
+        sample_weights_column: Optional[str] = None,
     ):
         """
         Faraday Model. Note:
@@ -42,36 +46,31 @@ class FaradayModel:
             vae_module (FaradayVAE): Trained VAE component.
             n_components (int): GMM clusters.
             tol (float, optional): Tolerance for GMM. Defaults to 1e-3.
-            is_batch_training (bool, optional): Batch training for GMM.
-                Defaults to True.
             accelerator (str, optional): Accelerator for GMM training.
                 Defaults to "cpu".
             devices (int, optional): Number of devices for GMM training.
                 Defaults to 1.
-            gmm_max_epochs (int, optional): Max epochs for GMM training.
+            max_epochs (int, optional): Max epochs for GMM training.
                 Defaults to 1000.
-            gmm_covariance_reg (float, optional): Covariance
+            covariance_reg (float, optional): Covariance
                 regularization for GMM. Defaults to 1e-6.
                 This is added to the diagonal of the covariance matrix to
                 ensure that it is positive semi-definite. Higher values will
                 make the algorithm more robust to singular covariance matrices,
                 at the cost of higher regularization.
-            train_sample_weights (bool, optional): Train with sample weights.
-                Defaults to False.
         """
         self.n_components = n_components
         self.vae_module = vae_module
         self.tol = tol
-        self.is_batch_training = is_batch_training
         self.accelerator = accelerator
         self.devices = devices
-        self.gmm_max_epochs = gmm_max_epochs
-        self.gmm_covariance_reg = gmm_covariance_reg
-        self.train_sample_weights = train_sample_weights
+        self.max_epochs = max_epochs
+        self.covariance_reg = covariance_reg
+        self.sample_weights_column = sample_weights_column
 
     @staticmethod
     def parse_samples(
-        samples: np.array, latent_dim: int, feature_list: list[str]
+        samples: torch.Tensor, latent_dim: int, feature_list: list[str]
     ) -> TrainingData:
         """
         Abstract the labels and round numerical values to integers
@@ -79,7 +78,7 @@ class FaradayModel:
         it correctly, and is handled by `get_index` method.
 
         Args:
-            samples (np.array): Samples sampled from GMM
+            samples (torch.Tensor): Samples sampled from GMM
             latent_dim (int): Latent Dimension Size
             feature_list (list[str]): List of feature names
 
@@ -88,14 +87,13 @@ class FaradayModel:
             kWh and feature labels
         """
 
-        gmm_tensors: torch.Tensor = torch.from_numpy(samples)
-        kwh: torch.Tensor = gmm_tensors[:, :latent_dim]
+        kwh: torch.Tensor = samples[:, :latent_dim]
         labels: dict[str, torch.Tensor] = {}
 
         for i, feature in enumerate(feature_list):
             index = FaradayModel.get_index(feature_list, i)
             feature_tensor = torch.round(
-                gmm_tensors[:, index], decimals=0
+                torch.Tensor(samples[:, index]), decimals=0
             ).int()
             labels[feature] = feature_tensor.reshape(len(kwh), 1)
 
@@ -227,6 +225,8 @@ class FaradayModel:
         # when training the VAE
         features = next_batch["features"]
         obtained_feature_list = list(features.keys())
+        num_features = self.vae_module.latent_dim + len(obtained_feature_list)
+
         expected_feature_list = self.vae_module.feature_list
         if obtained_feature_list != expected_feature_list:
             logger.error(
@@ -235,21 +235,45 @@ class FaradayModel:
                 """
             )
 
-        gmm_module, _, _ = fit_gmm(
-            data=dl,
+        # Initialise GMM parameters
+        # Initialising on the first batch of the data only
+        # If data is shuffled, this should represent the full data distribution
+        gmm_init_params = initialise_gmm_params(
+            next_batch,
+            n_components=self.n_components,
             vae_module=self.vae_module,
-            train_sample_weights=self.train_sample_weights,
-            num_components=self.n_components,
-            num_features=self.vae_module.latent_dim
-            + len(obtained_feature_list),
-            gmm_convergence_tolerance=self.tol,
-            covariance_regularization=self.gmm_covariance_reg,
-            init_method="kmeans",
-            gmm_max_epochs=self.gmm_max_epochs,
-            is_batch_training=self.is_batch_training,
-            accelerator=self.accelerator,
-            devices=self.devices,
+            reg_covar=self.covariance_reg,
+            sample_weights_column=self.sample_weights_column,
         )
+
+        gmm_module = GaussianMixtureModel(
+            num_components=self.n_components,
+            num_features=num_features,
+            reg_covar=self.covariance_reg,
+        )
+        gmm_module.initialise(gmm_init_params)
+        print(
+            f"Initial prec chol: {gmm_module.precision_cholesky[0][0][0]}. \
+                Initial mean: {gmm_module.means[0][0]}"
+        )
+
+        # Fit GMM
+        gmm_lightning_module = GaussianMixtureLightningModule(
+            gmm_module=gmm_module,
+            vae_module=self.vae_module,
+            num_components=gmm_module.num_components,
+            num_features=gmm_module.num_features,
+            reg_covar=gmm_module.reg_covar,
+            convergence_tolerance=self.tol,
+            sync_on_batch=False,
+            sample_weights_column=self.sample_weights_column,
+        )
+        trainer = pl.Trainer(
+            max_epochs=self.max_epochs,
+            accelerator="cpu",
+            deterministic=True,
+        )
+        trainer.fit(gmm_lightning_module, dl)
 
         # Record the ranges of features seen during training
         # Assuming that batches are random, than this should
@@ -269,9 +293,8 @@ class FaradayModel:
         Returns:
             TrainingData: Decoder output (KWH), feature labels
         """
-        gmm_samples: np.array = (
-            self.gmm_module.model.sample(n_samples).detach().numpy()
-        )
+
+        gmm_samples: torch.Tensor = self.gmm_module.sample(n_samples)
 
         # Parse GMM samples
         gmm_samples_parsed: TrainingData = self.parse_samples(
