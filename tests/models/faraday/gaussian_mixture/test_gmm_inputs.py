@@ -9,6 +9,10 @@ from opensynth.models.faraday.gaussian_mixture import (
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 
+class TrainingDataWithWeights(TrainingData):
+    weights: torch.Tensor
+
+
 class TestGMMDataPreparation:
 
     vae_module = FaradayVAE(
@@ -19,7 +23,9 @@ class TestGMMDataPreparation:
     features = {"feature_1": torch.rand(100), "feature_2": torch.rand(100)}
     weights = torch.randint(low=1, high=5, size=(100,))
 
-    batch = TrainingData(kwh=kwh, features=features, weights=weights)
+    weighted_batch = TrainingDataWithWeights(
+        kwh=kwh, features=features, weights=weights
+    )
 
     unweighted_batch = TrainingData(kwh=kwh, features=features)
 
@@ -28,15 +34,15 @@ class TestGMMDataPreparation:
     def test_check_data_size(self):
 
         model_input = gmm_utils.prepare_data_for_training_step(
-            self.batch, self.vae_module, self.sample_weights_column
+            self.weighted_batch, self.vae_module, self.sample_weights_column
         )
 
         assert (
             model_input.shape[0]
-            == self.batch[self.sample_weights_column].sum()
+            == self.weighted_batch[self.sample_weights_column].sum()
         )
         assert model_input.shape[1] == self.vae_module.latent_dim + len(
-            self.batch["features"].keys()
+            self.weighted_batch["features"].keys()
         )
 
     def test_check_weights(self):
@@ -45,12 +51,14 @@ class TestGMMDataPreparation:
         # Expect these rows to be shuffled into random positions in the final
         # tensor, not just repreated on consecutive rows.
 
-        test_idx = torch.where(self.batch[self.sample_weights_column] > 1)[0][
-            0
-        ]
-        encoded_batch = gmm_utils._encode_data(self.batch, self.vae_module)
+        test_idx = torch.where(
+            self.weighted_batch[self.sample_weights_column] > 1
+        )[0][0]
+        encoded_batch = gmm_utils._encode_data(
+            self.weighted_batch, self.vae_module
+        )
         model_input = gmm_utils._expand_weights(
-            encoded_batch, self.batch[self.sample_weights_column]
+            encoded_batch, self.weighted_batch[self.sample_weights_column]
         )
 
         assert (
@@ -62,7 +70,7 @@ class TestGMMDataPreparation:
                     for i in range(model_input.size(0))
                 ]
             ).sum()
-            == self.batch[self.sample_weights_column][test_idx]
+            == self.weighted_batch[self.sample_weights_column][test_idx]
         )
 
         assert not torch.equal(
@@ -71,7 +79,9 @@ class TestGMMDataPreparation:
                 [
                     test_idx + i
                     for i in range(
-                        self.batch[self.sample_weights_column][test_idx]
+                        self.weighted_batch[self.sample_weights_column][
+                            test_idx
+                        ]
                     )
                 ]
             ),
@@ -80,7 +90,7 @@ class TestGMMDataPreparation:
     def test_no_sample_weights(self):
 
         model_input = gmm_utils.prepare_data_for_training_step(
-            self.batch, self.vae_module, sample_weights_column=None
+            self.weighted_batch, self.vae_module, sample_weights_column=None
         )
 
         assert model_input.size(0) == 100
@@ -93,7 +103,7 @@ class TestGMMDataPreparation:
         n_components = 2
 
         gmm_init_params = initialise_gmm_params(
-            self.batch,
+            self.weighted_batch,
             n_components=n_components,
             vae_module=self.vae_module,
             sample_weights_column=self.sample_weights_column,
@@ -108,7 +118,7 @@ class TestGMMDataPreparation:
         n_components = 2
 
         gmm_init_params = initialise_gmm_params(
-            self.batch,
+            self.weighted_batch,
             n_components=n_components,
             vae_module=self.vae_module,
             sample_weights_column=None,
@@ -122,5 +132,5 @@ class TestGMMDataPreparation:
     def test_wrong_weights_column(self):
 
         gmm_utils.prepare_data_for_training_step(
-            self.batch, self.vae_module, "wrong_column"
+            self.weighted_batch, self.vae_module, "wrong_column"
         )
