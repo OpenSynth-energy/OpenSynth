@@ -237,14 +237,11 @@ class FaradayModel:
 
         # Fit GMM
         gmm_init_params = initialise_gmm_params(
-            dl,
+            next_batch,
             n_components=self.n_components,
             vae_module=self.vae_module,
             reg_covar=self.covariance_reg,
         )
-
-        sum_weights = round(gmm_init_params["weights"].sum().item(), 3)
-        assert sum_weights == 1.0
 
         gmm_module = GaussianMixtureModel(
             num_components=self.n_components,

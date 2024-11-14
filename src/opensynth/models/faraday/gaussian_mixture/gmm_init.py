@@ -8,7 +8,7 @@ from opensynth.models.faraday.vae_model import FaradayVAE
 
 
 def initialise_gmm_params(
-    dl: torch.utils.data.DataLoader,
+    data: torch.Tensor,
     n_components: int,
     vae_module: FaradayVAE,
     reg_covar: float = 1e-6,
@@ -30,8 +30,7 @@ def initialise_gmm_params(
 
     # Use data from first batch to initialise centroids
     # If data is shuffled, this should represent the full dataset
-    X = next(iter(dl))
-    X = gmm_utils.encode_data(X, vae_module)
+    X = gmm_utils.encode_data(data, vae_module)
     X = X.detach().numpy()
 
     labels_, means_, responsibilities_ = gmm_utils.initialise_centroids(

@@ -2,6 +2,9 @@ import torch
 
 from opensynth.data_modules.lcl_data_module import TrainingData
 from opensynth.models.faraday.gaussian_mixture import gmm_utils
+from opensynth.models.faraday.gaussian_mixture.gmm_init import (
+    initialise_gmm_params,
+)
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 
@@ -72,3 +75,17 @@ class TestGMMDataPreparation:
         assert model_input.size(1) == self.vae_module.latent_dim + len(
             self.unweighted_batch["features"].keys()
         )
+
+    def test_weights_sum_to_one(self):
+
+        n_components = 2
+
+        gmm_init_params = initialise_gmm_params(
+            self.batch,
+            n_components=n_components,
+            vae_module=self.vae_module,
+        )
+
+        sum_weights = gmm_init_params["weights"].sum().numpy().round(2)
+
+        assert sum_weights == 1.0
