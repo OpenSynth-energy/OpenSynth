@@ -19,8 +19,16 @@ class TestGMM:
         model.means = torch.tensor([[0.0, 0.0, 0.0], [1000.0, 1000.0, 1000.0]])
         model.covariances = torch.tensor(
             [
-                [[1e-2, 1e-2, 1e-2], [1e-2, 1e-2, 1e-2], [1e-2, 1e-2, 1e-2]],
-                [[1e-2, 1e-2, 1e-2], [1e-2, 1e-2, 1e-2], [1e-2, 1e-2, 1e-2]],
+                [
+                    [1e-2, 0, 0],
+                    [0, 1e-2, 0],
+                    [0, 0, 1e-2],
+                ],
+                [
+                    [1e-2, 0, 0],
+                    [0, 1e-2, 0],
+                    [0, 0, 1e-2],
+                ],
             ]
         )
         samples = model.sample(num_samples)
@@ -41,7 +49,7 @@ class TestGMM:
             == 0.9
         )
 
-    def test_gmm_forward(self):
+    def test_gmm_e_step(self):
         num_components = 2
         num_features = 3
 
@@ -82,7 +90,7 @@ class TestGMM:
 
         model.initialise(gmm_init_params)
 
-        # run a forward pass
+        # run e-step
         _, resp = model.e_step(data)
 
         # test that the responsibilities are as expected
