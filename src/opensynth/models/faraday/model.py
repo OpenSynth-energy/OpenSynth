@@ -90,7 +90,9 @@ class FaradayModel:
 
         for i, feature in enumerate(feature_list):
             index = FaradayModel.get_index(feature_list, i)
-            feature_tensor = torch.round(samples[:, index], decimals=0).int()
+            feature_tensor = torch.round(
+                torch.Tensor(samples[:, index]), decimals=0
+            ).int()
             labels[feature] = feature_tensor.reshape(len(kwh), 1)
 
         return TrainingData(kwh=kwh, features=labels)

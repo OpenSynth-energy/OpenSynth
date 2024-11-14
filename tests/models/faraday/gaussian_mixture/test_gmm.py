@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from opensynth.models.faraday.gaussian_mixture import GaussianMixtureModel
+from opensynth.models.faraday.gmm.gmm_model import GaussianMixtureModel
 
 
 class TestGMM:
@@ -13,10 +13,15 @@ class TestGMM:
         num_samples = 1000
 
         # set component probs to test sampling
-        model.component_probs = torch.tensor([0.1, 0.9])
-
+        model.weights = torch.tensor([0.1, 0.9])
         model.means = torch.tensor([[0.0, 0.0, 0.0], [1000.0, 1000.0, 1000.0]])
-        samples = model.sample(num_datapoints=num_samples)
+        model.covariances = torch.tensor(
+            [
+                [[1e-2, 1e-2, 1e-2], [1e-2, 1e-2, 1e-2], [1e-2, 1e-2, 1e-2]],
+                [[1e-2, 1e-2, 1e-2], [1e-2, 1e-2, 1e-2], [1e-2, 1e-2, 1e-2]],
+            ]
+        )
+        samples = model.sample(num_samples)
 
         # test that the number of samples in both clusters is as expected
         assert (
@@ -52,12 +57,31 @@ class TestGMM:
         )
         model = GaussianMixtureModel(num_components, num_features)
 
-        model.means = torch.tensor(
-            [[1.0, 1.0, 1.0], [200, 200, 200]], dtype=torch.float32
-        )
+        gmm_init_params = {
+            "means": torch.tensor(
+                [[1.0, 1.0, 1.0], [200, 200, 200]], dtype=torch.float32
+            ),
+            "precision_cholesky": torch.tensor(
+                [
+                    [
+                        [1e-2, 1e-2, 1e-2],
+                        [1e-2, 1e-2, 1e-2],
+                        [1e-2, 1e-2, 1e-2],
+                    ],
+                    [
+                        [1e-2, 1e-2, 1e-2],
+                        [1e-2, 1e-2, 1e-2],
+                        [1e-2, 1e-2, 1e-2],
+                    ],
+                ]
+            ),
+            "weights": torch.tensor([0.1, 0.9]),
+        }
+
+        model.initialise(gmm_init_params)
 
         # run a forward pass
-        resp, _ = model.forward(data)
+        _, resp = model.e_step(data)
 
         # test that the responsibilities are as expected
         # first 4 samples should be in cluster 1, last 4 in cluster 2

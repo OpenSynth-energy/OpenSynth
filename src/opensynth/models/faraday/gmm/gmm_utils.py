@@ -41,7 +41,7 @@ def expand_weights(data: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
             dataset
 
     Returns:
-        torch.Tensor:
+        torch.Tensor
     """
     model_input = _expand_samples(data, weights)
     model_input = model_input[torch.randperm(model_input.size(dim=0))]
