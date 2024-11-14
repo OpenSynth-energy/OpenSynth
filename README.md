@@ -1,6 +1,7 @@
 # [OpenSynth](https://lfenergy.org/projects/opensynth/)
 OpenSynth Model Repository.
 
+
 ### For the data repository:
 [_Link to CNZ's Synthetic Dataset on Zenodo here_](https://zenodo.org/records/13618456)
 
@@ -11,8 +12,6 @@ The data repository is still under construction. In the mean time, Centre for Ne
 - Seasonality: days of the week and month of the year
 
 You can find the dataset [here on Zenodo](https://zenodo.org/records/13618456). For more information about Faraday, please refer to the [workshop paper](https://arxiv.org/abs/2404.04314) that Centre for Net Zero presented at ICLR 2024. For more news and updates on OpenSynth, please subscribe to our mailing list [here](https://lists.lfenergy.org/g/opensynth-discussion).
-
-
 
 
 # 💻 Development Set up
@@ -47,6 +46,10 @@ Precommit Tools:
 - The dataset contains half-hourly smart meter readings of 5,567 households.
 - All timestamps are given in UTC so there's no time-zone conversation needed (i.e. 48 half-hourly data a day per household)
 
+### ☁️ Preparing LCL Dataset for streaming
+- In order to prepare the LCL Dataset for streaming, follow the instrucitons in `notebooks/streaming/streaming_data_preparation.ipynb`
 
 # 📕 Tutorials
 For tutorials on algorithms in this repository, please refer to notebooks in the `notebooks` folder.
+- `faraday`: Train a synthetic data generative model using the Faraday algorithm
+- `streaming`: Train a synthetic data generative model using the Faraday algorithm by streaming the training data (useful for out of memory datasets)
