@@ -3,7 +3,7 @@
 
 import torch
 
-from opensynth.models.faraday.gmm import gmm_model, gmm_utils
+from opensynth.models.faraday.gaussian_mixture import gmm_model, gmm_utils
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 

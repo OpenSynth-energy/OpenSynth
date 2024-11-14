@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from pytorch_lightning.callbacks import EarlyStopping
 
-from opensynth.models.faraday.gmm import gmm_metrics, gmm_utils
+from opensynth.models.faraday.gaussian_mixture import gmm_metrics, gmm_utils
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 

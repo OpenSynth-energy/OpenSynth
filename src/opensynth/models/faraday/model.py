@@ -10,8 +10,10 @@ import pytorch_lightning as pl
 import torch
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule, TrainingData
-from opensynth.models.faraday.gmm.gmm_init import initialise_gmm_params
-from opensynth.models.faraday.gmm.gmm_model import (
+from opensynth.models.faraday.gaussian_mixture.gmm_init import (
+    initialise_gmm_params,
+)
+from opensynth.models.faraday.gaussian_mixture.gmm_model import (
     GaussianMixtureLightningModule,
     GaussianMixtureModel,
 )

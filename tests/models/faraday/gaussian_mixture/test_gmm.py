@@ -1,7 +1,9 @@
 import numpy as np
 import torch
 
-from opensynth.models.faraday.gmm.gmm_model import GaussianMixtureModel
+from opensynth.models.faraday.gaussian_mixture.gmm_model import (
+    GaussianMixtureModel,
+)
 
 
 class TestGMM:
