@@ -20,8 +20,9 @@ def initialise_gmm_params(
       covariances.
 
     Args:
-        X (torch.Tensor): Input data
+        data (torch.Tensor): Input data
         n_components (int): Number of components
+        vae_module(FaradayVAE): Trained VAE model
         reg_covar (float): Regularisation for covariance matrix
 
     Returns:
