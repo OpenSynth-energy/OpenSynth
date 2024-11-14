@@ -1,7 +1,7 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -11,7 +11,7 @@ from opensynth.models.faraday.losses import _expand_samples
 from opensynth.models.faraday.vae_model import FaradayVAE
 
 
-def encode_data(data: torch.Tensor, vae_module: FaradayVAE) -> torch.Tensor:
+def _encode_data(data: torch.Tensor, vae_module: FaradayVAE) -> torch.Tensor:
     """Prepare data for the GMM by encoding it with the VAE.
 
     Args:
@@ -29,7 +29,7 @@ def encode_data(data: torch.Tensor, vae_module: FaradayVAE) -> torch.Tensor:
     return model_input
 
 
-def expand_weights(data: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
+def _expand_weights(data: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
     """Expand the repeat based on the training weights and shuffle the
      expanded dataset.
      Shuffling prevents consecutive samples from being the same to prevent
@@ -46,6 +46,28 @@ def expand_weights(data: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
     model_input = _expand_samples(data, weights)
     model_input = model_input[torch.randperm(model_input.size(dim=0))]
     return model_input
+
+
+def prepare_data_for_training_step(
+    data: torch.Tensor,
+    vae_module: FaradayVAE,
+    sample_weights_column: Optional[str] = None,
+) -> torch.Tensor:
+
+    encoded_data = _encode_data(data, vae_module)
+
+    if sample_weights_column is not None:
+        try:
+            model_input = _expand_weights(
+                encoded_data, data[sample_weights_column]
+            )
+        except KeyError:
+            raise KeyError(
+                f"Column {sample_weights_column} not found in input data."
+            )
+        return model_input
+    else:
+        return encoded_data
 
 
 def initialise_centroids(

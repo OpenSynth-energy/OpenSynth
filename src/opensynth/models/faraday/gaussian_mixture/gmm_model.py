@@ -1,7 +1,7 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Tuple, TypedDict
+from typing import Optional, Tuple, TypedDict
 
 import pytorch_lightning as pl
 import torch
@@ -278,6 +278,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         reg_covar: float = 1e-6,
         convergence_tolerance: float = 1e-2,
         sync_on_batch: bool = False,
+        sample_weights_column: Optional[str] = None,
     ):
         super().__init__()
         self.gmm_module = gmm_module
@@ -304,6 +305,8 @@ class GaussianMixtureLightningModule(pl.LightningModule):
 
         self.sync_on_batch = sync_on_batch
 
+        self.sample_weights_column = sample_weights_column
+
     def configure_optimizers(self) -> None:
         return None
 
@@ -317,12 +320,9 @@ class GaussianMixtureLightningModule(pl.LightningModule):
 
     def training_step(self, batch) -> None:
         # Encode the batch
-        encoded_batch = gmm_utils.encode_data(batch, self.vae_module)
-
-        if "weights" in list(batch.keys()):
-            encoded_batch = gmm_utils.expand_weights(
-                encoded_batch, batch["weights"]
-            )
+        encoded_batch = gmm_utils.prepare_data_for_training_step(
+            batch, self.vae_module, self.sample_weights_column
+        )
 
         # Run e-step
         log_prob, log_resp = self.gmm_module.e_step(encoded_batch)

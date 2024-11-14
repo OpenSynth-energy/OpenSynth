@@ -31,6 +31,7 @@ class FaradayModel:
         devices: int = 1,
         max_epochs: int = 1000,
         covariance_reg: float = 1e-6,
+        sample_weights_column: Optional[str] = None,
     ):
         """
         Faraday Model. Note:
@@ -65,6 +66,7 @@ class FaradayModel:
         self.devices = devices
         self.max_epochs = max_epochs
         self.covariance_reg = covariance_reg
+        self.sample_weights_column = sample_weights_column
 
     @staticmethod
     def parse_samples(
@@ -241,6 +243,7 @@ class FaradayModel:
             n_components=self.n_components,
             vae_module=self.vae_module,
             reg_covar=self.covariance_reg,
+            sample_weights_column=self.sample_weights_column,
         )
 
         gmm_module = GaussianMixtureModel(
@@ -263,6 +266,7 @@ class FaradayModel:
             reg_covar=gmm_module.reg_covar,
             convergence_tolerance=self.tol,
             sync_on_batch=False,
+            ample_weights_column=self.sample_weights_column,
         )
         trainer = pl.Trainer(
             max_epochs=self.max_epochs,

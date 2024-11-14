@@ -1,6 +1,8 @@
 # Copyright Contributors to the Opensynth-energy Project.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Optional
+
 import torch
 
 from opensynth.models.faraday.gaussian_mixture import gmm_model, gmm_utils
@@ -12,6 +14,7 @@ def initialise_gmm_params(
     n_components: int,
     vae_module: FaradayVAE,
     reg_covar: float = 1e-6,
+    sample_weights_column: Optional[str] = None,
 ) -> gmm_model.GMMInitParams:
     """
     Initialise Gaussian Mixture Parameters.
@@ -29,10 +32,10 @@ def initialise_gmm_params(
         dict[str, torch.Tensor]: GMM params
     """
 
-    X = gmm_utils.encode_data(data, vae_module)
-    if "weights" in list(data.keys()):
-        X = gmm_utils.expand_weights(X, data["weights"])
-    X = X.detach().numpy()
+    encoded_data = gmm_utils.prepare_data_for_training_step(
+        data, vae_module, sample_weights_column
+    )
+    X = encoded_data.detach().numpy()
 
     labels_, means_, responsibilities_ = gmm_utils.initialise_centroids(
         X=X, n_components=n_components
