@@ -34,7 +34,7 @@ jobs:
       - name: Scan code base for GPL/ GNU licenses with Scancode-toolkit
         id: gpl_scan
         run: |
-          docker run -v $PWD/:/project scancode-toolkit -clpeui -n 1 --ignore /project/scancode-toolkit/* --ignore /project/.github/* --ignore /project/scripts/* --json-pp /project/scan_results.json /project --verbose
+          docker run -v $PWD/:/project scancode-toolkit -clpeui -n 1 --ignore /project/scancode-toolkit/* --ignore /project/.github/* --ignore /project/scripts/* --ignore /project/notebooks/* --json-pp /project/scan_results.json /project --verbose
           ./scripts/check_gpl.sh
 
       - name: Output file locations of GPL licenses

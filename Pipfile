@@ -16,6 +16,8 @@ torchmetrics = "*"
 numpy = "<=2.0.0"
 pandas = "<2.2.2"
 matplotlib = "*"
+litdata = "*"
+zstd = "*"
 
 [dev-packages]
 pytest = "*"
@@ -27,6 +29,10 @@ pre-commit = "*"
 ipython = "*"
 jupyterlab = "*"
 typer = "*"
+viztracer = "*"
+db-dtypes = "*"
+google-cloud-bigquery-storage = "*"
+ipywidgets = "*"
 
 [requires]
 python_version = "3.11"

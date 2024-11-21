@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -10,6 +10,7 @@ import pytorch_lightning as pl
 import torch
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule, TrainingData
+from opensynth.data_modules.streaming_data_module import StreamDataModule
 from opensynth.models.faraday.gaussian_mixture import (
     GaussianMixtureLightningModule,
     GaussianMixtureModel,
@@ -208,12 +209,12 @@ class FaradayModel:
             ][mask]
         return sampled_data
 
-    def train_gmm(self, dm: LCLDataModule):
+    def train_gmm(self, dm: Union[StreamDataModule, LCLDataModule]):
         """
         Train Gaussian Mixture Module
 
         Args:
-            dm (LCLDataModule): Training data
+            dm (StreamDataModule, LCLDataModule): Training data
         """
         logger.info("🚀 Training GMM")
 
