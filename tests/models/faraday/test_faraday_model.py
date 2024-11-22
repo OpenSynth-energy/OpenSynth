@@ -3,7 +3,8 @@ import pytest
 import torch
 
 from opensynth.data_modules.lcl_data_module import TrainingData
-from opensynth.models.faraday import FaradayModel, FaradayVAE
+from opensynth.models.faraday.model import FaradayModel
+from opensynth.models.faraday.vae_model import FaradayVAE
 
 
 @pytest.fixture
@@ -53,7 +54,7 @@ def test_get_index(feature_dict):
 
 class TestFaradayModelParseLabelsAndProfiles:
 
-    samples = np.random.rand(12, 12)
+    samples = torch.rand(12, 12)
     latent_size = 10
     feature_dict = {
         "feature_1": torch.tensor([1, 2, 3, 4, 5]),
