@@ -8,115 +8,8 @@ from tqdm.auto import tqdm
 
 from .diffusion import GaussianDiffusion1D, ModelMeanType, ModelVarianceType
 
-# two functions we use to sample. 
-def ancestral_sample(
-    num_sample: int, 
-    batch_size: int, 
-    cond: torch.Tensor|None=None,
-    cfg_scale: float = 1.,
-    trainer: Trainer1D|None=None, 
-    model: SpacedDiffusion1D|None=None,
-    post_transforms: Iterable[Callable] = [],
-) -> torch.Tensor:
-    """ sample from either the EMA in trainer or directly the diffusion model. 
-    
-    trainer = Trainer1D and model = None: sample from EMA
-    trainer = None and model = GaussianDiffusion1D: sample from model
-    
-    Arguments:
-        - num_sample: int, number of samples to generate
-        - batch_size: int, batch size for sampling
-        - cond: shape [batch_size, channel, 1], condition for sampling
-    """
-    # process cond
-    if cond is not None:
-        if model is not None:
-            _device = next(model.parameters()).device
-            cond = cond.to(_device)
-        else:
-            cond = cond.to(trainer.device)
-    
-    # process batch size split
-    if num_sample < batch_size:
-        list_batch_size = [num_sample]
-    else:
-        list_batch_size = [batch_size] * (num_sample // batch_size)
-        if num_sample % batch_size != 0:
-            list_batch_size.append(num_sample % batch_size)
-    
-    # sample
-    list_sample = []
-    for idx, batch_size in enumerate(list_batch_size):
-        print(f'sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. ')
-        cond = cond[:batch_size] if cond is not None else None
-        model_kwargs = {
-            'c': cond,
-            'cfg_scale': cfg_scale,
-        }
-        if model is None:
-            # trainer.ema.ema_model.half()
-            # with trainer.accelerator.autocast():
-            sample_batch = trainer.ema.ema_model.sample(batch_size=batch_size, clip_denoised=True, model_kwargs=model_kwargs).float()
-        else:
-            sample_batch = model.sample(batch_size=batch_size, clip_denoised=True, model_kwargs=model_kwargs)
-        
-        # post transforms
-        for post_trans in post_transforms:
-            sample_batch = post_trans(sample_batch)
-        
-        list_sample.append(sample_batch)
-    all_sample = torch.cat(list_sample, dim=0)
-    
-    if model is None:
-        gathered_all_sample = trainer.accelerator.gather(all_sample)
-        return gathered_all_sample
-    return all_sample
-
-def dpm_solver_sample(
-    sampler: DPMSolverSampler,
-    total_num_sample: int,
-    batch_size: int,
-    step: int,
-    shape: tuple[int, int],
-    conditioning: torch.Tensor|None,
-    cfg_scale: float,
-    accelerator = None,
-    clip_denoised: bool = True,
-) -> torch.Tensor:
-    if accelerator is not None:
-        num_sample = total_num_sample // accelerator.num_processes # for this process
-    else:
-        num_sample = total_num_sample
-    if num_sample < batch_size:
-        list_batch_size = [num_sample]
-    else:
-        list_batch_size = [batch_size] * (num_sample // batch_size)
-        if num_sample % batch_size != 0:
-            list_batch_size.append(num_sample % batch_size)
-    
-    list_sample = []
-    for idx, batch_size in enumerate(list_batch_size):
-        print(f'sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. ')
-        sample_batch, _ = sampler.sample(
-            S = step,
-            batch_size = batch_size,
-            shape = shape,
-            conditioning = conditioning,
-            cfg_scale = cfg_scale,
-        )
-        list_sample.append(sample_batch)
-        
-    all_sample = torch.cat(list_sample, dim=0)
-    if accelerator is not None:
-        gathered_all_sample = accelerator.gather(all_sample)
-        return gathered_all_sample
-    
-    if clip_denoised:
-        all_sample = torch.clamp(all_sample, -1, 1)
-    return all_sample
-
-" --- below is mostly DPM-Solver implementation and adaptation ---"
-
+" *** check the bottom of this script for sample functions      *** "
+" --- below is mostly DPM-Solver implementation and adaptation  ---"
 class NoiseScheduleVP:
     def __init__(
             self,
@@ -1362,7 +1255,7 @@ class DPMSolverSampler(object):
 
         # original model function
         def apply_model(x, t, c=None):
-            out = self.model.model.forward(x, t, c=c)
+            out = self.model.model.forward(x, t)
             if self.model.model_variance_type == ModelVarianceType.LEARNED_RANGE: # GaussianDiffusion1D.model_variance_type
                 out = torch.split(out, out.shape[1] // 2, dim=1)[0] # discard the learned variance
             return out
@@ -1389,3 +1282,107 @@ class DPMSolverSampler(object):
         x = dpm_solver.sample(img, steps=S, skip_type="time_uniform", method="multistep", order=3, lower_order_final=True)
 
         return x.to(device), None
+    
+# two functions we use to sample. 
+def ancestral_sample(
+    num_sample: int,
+    batch_size: int,
+    data_sequence_length: int,
+    data_feature_dim: int, # 1 for univariate, 2 for bivariate
+    # cond: torch.Tensor|None=None,
+    # cfg_scale: float = 1.,
+    diffusion_model: GaussianDiffusion1D,
+) -> torch.Tensor:
+    """ sample from either given diffusion model. 
+    
+    Arguments:
+        - num_sample: int, number of samples to generate
+        - batch_size: int, batch size for sampling
+        - cond: shape [batch_size, channel, 1], condition for sampling
+    """
+    # process cond
+    # if cond is not None:
+    #     if model is not None:
+    #         _device = next(model.parameters()).device
+    #         cond = cond.to(_device)
+    #     else:
+    #         cond = cond.to(trainer.device)
+    
+    # process batch size split
+    if num_sample < batch_size:
+        list_batch_size = [num_sample]
+    else:
+        list_batch_size = [batch_size] * (num_sample // batch_size)
+        if num_sample % batch_size != 0:
+            list_batch_size.append(num_sample % batch_size)
+    
+    # sample
+    list_sample = []
+    for idx, batch_size in enumerate(list_batch_size):
+        print(f'sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. ')
+        # cond = cond[:batch_size] if cond is not None else None
+        # model_kwargs = {
+        #     'c': cond,
+        #     'cfg_scale': cfg_scale,
+        # }
+        # 
+        # if model is None:
+            # trainer.ema.ema_model.half()
+            # with trainer.accelerator.autocast():
+        #     sample_batch = trainer.ema.ema_model.sample(batch_size=batch_size, clip_denoised=True, model_kwargs=model_kwargs).float()
+        # else:
+        #     sample_batch = model.sample(batch_size=batch_size, clip_denoised=True, model_kwargs=model_kwargs)
+        sample_batch = diffusion_model.p_sample_loop(
+            shape=(batch_size, data_sequence_length, data_feature_dim),
+            noise=None,
+            clip_denoised=False, # True requires data scaling to (-1,1)
+        )
+
+        list_sample.append(sample_batch)
+    all_sample = torch.cat(list_sample, dim=0)
+    
+    return all_sample # shape [num_sample, data_sequence_length, data_feature_dim]
+
+
+def dpm_solver_sample(
+    sampler: DPMSolverSampler,
+    total_num_sample: int,
+    batch_size: int,
+    step: int,
+    shape: tuple[int, int],
+    conditioning: torch.Tensor|None,
+    cfg_scale: float,
+    accelerator = None,
+    clip_denoised: bool = True,
+) -> torch.Tensor:
+    if accelerator is not None:
+        num_sample = total_num_sample // accelerator.num_processes # for this process
+    else:
+        num_sample = total_num_sample
+    if num_sample < batch_size:
+        list_batch_size = [num_sample]
+    else:
+        list_batch_size = [batch_size] * (num_sample // batch_size)
+        if num_sample % batch_size != 0:
+            list_batch_size.append(num_sample % batch_size)
+    
+    list_sample = []
+    for idx, batch_size in enumerate(list_batch_size):
+        print(f'sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. ')
+        sample_batch, _ = sampler.sample(
+            S = step,
+            batch_size = batch_size,
+            shape = shape,
+            conditioning = conditioning,
+            cfg_scale = cfg_scale,
+        )
+        list_sample.append(sample_batch)
+        
+    all_sample = torch.cat(list_sample, dim=0)
+    if accelerator is not None:
+        gathered_all_sample = accelerator.gather(all_sample)
+        return gathered_all_sample
+    
+    if clip_denoised:
+        all_sample = torch.clamp(all_sample, -1, 1)
+    return all_sample
