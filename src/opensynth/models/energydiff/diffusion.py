@@ -22,6 +22,7 @@ from ema_pytorch import EMA
 from torch import Tensor, nn
 from tqdm import tqdm
 
+from opensynth.data_modules.lcl_data_module import TrainingData
 from .model import DenoisingTransformer
 
 ModelPrediction = namedtuple(
@@ -645,6 +646,16 @@ class PLDiffusion1D(pl.LightningModule):
         )
         # NOTE: ema also contains a reference to the online model.
 
+    def on_before_batch_transfer(
+        self,
+        batch: TrainingData,
+        dataloader_idx: int,
+    ):
+        kwh_data = batch['kwh'] # shape: (batch, sequence)
+        features = batch['features'] # not used
+        kwh_data = kwh_data.unsqueeze(-1)  # shape: (batch, sequence, 1)
+        return kwh_data
+   
     # training step
     def training_step(
         self,
