@@ -842,20 +842,19 @@ class PLDiffusion1D(pl.LightningModule):
             loss_type=loss_type,
             beta_schedule_type=beta_schedule_type,
         )
-        self.lr = lr
-        self.ema_update_every = ema_update_every
-        self.ema_decay = ema_decay
-
-    # setup function
-    def setup(self, stage: str) -> None:
-        """setup EMA here."""
         self.ema = EMA(
             self.diffusion_model,
             beta=self.ema_decay,
             update_every=self.ema_update_every,
             include_online_model=True,
         )
-        # NOTE: ema also contains a reference to the online model.
+        self.lr = lr
+        self.ema_update_every = ema_update_every
+        self.ema_decay = ema_decay
+
+    # setup function
+    def setup(self, stage: str) -> None:
+       pass # nothing to setup
 
     def on_before_batch_transfer(
         self,
