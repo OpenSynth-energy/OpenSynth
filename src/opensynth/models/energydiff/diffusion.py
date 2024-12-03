@@ -880,7 +880,7 @@ class PLDiffusion1D(pl.LightningModule):
             "train_loss",
             loss.item(),
             on_step=True,
-            on_epoch=False,
+            on_epoch=True,
             prog_bar=True,
             sync_dist=True,
         )
@@ -888,8 +888,7 @@ class PLDiffusion1D(pl.LightningModule):
             "train_mse_loss",
             mse,
             on_step=True,
-            on_epoch=False,
-            prog_bar=True,
+            on_epoch=True,
             sync_dist=True,
         )
 
@@ -899,10 +898,28 @@ class PLDiffusion1D(pl.LightningModule):
         self.ema.update()
 
     # validation step
+    @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        raise NotImplementedError("Validation step is not implemented yet.")
+        loss_terms = self.diffusion_model(x_start=batch)
+        loss = loss_terms["loss"]
+        mse = loss_terms["mse"].item() if "mse" in loss_terms else 0.0
+        self.log(
+            "val_loss",
+            loss,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
+        )
+        self.log(
+            "val_mse_loss",
+            mse,
+            on_step=False,
+            on_epoch=True,
+            sync_dist=True,
+        )
 
     # test step
+    @torch.no_grad()
     def test_step(self, batch, batch_idx):
         raise NotImplementedError("Validation step is not implemented yet.")
 
