@@ -210,7 +210,7 @@ class GaussianDiffusion1D(nn.Module):
         self.sqrt_alpha_cumprod = self.sqrt_alpha_cumprod.to(torch.float32)
         self.sqrt_one_minus_alpha_cumprod = self.sqrt_one_minus_alpha_cumprod.to(torch.float32)
         self.log_one_minus_alpha_cumprod = self.log_one_minus_alpha_cumprod.to(torch.float32)
-        self.sqrt_recip_alpha_cumprod
+        self.sqrt_recip_alpha_cumprod = self.sqrt_recip_alpha_cumprod.to(torch.float32)
         self.sqrt_recipm1_alpha_cumprod = self.sqrt_recipm1_alpha_cumprod.to(torch.float32)
         self.posterior_variance = self.posterior_variance.to(torch.float32)
         self.posterior_log_variance_clipped = self.posterior_log_variance_clipped.to(torch.float32)
@@ -414,7 +414,7 @@ class GaussianDiffusion1D(nn.Module):
         if clip_denoised:
             pred_x_start = torch.clamp(pred_x_start, min=-1.0, max=1.0)
 
-        model_mean, *_ = self.q_posterior_mean_variance(x_t, pred_x_start, t)
+        model_mean, *_ = self.q_posterior_mean_variance(pred_x_start, x_t, t)
         # why not directly sample from N(model_mean, model_variance)?
         # because we did not explicitly calculate the mean of x_{t-1}, but x_start instead.
 
