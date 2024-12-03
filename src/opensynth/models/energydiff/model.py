@@ -204,6 +204,20 @@ class DecoderTransformer(nn.Module):
             x = decoder(x, c)
         return x # shape: (batch, sequence, dim)
     
+class InitProjection(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, padding):
+        super().__init__()
+        self.conv = nn.Conv1d(in_channels, out_channels, 
+                              kernel_size=kernel_size, padding=padding)
+    
+    def forward(self, x: Float[Tensor, 'B L D']):
+        # x = rearrange(x, 'B L D -> B D L')
+        x = x.reshape(x.shape[0], x.shape[2], x.shape[1])
+        x = self.conv(x)
+        # x = rearrange(x, 'B D L -> B L D') # unsupported by mps
+        x = x.reshape(x.shape[0], x.shape[2], x.shape[1])
+        return x
+    
 class DenoisingTransformer(nn.Module):
     """wraps DecoderTransformer with additional layers for denoising
     input:
@@ -253,11 +267,12 @@ class DenoisingTransformer(nn.Module):
         )
 
         # initial projection
-        self.init_proj = nn.Sequential(
-            Rearrange('batch seq dim_in -> batch dim_in seq'),
-            nn.Conv1d(self.dim_in, self.dim_base, kernel_size=5, padding=2), 
-            Rearrange('batch dim_base seq -> batch seq dim_base')
-        ) # (batch, sequence, dim_in) -> (batch, sequence, dim_base)
+        # self.init_proj = nn.Sequential(
+        #     Rearrange('batch seq dim_in -> batch dim_in seq'),
+        #     nn.Conv1d(self.dim_in, self.dim_base, kernel_size=5, padding=2), 
+        #     Rearrange('batch dim_base seq -> batch seq dim_base')
+        # ) # (batch, sequence, dim_in) -> (batch, sequence, dim_base)
+        self.init_proj = InitProjection(self.dim_in, self.dim_base, kernel_size=5, padding=2)
         
         # decoder
         self.transformer = DecoderTransformer(

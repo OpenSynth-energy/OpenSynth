@@ -200,8 +200,21 @@ class GaussianDiffusion1D(nn.Module):
             raise ValueError(
                 "model_mean_type must be one of ModelMeanType.X_START, ModelMeanType.NOISE, ModelMeanType.V"
             )
-
-        self.loss_weight = loss_weight
+            
+        # convert to float32 to support mps device
+        self.beta_schedule = self.beta_schedule.to(torch.float32)
+        self.alpha_cumprod = self.alpha_cumprod.to(torch.float32)
+        self.alpha_cumprod_prev = self.alpha_cumprod_prev.to(torch.float32)
+        self.sqrt_alpha_cumprod = self.sqrt_alpha_cumprod.to(torch.float32)
+        self.sqrt_one_minus_alpha_cumprod = self.sqrt_one_minus_alpha_cumprod.to(torch.float32)
+        self.log_one_minus_alpha_cumprod = self.log_one_minus_alpha_cumprod.to(torch.float32)
+        self.sqrt_recip_alpha_cumprod
+        self.sqrt_recipm1_alpha_cumprod = self.sqrt_recipm1_alpha_cumprod.to(torch.float32)
+        self.posterior_variance = self.posterior_variance.to(torch.float32)
+        self.posterior_log_variance_clipped = self.posterior_log_variance_clipped.to(torch.float32)
+        self.posterior_mean_coef1 = self.posterior_mean_coef1.to(torch.float32)
+        self.posterior_mean_coef2 = self.posterior_mean_coef2.to(torch.float32)
+        self.loss_weight = loss_weight.to(torch.float32)
 
     def predict_start_from_noise(
         self,
