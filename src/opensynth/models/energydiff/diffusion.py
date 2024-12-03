@@ -844,8 +844,8 @@ class PLDiffusion1D(pl.LightningModule):
         )
         self.ema = EMA(
             self.diffusion_model,
-            beta=self.ema_decay,
-            update_every=self.ema_update_every,
+            beta=ema_decay,
+            update_every=ema_update_every,
             include_online_model=True,
         )
         self.lr = lr
