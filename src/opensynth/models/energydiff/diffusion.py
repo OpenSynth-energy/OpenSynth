@@ -821,8 +821,15 @@ class PLDiffusion1D(pl.LightningModule):
 
     def __init__(
         self,
-        # GaussianDiffusion1D arguments
-        base_model: DenoisingTransformer,  # denoise model
+        # transformer model arguments
+        dim_base: int = 256,
+        dim_in: int = 1,
+        num_attn_head: int = 4,
+        num_decoder_layer: int = 6,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.1,
+        learn_variance: bool = False,
+        # diffusion model arguments
         num_timestep: int = 1000,
         model_mean_type: ModelMeanType = ModelMeanType.NOISE,
         model_variance_type: ModelVarianceType = ModelVarianceType.FIXED_SMALL,
@@ -834,6 +841,16 @@ class PLDiffusion1D(pl.LightningModule):
         ema_decay: float = 0.9999,
     ):
         super().__init__()
+        self.save_hyperparameters()
+        base_model = DenoisingTransformer(
+            dim_base=dim_base,
+            dim_in=dim_in,
+            num_attn_head=num_attn_head,
+            num_decoder_layer=num_decoder_layer,
+            dim_feedforward=dim_feedforward,
+            dropout=dropout,
+            learn_variance=learn_variance,
+        )
         self.diffusion_model = GaussianDiffusion1D(
             base_model=base_model,
             num_timestep=num_timestep,
