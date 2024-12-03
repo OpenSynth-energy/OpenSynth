@@ -31,7 +31,7 @@ def main():
     )
     df_model = diffusion.PLDiffusion1D(
         base_model=denoise_model,
-        num_timestep=1000,
+        num_timestep=250,
         model_mean_type=diffusion.ModelMeanType.V,
         model_variance_type=diffusion.ModelVarianceType.FIXED_SMALL,
         loss_type=diffusion.LossType.MSE,
@@ -43,9 +43,20 @@ def main():
     trainer = pl.Trainer(
         gradient_clip_val=1.0,
         gradient_clip_algorithm="norm",
-        max_epochs=10,
+        max_epochs=5,
     )
     trainer.fit(df_model, dm)
+
+    # sample
+    ema_df_model = df_model.ema.ema_model # GaussianDiffusion1D
+    ans_samples = ema_df_model.ancestral_sample(50, 50, 48, 1)
+    dpm_samples = ema_df_model.dpm_solver_sample(50, 50, 100, (48, 1))
+    from matplotlib import pyplot as plt
+    plt.plot(ans_samples[0].detach().cpu().numpy(), label="ancestral")
+    plt.plot(dpm_samples[0].detach().cpu().numpy(), label="dpm")
+    plt.legend()
+    plt.show()
+    pass
     
 if __name__ == "__main__":
     main()

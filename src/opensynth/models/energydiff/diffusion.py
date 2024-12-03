@@ -24,6 +24,7 @@ from tqdm import tqdm
 
 from opensynth.data_modules.lcl_data_module import TrainingData
 from .model import DenoisingTransformer
+from .sampler import NoiseScheduleVP, model_wrapper, DPM_Solver
 
 ModelPrediction = namedtuple(
     "ModelPrediction", ["pred_noise", "pred_x_start", "pred_var_factor"]
@@ -39,7 +40,7 @@ class ModelMeanType(enum.Enum):
 class ModelVarianceType(enum.Enum):
     FIXED_SMALL = enum.auto()  # default, necessary for dpm-solver
     FIXED_LARGE = enum.auto()
-    LAERNED_RANGE = enum.auto()
+    LEARNED_RANGE = enum.auto()
 
 
 class LossType(enum.Enum):
@@ -123,6 +124,7 @@ class GaussianDiffusion1D(nn.Module):
         self.model_variance_type = model_variance_type
         self.loss_type = loss_type
         self.beta_schedule_type = beta_schedule_type
+        self.dpm_sampler = None
 
         # Check arguments
         assert (
@@ -136,12 +138,12 @@ class GaussianDiffusion1D(nn.Module):
         ), "type_beta_schedule must be one of linear, cosine"
 
         assert (
-            self.model_variance_type == ModelVarianceType.LAERNED_RANGE
+            self.model_variance_type == ModelVarianceType.LEARNED_RANGE
         ) == (
             self.model.learn_variance
         ), "denoising_model.learn_variance must be consistent with diffusion_model_variance_type"
 
-        if self.model_variance_type == ModelVarianceType.LAERNED_RANGE:
+        if self.model_variance_type == ModelVarianceType.LEARNED_RANGE:
             raise NotImplementedError("Learned range is not implemented yet.")
         if self.loss_type.is_vb():
             raise NotImplementedError("KL loss is not implemented yet.")
@@ -314,7 +316,7 @@ class GaussianDiffusion1D(nn.Module):
         )
 
         # if learned variance range, split the mean and variance prediction
-        if self.model_variance_type == ModelVarianceType.LAERNED_RANGE:
+        if self.model_variance_type == ModelVarianceType.LEARNED_RANGE:
             assert model_output.shape == (
                 x_t.shape[0],
                 x_t.shape[1],
@@ -375,7 +377,7 @@ class GaussianDiffusion1D(nn.Module):
         var_factor = pred.pred_var_factor
 
         # get variance
-        if self.model_variance_type == ModelVarianceType.LAERNED_RANGE:
+        if self.model_variance_type == ModelVarianceType.LEARNED_RANGE:
             min_log = extract(
                 self.posterior_log_variance_clipped, t, x_t.shape
             )
@@ -516,7 +518,7 @@ class GaussianDiffusion1D(nn.Module):
         for sample_out in self.p_sample_loop_progressive(
             shape, noise, clip_denoised, model_kwargs
         ):
-            sample = sample_out
+            sample = sample_out['pred_x_prev']
 
         return sample
 
@@ -562,7 +564,7 @@ class GaussianDiffusion1D(nn.Module):
                 x_t, t, clip_denoised=False, model_kwargs=model_kwargs
             )
 
-            if self.model_variance_type == ModelVarianceType.LAERNED_RANGE:
+            if self.model_variance_type == ModelVarianceType.LEARNED_RANGE:
                 raise NotImplementedError(
                     "Learned range is not implemented yet."
                 )
@@ -616,6 +618,202 @@ class GaussianDiffusion1D(nn.Module):
             loss_terms[k] = v.mean()
 
         return loss_terms
+    
+    # two functions we use to sample. 
+    def ancestral_sample(
+        self,
+        num_sample: int,
+        batch_size: int,
+        data_sequence_length: int,
+        data_feature_dim: int, # 1 for univariate, 2 for bivariate
+        # cond: torch.Tensor|None=None,
+        # cfg_scale: float = 1.,
+    ) -> torch.Tensor:
+        """ sample from either given diffusion model. 
+        
+        Arguments:
+            - num_sample: int, number of samples to generate
+            - batch_size: int, batch size for sampling
+            - cond: shape [batch_size, channel, 1], condition for sampling
+        """
+        # process cond
+        # if cond is not None:
+        #     if model is not None:
+        #         _device = next(model.parameters()).device
+        #         cond = cond.to(_device)
+        #     else:
+        #         cond = cond.to(trainer.device)
+        
+        # process batch size split
+        if num_sample < batch_size:
+            list_batch_size = [num_sample]
+        else:
+            list_batch_size = [batch_size] * (num_sample // batch_size)
+            if num_sample % batch_size != 0:
+                list_batch_size.append(num_sample % batch_size)
+        
+        # sample
+        list_sample = []
+        for idx, batch_size in enumerate(list_batch_size):
+            print(f'sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. ')
+            # cond = cond[:batch_size] if cond is not None else None
+            # model_kwargs = {
+            #     'c': cond,
+            #     'cfg_scale': cfg_scale,
+            # }
+            # 
+            # if model is None:
+                # trainer.ema.ema_model.half()
+                # with trainer.accelerator.autocast():
+            #     sample_batch = trainer.ema.ema_model.sample(batch_size=batch_size, clip_denoised=True, model_kwargs=model_kwargs).float()
+            # else:
+            #     sample_batch = model.sample(batch_size=batch_size, clip_denoised=True, model_kwargs=model_kwargs)
+            sample_batch = self.p_sample_loop(
+                shape=(batch_size, data_sequence_length, data_feature_dim),
+                noise=None,
+                clip_denoised=False, # True requires data scaling to (-1,1)
+            )
+
+            list_sample.append(sample_batch)
+        all_sample = torch.cat(list_sample, dim=0)
+        
+        return all_sample # shape [num_sample, data_sequence_length, data_feature_dim]
+
+    def _init_dpm_sampler(self):
+        self.dpm_sampler = DPMSolverSampler(self)
+        
+    def dpm_solver_sample(
+        self,
+        total_num_sample: int,
+        batch_size: int,
+        step: int,
+        shape: tuple[int, int],
+        # conditioning: torch.Tensor|None,
+        # cfg_scale: float,
+        clip_denoised: bool = False,
+    ) -> torch.Tensor:
+        if self.dpm_sampler is None:
+            self._init_dpm_sampler()
+        
+        num_sample = total_num_sample
+        if num_sample < batch_size:
+            list_batch_size = [num_sample]
+        else:
+            list_batch_size = [batch_size] * (num_sample // batch_size)
+            if num_sample % batch_size != 0:
+                list_batch_size.append(num_sample % batch_size)
+        
+        list_sample = []
+        for idx, batch_size in enumerate(list_batch_size):
+            print(f'sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. ')
+            sample_batch, _ = self.dpm_sampler.sample(
+                S = step,
+                batch_size = batch_size,
+                shape = shape,
+                # conditioning = conditioning,
+                # cfg_scale = cfg_scale,
+            )
+            list_sample.append(sample_batch)
+            
+        all_sample = torch.cat(list_sample, dim=0)
+        
+        if clip_denoised:
+            all_sample = torch.clamp(all_sample, -1, 1)
+        return all_sample
+
+class DPMSolverSampler(object):
+    def __init__(self, model: GaussianDiffusion1D, **kwargs):
+        super().__init__()
+        self.model = model
+        device = next(model.parameters()).device
+        to_torch = lambda x: x.clone().detach().to(torch.float32).to(device)
+        self.register_buffer('alphas_cumprod', to_torch(model.alpha_cumprod))
+
+    def register_buffer(self, name, attr):
+        if type(attr) == torch.Tensor:
+            # if attr.device != torch.device("cuda"):
+            #     attr = attr.to(torch.device("cuda"))
+            if attr.device != next(self.model.parameters()).device:
+                attr = attr.to(next(self.model.parameters()).device)
+        setattr(self, name, attr)
+
+    @torch.no_grad()
+    def sample(self,
+               S, # steps
+               batch_size, # N
+               shape, # (C, L)
+               conditioning=None, # (N, *) or broadcastable (1, *)
+               callback=None,
+               normals_sequence=None,
+               img_callback=None,
+               quantize_x0=False,
+               eta=0.,
+               mask=None,
+               x0=None,
+               temperature=1.,
+               noise_dropout=0.,
+               score_corrector=None,
+               corrector_kwargs=None,
+               verbose=True,
+               x_T=None,
+               log_every_t=100,
+               cfg_scale=1.,
+               unconditional_conditioning=None, # the unconditional-class tensor
+               # this has to come in the same format as the conditioning, # e.g. as encoded tokens, ...
+               **kwargs
+               ):
+        if conditioning is not None:
+            if isinstance(conditioning, dict):
+                cbs = conditioning[list(conditioning.keys())[0]].shape[0]
+                if cbs != batch_size and cbs != 1:
+                    print(f"Warning: Got {cbs} conditionings but batch-size is {batch_size}")
+            else:
+                if conditioning.shape[0] != batch_size and conditioning.shape[0] != 1:
+                    print(f"Warning: Got {conditioning.shape[0]} conditionings but batch-size is {batch_size}")
+
+        # sampling
+        (C, L) = shape
+        size = (batch_size, C, L)
+
+        # print(f'Data shape for DPM-Solver sampling is {size}, sampling steps {S}')
+
+        device = next(self.model.parameters()).device
+        if x_T is None:
+            img = torch.randn(size, device=device)
+        else:
+            img = x_T
+
+        ns = NoiseScheduleVP('discrete', alphas_cumprod=self.alphas_cumprod)
+
+        # original model function
+        def apply_model(x, t, c=None):
+            out = self.model.model.forward(x, t)
+            if self.model.model_variance_type == ModelVarianceType.LEARNED_RANGE: # GaussianDiffusion1D.model_variance_type
+                out = torch.split(out, out.shape[1] // 2, dim=1)[0] # discard the learned variance
+            return out
+        # model mean type
+        if self.model.model_mean_type == ModelMeanType.NOISE:
+            model_type = 'noise'
+        elif self.model.model_mean_type == ModelMeanType.X_START:
+            model_type = 'x_start'
+        elif self.model.model_mean_type == ModelMeanType.V:
+            model_type = 'v'
+        else:
+            raise ValueError(f"Unknown model mean type {self.model.model_mean_type}")
+        model_fn = model_wrapper(
+            apply_model,
+            ns,
+            model_type=model_type,
+            guidance_type="classifier-free",
+            condition=conditioning,
+            unconditional_condition=unconditional_conditioning,
+            cfg_scale=cfg_scale,
+        )
+
+        dpm_solver = DPM_Solver(model_fn, ns, predict_x0=True, thresholding=False)
+        x = dpm_solver.sample(img, steps=S, skip_type="time_uniform", method="multistep", order=3, lower_order_final=True)
+
+        return x.to(device), None
 
 
 class PLDiffusion1D(pl.LightningModule):
