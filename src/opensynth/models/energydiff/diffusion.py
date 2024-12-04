@@ -23,8 +23,8 @@ from torch import Tensor, nn
 from tqdm import tqdm
 
 from opensynth.data_modules.lcl_data_module import TrainingData
-from .model import DenoisingTransformer
-from .sampler import NoiseScheduleVP, model_wrapper, DPM_Solver
+from opensynth.models.energydiff.model import DenoisingTransformer
+from opensynth.models.energydiff.sampler import NoiseScheduleVP, model_wrapper, DPM_Solver
 
 ModelPrediction = namedtuple(
     "ModelPrediction", ["pred_noise", "pred_x_start", "pred_var_factor"]
