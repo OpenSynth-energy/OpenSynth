@@ -75,8 +75,10 @@ def main():
     trainer.fit(df_model, dm)
     
     # sample
-    ema_df_model = df_model.ema.ema_model # GaussianDiffusion1
-    synthetic = ema_df_model.dpm_solver_sample(20000, 100, 100, (48, 1))
+    ema_df_model = df_model.ema.ema_model.to('cuda' if torch.cuda.is_available() \
+        else 'mps' if torch.backends.mps.is_available() \
+            else 'cpu') # GaussianDiffusion1
+    synthetic = ema_df_model.dpm_solver_sample(20000, 500, 100, (48, 1)) # 500 bs suitable for A100
     log_dir = trainer.logger.log_dir
     os.makedirs(f'{log_dir}/synthetic', exist_ok=True)
     torch.save(synthetic, f'{log_dir}/synthetic/synthetic_dpm.pt')
