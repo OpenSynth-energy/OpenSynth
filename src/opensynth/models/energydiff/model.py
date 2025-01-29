@@ -211,11 +211,9 @@ class InitProjection(nn.Module):
                               kernel_size=kernel_size, padding=padding)
     
     def forward(self, x: Float[Tensor, 'B L D']):
-        # x = rearrange(x, 'B L D -> B D L')
-        x = x.reshape(x.shape[0], x.shape[2], x.shape[1])
+        x = x.permute(0, 2, 1)
         x = self.conv(x)
-        # x = rearrange(x, 'B D L -> B L D') # unsupported by mps
-        x = x.reshape(x.shape[0], x.shape[2], x.shape[1])
+        x = x.permute(0, 2, 1)
         return x
     
 class DenoisingTransformer(nn.Module):
