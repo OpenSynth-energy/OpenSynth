@@ -274,7 +274,7 @@ class DenoisingTransformer(nn.Module):
         if not disable_init_proj:
             self.init_proj = InitProjection(self.dim_in, self.dim_base, kernel_size=5, padding=2)
         else:
-            self.init_proj = nn.Identity()
+            self.init_proj = nn.Linear(self.dim_in, self.dim_base)
         
         # decoder
         self.transformer = DecoderTransformer(
