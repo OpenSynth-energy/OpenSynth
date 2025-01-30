@@ -6,14 +6,11 @@ Author: Nan Lin (sentient-codebot)
 Date: Nov 2024
 
 """
-import logging
 import math
-from typing import Annotated as Float
-from typing import Callable, Iterable, Optional
 
 import torch
 import torch.nn.functional as F
-from einops import einsum, rearrange, reduce
+from einops import einsum, rearrange
 from einops.layers.torch import Rearrange
 from torch import Tensor, nn
 
@@ -32,14 +29,13 @@ class SinusoidalPosEmb(nn.Module):
         assert dim % 2 == 0, "dimension must be even"
         self.dim = dim
 
-    def forward(
-        self, pos: Float[Tensor, "batch, "]
-    ) -> Float[Tensor, "batch, dim"]:
+    def forward(self, pos: Tensor) -> Tensor:
         device = pos.device
         half_dim = self.dim // 2
-        emb = math.log(10000) / (half_dim - 1)
         emb = torch.exp(
-            torch.arange(half_dim, device=device) * -emb
+            torch.arange(half_dim, device=device)
+            * -math.log(10000)
+            / (half_dim - 1)
         )  # shape: (dim/2,)
         emb = pos.unsqueeze(-1) * emb.unsqueeze(
             0
@@ -49,15 +45,14 @@ class SinusoidalPosEmb(nn.Module):
 
 
 class RMSNorm(nn.Module):
-    "do normalization over channel dimension and multiply with a learnable parameter g"
+    """do normalization over channel dimension \
+        and multiply with a learnable parameter g"""
 
     def __init__(self, dim: int):
         super().__init__()
         self.g = nn.Parameter(torch.ones(1, 1, dim))
 
-    def forward(
-        self, x: Float[Tensor, "batch sequence dim"]
-    ) -> Float[Tensor, "batch sequence dim"]:
+    def forward(self, x: Tensor) -> Tensor:
         return F.normalize(x, dim=2) * self.g * math.sqrt(x.shape[2])
 
 
@@ -90,9 +85,7 @@ class SelfAttention(nn.Module):
             ),
         )
 
-    def forward(
-        self, x: Float[Tensor, "batch sequence dim"]
-    ) -> Float[Tensor, "batch sequence dim"]:
+    def forward(self, x: Tensor) -> Tensor:
         qkv = self.to_qkv(x).chunk(
             3, dim=2
         )  # 3 * (batch, sequence, hidden_dim)
@@ -172,9 +165,9 @@ class DecoderBlock(nn.Module):
 
     def forward(
         self,
-        x: Float[Tensor, "batch sequence dim"],
-        c: None | Float[Tensor, "batch sequence dim"] = None,
-    ) -> Float[Tensor, "batch sequence dim"]:
+        x: Tensor,
+        c: None | Tensor = None,
+    ) -> Tensor:
         if c is not None and self.conditioning:
             cond_scale_shift_gate = self.adaLN_modulation(
                 c
@@ -198,7 +191,6 @@ class DecoderBlock(nn.Module):
             ) = [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]
 
         # attention
-        x_copy = x.clone()
         x = x + gate_attn * self.attn(
             self.ln_1(x) * (1.0 + scale_attn) + shift_attn
         )
@@ -250,9 +242,9 @@ class DecoderTransformer(nn.Module):
 
     def forward(
         self,
-        x: Float[Tensor, "batch sequence dim"],
-        c: None | Float[Tensor, "batch sequence dim"] = None,
-    ) -> Float[Tensor, "batch sequence dim"]:
+        x: Tensor,
+        c: None | Tensor = None,
+    ) -> Tensor:
         for decoder in self.decoders:
             x = decoder(x, c)
         return x  # shape: (batch, sequence, dim)
@@ -265,7 +257,7 @@ class InitProjection(nn.Module):
             in_channels, out_channels, kernel_size=kernel_size, padding=padding
         )
 
-    def forward(self, x: Float[Tensor, "B L D"]):
+    def forward(self, x: Tensor) -> Tensor:
         x = x.permute(0, 2, 1)
         x = self.conv(x)
         x = x.permute(0, 2, 1)
@@ -387,9 +379,9 @@ class DenoisingTransformer(nn.Module):
 
     def forward(
         self,
-        x: Float[Tensor, "batch sequence dim_in"],
-        time: Float[Tensor, "batch"],
-    ) -> Float[Tensor, "batch sequence dim_out"]:
+        x: Tensor,
+        time: Tensor,
+    ) -> Tensor:
         # encoder time
         _encoded_t = self.time_mlp(time)  # shape: (batch, dim_base * 3)
         _encoded_t = rearrange(_encoded_t, "batch dim -> batch 1 dim")

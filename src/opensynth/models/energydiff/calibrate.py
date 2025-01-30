@@ -62,19 +62,20 @@ class MultiDimECDF:
             x: input data, shape (b, c, l) or (b, c*l) or (c, l) or (c*l)
         (x_sorted shape) (b, c*l)
         Returns:
-            y: ECDF transformed data, shape (batch_size, dim1, dim2) or (batch_size, dim)
+            y: ECDF transformed data, shape (batch_size, dim1, dim2)
+                or (batch_size, dim)
         """
         x_sorted = self.x_sorted.to(x.device)
         xndim = len(x.shape)
         input_shape_type = DataShapeType.BATCH_SEQUENCE
         if xndim == 3:
             input_shape_type = DataShapeType.BATCH_CHANNEL_SEQUENCE
-            c, l = x.shape[1], x.shape[2]
+            c, _ = x.shape[1], x.shape[2]
             x = rearrange(x, "b c l -> b (c l)")
         elif xndim == 2:
             if x.shape[0] * x.shape[1] == self.x_sorted.shape[1]:
                 input_shape_type = DataShapeType.CHANNEL_SEQUENCE
-                c, l = x.shape[0], x.shape[1]
+                c, _ = x.shape[0], x.shape[1]
                 x = rearrange(x, "c l -> 1 (c l)")
             else:
                 input_shape_type = DataShapeType.BATCH_SEQUENCE
@@ -112,7 +113,8 @@ class MultiDimECDF:
     def inverse_transform(self, y):
         """
         Args:
-            y: ECDF transformed data, shape (batch_size, dim1, dim2) or (batch_size, dim)
+            y: ECDF transformed data,
+                shape (batch_size, dim1, dim2) or (batch_size, dim)
         Returns:
             x: input data, shape (batch_size, dim)
         """
@@ -120,12 +122,12 @@ class MultiDimECDF:
         yndim = len(y.shape)
         if yndim == 3:
             input_shape_type = DataShapeType.BATCH_CHANNEL_SEQUENCE
-            c, l = y.shape[1], y.shape[2]
+            c, _ = y.shape[1], y.shape[2]
             y = rearrange(y, "b c l -> b (c l)")
         elif yndim == 2:
             if y.shape[0] * y.shape[1] == x_sorted.shape[1]:
                 input_shape_type = DataShapeType.CHANNEL_SEQUENCE
-                c, l = y.shape[0], y.shape[1]
+                c, _ = y.shape[0], y.shape[1]
                 y = rearrange(y, "c l -> 1 (c l)")
             else:
                 input_shape_type = DataShapeType.BATCH_SEQUENCE
@@ -139,18 +141,9 @@ class MultiDimECDF:
         y = torch.clamp(y, 0.0, 1.0)
         y_scaled = y * self.num_sample
         indices_lower = torch.floor(y_scaled).long()  # range (0, num_sample)
-        indices_upper = torch.ceil(y_scaled).long()  # range (0, num_sample)
         xlower = torch.gather(
             x_sorted, 0, indices_lower.clamp(min=1, max=self.num_sample) - 1
         )  # range bounded by x_sorted
-        xupper = torch.gather(
-            x_sorted, 0, indices_upper.clamp(min=1, max=self.num_sample) - 1
-        )
-        # theoretically indices should never be <= 0, probability == 0
-        x_interp = xlower + (y_scaled - indices_lower.float()) * (
-            xupper - xlower
-        )
-        # x = x_interp
         x = xlower
 
         if input_shape_type == DataShapeType.BATCH_CHANNEL_SEQUENCE:
@@ -203,7 +196,8 @@ def calibrate(
     source,  # [batch sequence]
 ):
     """
-    calibrate the marginals of source data to target data. return calibrated source data.
+    calibrate the marginals of source data to target data.
+        return calibrated source data.
     """
     ecdf_source = MultiDimECDF(source)
     ecdf_target = MultiDimECDF(target)

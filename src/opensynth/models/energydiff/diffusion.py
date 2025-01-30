@@ -10,9 +10,7 @@ import enum
 import math
 from collections import namedtuple
 from functools import partial
-from typing import Annotated as Float
-from typing import Annotated as Int
-from typing import Iterator
+from typing import Callable, Iterator
 
 import pytorch_lightning as pl
 import torch
@@ -133,10 +131,12 @@ class GaussianDiffusion1D(nn.Module):
         # Check arguments
         assert (
             model_mean_type in ModelMeanType
-        ), "objective must be ModelMeanType.X_START, ModelMeanType.NOISE, ModelMeanType.V"
+        ), "objective must be ModelMeanType.X_START, \
+                ModelMeanType.NOISE, ModelMeanType.V"
         assert (
             model_variance_type in ModelVarianceType
-        ), "model_variance_type must be ModelVarianceType.FIXED_SMALL, ModelVarianceType.FIXED_LARGE, ModelVarianceType.LEARNED_RANGE"
+        ), "model_variance_type must be ModelVarianceType.FIXED_SMALL, \
+                ModelVarianceType.FIXED_LARGE, ModelVarianceType.LEARNED_RANGE"
         assert (
             beta_schedule_type in BetaScheduleType
         ), "type_beta_schedule must be one of linear, cosine"
@@ -145,7 +145,8 @@ class GaussianDiffusion1D(nn.Module):
             self.model_variance_type == ModelVarianceType.LEARNED_RANGE
         ) == (
             self.model.learn_variance
-        ), "denoising_model.learn_variance must be consistent with diffusion_model_variance_type"
+        ), "denoising_model.learn_variance must be \
+                consistent with diffusion_model_variance_type"
 
         if self.model_variance_type == ModelVarianceType.LEARNED_RANGE:
             raise NotImplementedError("Learned range is not implemented yet.")
@@ -204,7 +205,8 @@ class GaussianDiffusion1D(nn.Module):
             loss_weight = snr / (snr + 1.0)
         else:
             raise ValueError(
-                "model_mean_type must be one of ModelMeanType.X_START, ModelMeanType.NOISE, ModelMeanType.V"
+                "model_mean_type must be one of ModelMeanType.X_START, \
+                    ModelMeanType.NOISE, ModelMeanType.V"
             )
 
         # convert to float32 to support mps device
@@ -234,9 +236,9 @@ class GaussianDiffusion1D(nn.Module):
 
     def predict_start_from_noise(
         self,
-        x_t: Float[Tensor, "B L D"],
-        t: Int[Tensor, "B"],
-        noise: Float[Tensor, "B L D"],
+        x_t: Tensor,
+        t: Tensor,
+        noise: Tensor,
     ):
         return (
             extract(self.sqrt_recip_alpha_cumprod, t, x_t.shape) * x_t
@@ -264,8 +266,8 @@ class GaussianDiffusion1D(nn.Module):
 
     def q_mean_variance(
         self,
-        x_start: Float[Tensor, "B L D"],
-        t: Int[Tensor, "B"],
+        x_start: Tensor,
+        t: Tensor,
     ):
         "forward x_0 -> x_t, q(x_t | x_0)"
         mean = extract(self.sqrt_alpha_cumprod, t, x_start.shape) * x_start
@@ -279,9 +281,9 @@ class GaussianDiffusion1D(nn.Module):
 
     def q_posterior_mean_variance(
         self,
-        x_start: Float[Tensor, "B L D"],
-        x_t: Float[Tensor, "B L D"],
-        t: Int[Tensor, "B"],
+        x_start: Tensor,
+        x_t: Tensor,
+        t: Tensor,
     ):
         "posterior q(x_{t-1} | x_t, x_0)"
         posterior_mean = (
@@ -303,10 +305,10 @@ class GaussianDiffusion1D(nn.Module):
 
     def q_sample(
         self,
-        x_start: Float[Tensor, "B L D"],
-        t: Int[Tensor, "B"],
-        noise: None | Float[Tensor, "B L D"] = None,
-    ) -> Float[Tensor, "B L D"]:
+        x_start: Tensor,
+        t: Tensor,
+        noise: None | Tensor = None,
+    ) -> Tensor:
         "sample x_t from q(x_t | x_0)"
         noise = noise if noise is not None else torch.randn_like(x_start)
         return (
@@ -317,17 +319,15 @@ class GaussianDiffusion1D(nn.Module):
 
     def model_prediction(
         self,
-        x_t: Float[Tensor, "B L D"],
-        t: Int[Tensor, "B"],
+        x_t: Tensor,
+        t: Tensor,
         clip_x_start: bool = False,
     ) -> ModelPrediction:
         "get ModelPrediction(noise, x_start, var_factor)"
         model_output = self.model(x_t, t)
-        maybe_clip = (
-            partial(torch.clamp, min=-1.0, max=1.0)
-            if clip_x_start
-            else lambda x: x
-        )
+        _clip_fn: Callable = partial(torch.clamp, min=-1.0, max=1.0)
+        _identity_fn: Callable = lambda x: x
+        maybe_clip = _clip_fn if clip_x_start else _identity_fn
 
         # if learned variance range, split the mean and variance prediction
         if self.model_variance_type == ModelVarianceType.LEARNED_RANGE:
@@ -360,23 +360,27 @@ class GaussianDiffusion1D(nn.Module):
             pred_noise = self.predict_noise_from_start(x_t, t, x_start)
         else:
             raise ValueError(
-                "model_mean_type must be one of ModelMeanType.X_START, ModelMeanType.NOISE, ModelMeanType.V"
+                "model_mean_type must be one of ModelMeanType.X_START, \
+                    ModelMeanType.NOISE, ModelMeanType.V"
             )
 
         return ModelPrediction(pred_noise, x_start, model_var_factor)
 
     def p_mean_variance(
         self,
-        x_t: Float[Tensor, "B L D"],
-        t: Int[Tensor, "B"],
+        x_t: Tensor,
+        t: Tensor,
         clip_denoised: bool = False,
         model_kwargs=None,
     ) -> dict:
-        """Get approximate mean and var of posterior p_model(x_{t-1} | x_t). Also returns x_start
+        """Get approximate mean and var of posterior p_model(x_{t-1} | x_t).
+            Also returns x_start
         :param x_t: the input x_t, float, shape: (batch, sequence, dim)
         :param t: the time step, int, shape: (batch,)
-        :param clip_denoised: whether to clip the denoised x_start to [-1, 1]
-        :param model_kwargs: additional kwargs for for model_prediction function
+        :param clip_denoised: whether to
+            clip the denoised x_start to [-1, 1]
+        :param model_kwargs: additional kwargs for \
+            for model_prediction function
 
         :return dict: {
             'model_mean': model_mean
@@ -429,8 +433,6 @@ class GaussianDiffusion1D(nn.Module):
             pred_x_start = torch.clamp(pred_x_start, min=-1.0, max=1.0)
 
         model_mean, *_ = self.q_posterior_mean_variance(pred_x_start, x_t, t)
-        # why not directly sample from N(model_mean, model_variance)?
-        # because we did not explicitly calculate the mean of x_{t-1}, but x_start instead.
 
         assert (
             model_mean.shape
@@ -449,19 +451,21 @@ class GaussianDiffusion1D(nn.Module):
     @torch.no_grad()
     def p_sample(
         self,
-        x_t: Float[Tensor, "B L D"],
+        x_t: Tensor,
         t: int,  # int, scalar, not a batched tensor.
         clip_denoised: bool = False,
         model_kwargs: None | dict = None,
-        noise: None | Float[Tensor, "B L D"] = None,
-    ) -> Float[Tensor, "B L D"]:
+        noise: None | Tensor = None,
+    ) -> Tensor:
         """Apply p_model(x_{t-1} | x_t) to sample x_{t-1} from x_t.
-        A inference-centric function, so `t` is an integer, same for every sample in the batch.
+        A inference-centric function, so `t` is an integer,
+            same for every sample in the batch.
         :param x_t: x_t, shape (batch, channel, sequence)
         :param t: timestep, int
         :param clip_denoised: whether to clip the denoised x_{t-1} to [-1, 1]
         :param model_kwargs: kwargs for model_prediction
-        :param noise: optional. noise to use for sampling, shape (batch, channel, sequence)
+        :param noise: optional. noise to use
+            for sampling, shape (batch, channel, sequence)
 
         :return: {
             'pred_x_prev': pred_x_prev,
@@ -493,12 +497,11 @@ class GaussianDiffusion1D(nn.Module):
     def p_sample_loop_progressive(
         self,
         shape: torch.Size,  # 'b l d'
-        noise: None | Float[Tensor, "B L D"] = None,
+        noise: None | Tensor = None,
         clip_denoised: bool = False,
         model_kwargs: None | dict = None,
-    ) -> Iterator[dict[str, Float[Tensor, "B L D"]]]:
+    ) -> Iterator[dict[str, Tensor]]:
         "return a generator that yields x_{T-1} -> x_0"
-        b = shape[0]
         device = next(self.model.parameters()).device
         model_kwargs = model_kwargs
 
@@ -516,18 +519,18 @@ class GaussianDiffusion1D(nn.Module):
                 t=t,  # int
                 clip_denoised=clip_denoised,
                 model_kwargs=model_kwargs,
-            )  # the noise parameter IS NOT THE SAME AS the noise here.
+            )  # the noise parameter
+            # IS NOT THE SAME AS the noise here.
             yield sample_out
-            x_t = sample_out["pred_x_prev"]  # update x_t for next iteration
-            # pred_x_start is not used here. it's needed for tricks like "self condition"
+            x_t = sample_out["pred_x_prev"]
 
     def p_sample_loop(
         self,
         shape: torch.Size,  # 'b l d'
-        noise: None | Float[Tensor, "B L D"] = None,
+        noise: None | Tensor = None,
         clip_denoised: bool = False,
         model_kwargs: None | dict = None,
-    ) -> Float[Tensor, "B L D"]:
+    ) -> Tensor:
         "return the final x_0"
         for sample_out in self.p_sample_loop_progressive(
             shape, noise, clip_denoised, model_kwargs
@@ -543,17 +546,18 @@ class GaussianDiffusion1D(nn.Module):
 
     def train_losses(
         self,
-        x_start: Float[Tensor, "B L D"],  # true x_0
-        t: Int[Tensor, "B"],  # timestep
-        noise: None | Float[Tensor, "B L D"] = None,  # noise
+        x_start: Tensor,  # true x_0
+        t: Tensor,  # timestep
+        noise: None | Tensor = None,  # noise
         model_kwargs: None | dict = None,  # kwargs for model_prediction
-    ) -> dict[str, Float[Tensor, "B"]]:
+    ) -> dict[str, Tensor]:
         """return batched loss. not yet averaged over batch.
 
         given
         - x_start: true data samples, shape (batch, channel, sequence)
         - t: randomly sampled (diffusion) timestep, shape (batch,)
-        - noise: optional, noise to impose on x_start, shape (batch, channel, sequence)
+        - noise: optional, noise to
+            impose on x_start, shape (batch, channel, sequence)
 
         apply forward diffusion to get x_t;
         apply model to get approximate posterior parameters;
@@ -617,9 +621,9 @@ class GaussianDiffusion1D(nn.Module):
 
     def forward(
         self,
-        x_start: Float[Tensor, "B L D"],  # true x_0
-        noise: None | Float[Tensor, "B L D"] = None,  # noise
-    ) -> dict[str, Float[Tensor, ""]]:
+        x_start: Tensor,  # true x_0
+        noise: None | Tensor = None,  # noise
+    ) -> dict[str, Tensor]:
         "return scalar loss. averaged over batch already."
         B, L, D = x_start.shape
         device = x_start.device
@@ -670,20 +674,9 @@ class GaussianDiffusion1D(nn.Module):
         list_sample = []
         for idx, batch_size in enumerate(list_batch_size):
             print(
-                f"sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. "
+                f"sampling batch {idx + 1}/{len(list_batch_size)}, \
+                    batch size {batch_size}. "
             )
-            # cond = cond[:batch_size] if cond is not None else None
-            # model_kwargs = {
-            #     'c': cond,
-            #     'cfg_scale': cfg_scale,
-            # }
-            #
-            # if model is None:
-            # trainer.ema.ema_model.half()
-            # with trainer.accelerator.autocast():
-            #     sample_batch = trainer.ema.ema_model.sample(batch_size=batch_size, clip_denoised=True, model_kwargs=model_kwargs).float()
-            # else:
-            #     sample_batch = model.sample(batch_size=batch_size, clip_denoised=True, model_kwargs=model_kwargs)
             sample_batch = self.p_sample_loop(
                 shape=(batch_size, data_sequence_length, data_feature_dim),
                 noise=None,
@@ -693,7 +686,7 @@ class GaussianDiffusion1D(nn.Module):
             list_sample.append(sample_batch)
         all_sample = torch.cat(list_sample, dim=0)
 
-        return all_sample  # shape [num_sample, data_sequence_length, data_feature_dim]
+        return all_sample
 
     def _init_dpm_sampler(self):
         self.dpm_sampler = DPMSolverSampler(self)
@@ -710,6 +703,7 @@ class GaussianDiffusion1D(nn.Module):
     ) -> torch.Tensor:
         if self.dpm_sampler is None:
             self._init_dpm_sampler()
+        assert self.dpm_sampler is not None
 
         num_sample = total_num_sample
         if num_sample < batch_size:
@@ -722,7 +716,8 @@ class GaussianDiffusion1D(nn.Module):
         list_sample = []
         for idx, batch_size in enumerate(list_batch_size):
             print(
-                f"sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. "
+                f"sampling batch {idx + 1}/{len(list_batch_size)}, \
+                    batch size {batch_size}. "
             )
             sample_batch, _ = self.dpm_sampler.sample(
                 S=step,
@@ -745,13 +740,13 @@ class DPMSolverSampler(object):
         super().__init__()
         self.model = model
         device = next(model.parameters()).device
-        to_torch = lambda x: x.clone().detach().to(torch.float32).to(device)
+        to_torch = (
+            lambda x: x.clone().detach().to(torch.float32).to(device)
+        )  # noqa: E731
         self.register_buffer("alphas_cumprod", to_torch(model.alpha_cumprod))
 
     def register_buffer(self, name, attr):
-        if type(attr) == torch.Tensor:
-            # if attr.device != torch.device("cuda"):
-            #     attr = attr.to(torch.device("cuda"))
+        if isinstance(attr, torch.Tensor):
             if attr.device != next(self.model.parameters()).device:
                 attr = attr.to(next(self.model.parameters()).device)
         setattr(self, name, attr)
@@ -779,7 +774,6 @@ class DPMSolverSampler(object):
         log_every_t=100,
         cfg_scale=1.0,
         unconditional_conditioning=None,  # the unconditional-class tensor
-        # this has to come in the same format as the conditioning, # e.g. as encoded tokens, ...
         **kwargs,
     ):
         if conditioning is not None:
@@ -787,7 +781,8 @@ class DPMSolverSampler(object):
                 cbs = conditioning[list(conditioning.keys())[0]].shape[0]
                 if cbs != batch_size and cbs != 1:
                     print(
-                        f"Warning: Got {cbs} conditionings but batch-size is {batch_size}"
+                        f"Warning: Got {cbs} conditionings \
+                            but batch-size is {batch_size}"
                     )
             else:
                 if (
@@ -795,14 +790,16 @@ class DPMSolverSampler(object):
                     and conditioning.shape[0] != 1
                 ):
                     print(
-                        f"Warning: Got {conditioning.shape[0]} conditionings but batch-size is {batch_size}"
+                        f"Warning: Got {conditioning.shape[0]} \
+                            conditionings but batch-size is {batch_size}"
                     )
 
         # sampling
         (C, L) = shape
         size = (batch_size, C, L)
 
-        # print(f'Data shape for DPM-Solver sampling is {size}, sampling steps {S}')
+        # print(f'Data shape for DPM-Solver sampling \
+        # is {size}, sampling steps {S}')
 
         device = next(self.model.parameters()).device
         if x_T is None:
@@ -925,16 +922,15 @@ class PLDiffusion1D(pl.LightningModule):
         dataloader_idx: int,
     ):
         kwh_data = batch["kwh"]  # shape: (batch, sequence)
-        features = batch["features"]  # not used
         kwh_data = kwh_data.unsqueeze(-1)  # shape: (batch, sequence, 1)
         return kwh_data
 
     # training step
     def training_step(
         self,
-        batch: Float[Tensor, "B L D"],
+        batch: Tensor,
         batch_idx: int,  # -> step counter
-    ) -> Float[Tensor, ""]:
+    ) -> Tensor:
         loss_terms = self.diffusion_model(x_start=batch)
         loss = loss_terms["loss"]
         mse = loss_terms["mse"].item() if "mse" in loss_terms else 0.0

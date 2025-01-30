@@ -435,5 +435,5 @@ def print_mia_results(df: pd.DataFrame):
         f"""\nFalse Positive: {false_positive},"""
         f"""\nTotal N: {total_n},"""
         f"""\nTotal Positive: {total_positive},"""
-        f"""\nRandom Precision : {total_positive/total_n:.2f},"""
+        f"""\nRandom Precision : {total_positive / total_n:.2f},"""
     )
