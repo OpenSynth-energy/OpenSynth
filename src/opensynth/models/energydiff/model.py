@@ -236,6 +236,7 @@ class DenoisingTransformer(nn.Module):
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
         learn_variance: bool = False, # learnable variance
+        disable_init_proj: bool = False, # disable initial projection
     ):
         super().__init__()
         self.dim_base = dim_base
@@ -270,7 +271,10 @@ class DenoisingTransformer(nn.Module):
         #     nn.Conv1d(self.dim_in, self.dim_base, kernel_size=5, padding=2), 
         #     Rearrange('batch dim_base seq -> batch seq dim_base')
         # ) # (batch, sequence, dim_in) -> (batch, sequence, dim_base)
-        self.init_proj = InitProjection(self.dim_in, self.dim_base, kernel_size=5, padding=2)
+        if not disable_init_proj:
+            self.init_proj = InitProjection(self.dim_in, self.dim_base, kernel_size=5, padding=2)
+        else:
+            self.init_proj = nn.Identity()
         
         # decoder
         self.transformer = DecoderTransformer(

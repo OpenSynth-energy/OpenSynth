@@ -839,6 +839,7 @@ class PLDiffusion1D(pl.LightningModule):
         lr: float = 1e-4,
         ema_update_every: int = 5,
         ema_decay: float = 0.9999,
+        disable_init_proj: bool = False,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -850,6 +851,7 @@ class PLDiffusion1D(pl.LightningModule):
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             learn_variance=learn_variance,
+            disable_init_proj=disable_init_proj,
         )
         self.diffusion_model = GaussianDiffusion1D(
             base_model=base_model,
