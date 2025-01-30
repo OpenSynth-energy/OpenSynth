@@ -24,7 +24,11 @@ from tqdm import tqdm
 
 from opensynth.data_modules.lcl_data_module import TrainingData
 from opensynth.models.energydiff.model import DenoisingTransformer
-from opensynth.models.energydiff.sampler import NoiseScheduleVP, model_wrapper, DPM_Solver
+from opensynth.models.energydiff.sampler import (
+    DPM_Solver,
+    NoiseScheduleVP,
+    model_wrapper,
+)
 
 ModelPrediction = namedtuple(
     "ModelPrediction", ["pred_noise", "pred_x_start", "pred_var_factor"]
@@ -202,18 +206,28 @@ class GaussianDiffusion1D(nn.Module):
             raise ValueError(
                 "model_mean_type must be one of ModelMeanType.X_START, ModelMeanType.NOISE, ModelMeanType.V"
             )
-            
+
         # convert to float32 to support mps device
         self.beta_schedule = self.beta_schedule.to(torch.float32)
         self.alpha_cumprod = self.alpha_cumprod.to(torch.float32)
         self.alpha_cumprod_prev = self.alpha_cumprod_prev.to(torch.float32)
         self.sqrt_alpha_cumprod = self.sqrt_alpha_cumprod.to(torch.float32)
-        self.sqrt_one_minus_alpha_cumprod = self.sqrt_one_minus_alpha_cumprod.to(torch.float32)
-        self.log_one_minus_alpha_cumprod = self.log_one_minus_alpha_cumprod.to(torch.float32)
-        self.sqrt_recip_alpha_cumprod = self.sqrt_recip_alpha_cumprod.to(torch.float32)
-        self.sqrt_recipm1_alpha_cumprod = self.sqrt_recipm1_alpha_cumprod.to(torch.float32)
+        self.sqrt_one_minus_alpha_cumprod = (
+            self.sqrt_one_minus_alpha_cumprod.to(torch.float32)
+        )
+        self.log_one_minus_alpha_cumprod = self.log_one_minus_alpha_cumprod.to(
+            torch.float32
+        )
+        self.sqrt_recip_alpha_cumprod = self.sqrt_recip_alpha_cumprod.to(
+            torch.float32
+        )
+        self.sqrt_recipm1_alpha_cumprod = self.sqrt_recipm1_alpha_cumprod.to(
+            torch.float32
+        )
         self.posterior_variance = self.posterior_variance.to(torch.float32)
-        self.posterior_log_variance_clipped = self.posterior_log_variance_clipped.to(torch.float32)
+        self.posterior_log_variance_clipped = (
+            self.posterior_log_variance_clipped.to(torch.float32)
+        )
         self.posterior_mean_coef1 = self.posterior_mean_coef1.to(torch.float32)
         self.posterior_mean_coef2 = self.posterior_mean_coef2.to(torch.float32)
         self.loss_weight = loss_weight.to(torch.float32)
@@ -518,7 +532,7 @@ class GaussianDiffusion1D(nn.Module):
         for sample_out in self.p_sample_loop_progressive(
             shape, noise, clip_denoised, model_kwargs
         ):
-            sample = sample_out['pred_x_prev']
+            sample = sample_out["pred_x_prev"]
 
         return sample
 
@@ -618,19 +632,19 @@ class GaussianDiffusion1D(nn.Module):
             loss_terms[k] = v.mean()
 
         return loss_terms
-    
-    # two functions we use to sample. 
+
+    # two functions we use to sample.
     def ancestral_sample(
         self,
         num_sample: int,
         batch_size: int,
         data_sequence_length: int,
-        data_feature_dim: int, # 1 for univariate, 2 for bivariate
+        data_feature_dim: int,  # 1 for univariate, 2 for bivariate
         # cond: torch.Tensor|None=None,
         # cfg_scale: float = 1.,
     ) -> torch.Tensor:
-        """ sample from either given diffusion model. 
-        
+        """sample from either given diffusion model.
+
         Arguments:
             - num_sample: int, number of samples to generate
             - batch_size: int, batch size for sampling
@@ -643,7 +657,7 @@ class GaussianDiffusion1D(nn.Module):
         #         cond = cond.to(_device)
         #     else:
         #         cond = cond.to(trainer.device)
-        
+
         # process batch size split
         if num_sample < batch_size:
             list_batch_size = [num_sample]
@@ -651,37 +665,39 @@ class GaussianDiffusion1D(nn.Module):
             list_batch_size = [batch_size] * (num_sample // batch_size)
             if num_sample % batch_size != 0:
                 list_batch_size.append(num_sample % batch_size)
-        
+
         # sample
         list_sample = []
         for idx, batch_size in enumerate(list_batch_size):
-            print(f'sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. ')
+            print(
+                f"sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. "
+            )
             # cond = cond[:batch_size] if cond is not None else None
             # model_kwargs = {
             #     'c': cond,
             #     'cfg_scale': cfg_scale,
             # }
-            # 
+            #
             # if model is None:
-                # trainer.ema.ema_model.half()
-                # with trainer.accelerator.autocast():
+            # trainer.ema.ema_model.half()
+            # with trainer.accelerator.autocast():
             #     sample_batch = trainer.ema.ema_model.sample(batch_size=batch_size, clip_denoised=True, model_kwargs=model_kwargs).float()
             # else:
             #     sample_batch = model.sample(batch_size=batch_size, clip_denoised=True, model_kwargs=model_kwargs)
             sample_batch = self.p_sample_loop(
                 shape=(batch_size, data_sequence_length, data_feature_dim),
                 noise=None,
-                clip_denoised=False, # True requires data scaling to (-1,1)
+                clip_denoised=False,  # True requires data scaling to (-1,1)
             )
 
             list_sample.append(sample_batch)
         all_sample = torch.cat(list_sample, dim=0)
-        
-        return all_sample # shape [num_sample, data_sequence_length, data_feature_dim]
+
+        return all_sample  # shape [num_sample, data_sequence_length, data_feature_dim]
 
     def _init_dpm_sampler(self):
         self.dpm_sampler = DPMSolverSampler(self)
-        
+
     def dpm_solver_sample(
         self,
         total_num_sample: int,
@@ -694,7 +710,7 @@ class GaussianDiffusion1D(nn.Module):
     ) -> torch.Tensor:
         if self.dpm_sampler is None:
             self._init_dpm_sampler()
-        
+
         num_sample = total_num_sample
         if num_sample < batch_size:
             list_batch_size = [num_sample]
@@ -702,24 +718,27 @@ class GaussianDiffusion1D(nn.Module):
             list_batch_size = [batch_size] * (num_sample // batch_size)
             if num_sample % batch_size != 0:
                 list_batch_size.append(num_sample % batch_size)
-        
+
         list_sample = []
         for idx, batch_size in enumerate(list_batch_size):
-            print(f'sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. ')
+            print(
+                f"sampling batch {idx+1}/{len(list_batch_size)}, batch size {batch_size}. "
+            )
             sample_batch, _ = self.dpm_sampler.sample(
-                S = step,
-                batch_size = batch_size,
-                shape = shape,
+                S=step,
+                batch_size=batch_size,
+                shape=shape,
                 # conditioning = conditioning,
                 # cfg_scale = cfg_scale,
             )
             list_sample.append(sample_batch)
-            
+
         all_sample = torch.cat(list_sample, dim=0)
-        
+
         if clip_denoised:
             all_sample = torch.clamp(all_sample, -1, 1)
         return all_sample
+
 
 class DPMSolverSampler(object):
     def __init__(self, model: GaussianDiffusion1D, **kwargs):
@@ -727,7 +746,7 @@ class DPMSolverSampler(object):
         self.model = model
         device = next(model.parameters()).device
         to_torch = lambda x: x.clone().detach().to(torch.float32).to(device)
-        self.register_buffer('alphas_cumprod', to_torch(model.alpha_cumprod))
+        self.register_buffer("alphas_cumprod", to_torch(model.alpha_cumprod))
 
     def register_buffer(self, name, attr):
         if type(attr) == torch.Tensor:
@@ -738,38 +757,46 @@ class DPMSolverSampler(object):
         setattr(self, name, attr)
 
     @torch.no_grad()
-    def sample(self,
-               S, # steps
-               batch_size, # N
-               shape, # (C, L)
-               conditioning=None, # (N, *) or broadcastable (1, *)
-               callback=None,
-               normals_sequence=None,
-               img_callback=None,
-               quantize_x0=False,
-               eta=0.,
-               mask=None,
-               x0=None,
-               temperature=1.,
-               noise_dropout=0.,
-               score_corrector=None,
-               corrector_kwargs=None,
-               verbose=True,
-               x_T=None,
-               log_every_t=100,
-               cfg_scale=1.,
-               unconditional_conditioning=None, # the unconditional-class tensor
-               # this has to come in the same format as the conditioning, # e.g. as encoded tokens, ...
-               **kwargs
-               ):
+    def sample(
+        self,
+        S,  # steps
+        batch_size,  # N
+        shape,  # (C, L)
+        conditioning=None,  # (N, *) or broadcastable (1, *)
+        callback=None,
+        normals_sequence=None,
+        img_callback=None,
+        quantize_x0=False,
+        eta=0.0,
+        mask=None,
+        x0=None,
+        temperature=1.0,
+        noise_dropout=0.0,
+        score_corrector=None,
+        corrector_kwargs=None,
+        verbose=True,
+        x_T=None,
+        log_every_t=100,
+        cfg_scale=1.0,
+        unconditional_conditioning=None,  # the unconditional-class tensor
+        # this has to come in the same format as the conditioning, # e.g. as encoded tokens, ...
+        **kwargs,
+    ):
         if conditioning is not None:
             if isinstance(conditioning, dict):
                 cbs = conditioning[list(conditioning.keys())[0]].shape[0]
                 if cbs != batch_size and cbs != 1:
-                    print(f"Warning: Got {cbs} conditionings but batch-size is {batch_size}")
+                    print(
+                        f"Warning: Got {cbs} conditionings but batch-size is {batch_size}"
+                    )
             else:
-                if conditioning.shape[0] != batch_size and conditioning.shape[0] != 1:
-                    print(f"Warning: Got {conditioning.shape[0]} conditionings but batch-size is {batch_size}")
+                if (
+                    conditioning.shape[0] != batch_size
+                    and conditioning.shape[0] != 1
+                ):
+                    print(
+                        f"Warning: Got {conditioning.shape[0]} conditionings but batch-size is {batch_size}"
+                    )
 
         # sampling
         (C, L) = shape
@@ -783,23 +810,31 @@ class DPMSolverSampler(object):
         else:
             img = x_T
 
-        ns = NoiseScheduleVP('discrete', alphas_cumprod=self.alphas_cumprod)
+        ns = NoiseScheduleVP("discrete", alphas_cumprod=self.alphas_cumprod)
 
         # original model function
         def apply_model(x, t, c=None):
             out = self.model.model.forward(x, t)
-            if self.model.model_variance_type == ModelVarianceType.LEARNED_RANGE: # GaussianDiffusion1D.model_variance_type
-                out = torch.split(out, out.shape[1] // 2, dim=1)[0] # discard the learned variance
+            if (
+                self.model.model_variance_type
+                == ModelVarianceType.LEARNED_RANGE
+            ):  # GaussianDiffusion1D.model_variance_type
+                out = torch.split(out, out.shape[1] // 2, dim=1)[
+                    0
+                ]  # discard the learned variance
             return out
+
         # model mean type
         if self.model.model_mean_type == ModelMeanType.NOISE:
-            model_type = 'noise'
+            model_type = "noise"
         elif self.model.model_mean_type == ModelMeanType.X_START:
-            model_type = 'x_start'
+            model_type = "x_start"
         elif self.model.model_mean_type == ModelMeanType.V:
-            model_type = 'v'
+            model_type = "v"
         else:
-            raise ValueError(f"Unknown model mean type {self.model.model_mean_type}")
+            raise ValueError(
+                f"Unknown model mean type {self.model.model_mean_type}"
+            )
         model_fn = model_wrapper(
             apply_model,
             ns,
@@ -810,8 +845,17 @@ class DPMSolverSampler(object):
             cfg_scale=cfg_scale,
         )
 
-        dpm_solver = DPM_Solver(model_fn, ns, predict_x0=True, thresholding=False)
-        x = dpm_solver.sample(img, steps=S, skip_type="time_uniform", method="multistep", order=3, lower_order_final=True)
+        dpm_solver = DPM_Solver(
+            model_fn, ns, predict_x0=True, thresholding=False
+        )
+        x = dpm_solver.sample(
+            img,
+            steps=S,
+            skip_type="time_uniform",
+            method="multistep",
+            order=3,
+            lower_order_final=True,
+        )
 
         return x.to(device), None
 
@@ -873,18 +917,18 @@ class PLDiffusion1D(pl.LightningModule):
 
     # setup function
     def setup(self, stage: str) -> None:
-       pass # nothing to setup
+        pass  # nothing to setup
 
     def on_before_batch_transfer(
         self,
         batch: TrainingData,
         dataloader_idx: int,
     ):
-        kwh_data = batch['kwh'] # shape: (batch, sequence)
-        features = batch['features'] # not used
+        kwh_data = batch["kwh"]  # shape: (batch, sequence)
+        features = batch["features"]  # not used
         kwh_data = kwh_data.unsqueeze(-1)  # shape: (batch, sequence, 1)
         return kwh_data
-   
+
     # training step
     def training_step(
         self,
