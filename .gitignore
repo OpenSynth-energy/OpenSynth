@@ -35,3 +35,5 @@ share/python-wheels/
 MANIFES
 *.pt
 *.tmp
+data
+data/
