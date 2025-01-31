@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader, Dataset
 from opensynth.data_modules.lcl_data_module import LCLDataModule
 from opensynth.datasets.low_carbon_london.preprocess_lcl import create_outliers
 from opensynth.evaluation.privacy import generate_attack_data
+from opensynth.models.energydiff.diffusion import PLDiffusion1D
 from opensynth.models.faraday import FaradayModel
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -88,6 +89,66 @@ def _create_attack_samples(
     synthetic_samples = generate_attack_data.generate_synthetic_samples(
         model, dm_train, n_samples=n_samples
     )
+    train_samples = generate_attack_data.draw_real_data(
+        dm=dm_train, n_samples=n_samples
+    )
+    holdout_samples = generate_attack_data.draw_real_data(
+        dm=dm_holdout, n_samples=n_samples
+    )
+    outlier_samples = generate_attack_data.draw_real_data(
+        dm=dm_train, outliers=True, n_samples=n_samples
+    )
+
+    df_train = dm_train.dataset.df[
+        dm_train.dataset.df["segment"].isna()
+    ].copy()
+    outlier_unseen_same_samples = _create_unseen_outliers(
+        df_train, dm_train.dataset.feature_mean, mean_factor
+    )
+    outlier_unseen_diff_samples = _create_unseen_outliers(
+        df_train, mean=0, mean_factor=mean_factor
+    )
+
+    return MembershipInferenceAttackSamples(
+        synthetic_samples=synthetic_samples,
+        train_samples=train_samples,
+        holdout_samples=holdout_samples,
+        outlier_seen_samples=outlier_samples,
+        outlier_unseen_same_samples=outlier_unseen_same_samples,
+        outlier_unseen_diff_samples=outlier_unseen_diff_samples,
+    )
+
+
+def _create_attack_samples_no_model(
+    synthetic_samples: torch.Tensor,
+    dm_train: LCLDataModule,
+    dm_holdout: LCLDataModule,
+    n_samples: int = 20000,
+    mean_factor: int = 20,
+) -> MembershipInferenceAttackSamples:
+    """
+    Creates attack samples for membership inference attack:
+
+    Synthetic samples: generated from the trained model.
+    Train samples: real data from the training set (with
+        outliers injected.)
+    Holdout samples: real data from the holdout set.
+    Outlier seen samples: Outliers seen during training.
+    Outlier unseen same samples: Outliers not seen during training,
+        but from the same distribution as seen outliers.
+    Outlier unseen diff samples: Outliers not seen during training,
+        but from a different distribution to the seen outliers.
+
+    Args:
+        synthetic_samples (torch.Tensor): generated synthetic samples.
+        dm_train (LCLDataModule): Train data module
+        dm_holdout (LCLDataModule): Holdout data module
+        n_samples (int, optional): Number of samples. Defaults to 20000.
+        mean_factor (int): Mean factor for outliers. Defaults to 20.
+
+    Returns:
+        MembershipInferenceAttackSamples: Attack samples
+    """
     train_samples = generate_attack_data.draw_real_data(
         dm=dm_train, n_samples=n_samples
     )
@@ -212,12 +273,13 @@ class MembershipInferenceDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        model: FaradayModel,
+        model: FaradayModel | PLDiffusion1D,
         dm_train: LCLDataModule,
         dm_holdout: LCLDataModule,
         batch_size: int,
         n_samples: int = 20000,
         mean_factor: int = 20,
+        synthetic_samples: torch.Tensor = None,
     ):
         """
         Membership Inference Attack Data Module
@@ -235,13 +297,26 @@ class MembershipInferenceDataModule(pl.LightningDataModule):
         self.model = model
         self.dm_train = dm_train
         self.dm_holdout = dm_holdout
-        self.samples = _create_attack_samples(
-            model=model,
-            dm_train=dm_train,
-            dm_holdout=dm_holdout,
-            mean_factor=mean_factor,
-            n_samples=n_samples,
-        )
+        if isinstance(model, FaradayModel):
+            self.samples = _create_attack_samples(
+                model=model,
+                dm_train=dm_train,
+                dm_holdout=dm_holdout,
+                mean_factor=mean_factor,
+                n_samples=n_samples,
+            )
+        elif isinstance(model, PLDiffusion1D):
+            if synthetic_samples is None:
+                raise ValueError("Synthetic samples must be provided.")
+            self.samples = _create_attack_samples_no_model(
+                synthetic_samples=synthetic_samples,
+                dm_train=dm_train,
+                dm_holdout=dm_holdout,
+                mean_factor=mean_factor,
+                n_samples=n_samples,
+            )
+        else:
+            raise ValueError("Model not supported")
         self.batch_size = batch_size
 
     def prepare_data(self):
@@ -288,6 +363,11 @@ class MembershipInferenceDataModule(pl.LightningDataModule):
         return DataLoader(
             self.attack_dataset, batch_size, drop_last=True, shuffle=False
         )
+
+
+class MembershipInferenceDataModuleDF(pl.LightningDataModule):
+    def __init__(self):
+        raise NotImplementedError("This class is not implemented yet.")
 
 
 class MembershipInferenceModule(nn.Module):
