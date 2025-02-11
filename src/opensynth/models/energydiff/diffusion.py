@@ -60,9 +60,26 @@ class BetaScheduleType(enum.Enum):
     COSINE = enum.auto()  # default
 
 
-def extract(a: Tensor, t: Tensor, x_shape: torch.Size):
-    """
-    extract values in a at positions in t, and reshape to x_shape
+def extract(a: Tensor, t: Tensor, x_shape: torch.Size) -> Tensor:
+    """Extract values from tensor 'a' at positions specified by tensor 't' \
+        and reshape to 'x_shape'.
+
+    This function extracts values from tensor 'a' at positions specified \
+        by tensor 't',
+    and reshapes the result to match the shape specified by 'x_shape'.
+
+    Args:
+        a (Tensor): Source tensor to extract values from.
+        t (Tensor): Tensor containing positions where values should be \
+            extracted.
+        x_shape (torch.Size): Target shape for the output tensor.
+
+    Returns:
+        Tensor: Extracted values reshaped to match x_shape.
+
+    Note:
+        The function automatically converts tensor 'a' to float32 dtype and
+        matches the device of tensor 't'.
     """
     a = a.to(device=t.device, dtype=torch.float32)  # !dtype is fixed here
     b, *_ = t.shape
@@ -74,7 +91,15 @@ def extract(a: Tensor, t: Tensor, x_shape: torch.Size):
     return out
 
 
-def linear_beta_schedule(num_timestep: int):
+def linear_beta_schedule(num_timestep: int) -> Tensor:
+    """get the linear beta schedule.
+
+    Arguments:
+        num_timestep -- int
+
+    Returns:
+        Tensor -- shape: (num_timestep,)
+    """
     scale = 1000.0 / num_timestep
     beta_start = scale * 1e-4
     beta_end = scale * 2e-2
@@ -501,7 +526,39 @@ class GaussianDiffusion1D(nn.Module):
         clip_denoised: bool = False,
         model_kwargs: None | dict = None,
     ) -> Iterator[dict[str, Tensor]]:
-        "return a generator that yields x_{T-1} -> x_0"
+        """Creates a generator that progressively samples from the diffusion \
+            process from x_T to x_0.
+
+        This method implements the progressive sampling loop that generates \
+            samples by iteratively
+        denoising from timestep T-1 to 0. At each step, it applies the \
+            p_sample function to
+        predict the previous timestep's sample.
+
+        Args:
+            shape (torch.Size): The shape of the tensor to sample, \
+                expected in format 'b l d'
+                (batch, length, dimension).
+            noise (Optional[Tensor], optional): Initial noise tensor. \
+                If None, random noise will be used.
+                Defaults to None.
+            clip_denoised (bool, optional): Whether to clip the denoised \
+                values. Defaults to False.
+            model_kwargs (Optional[dict], optional): Additional arguments \
+                to pass to the model.
+                Defaults to None.
+
+        Yields:
+            dict[str, Tensor]: Dictionary containing sampling information at \
+                each timestep, including:
+                - pred_x_prev: The predicted sample for the previous timestep
+                - pred_noise: The predicted noise component
+                - Other model-specific outputs
+
+        Returns:
+            Iterator[dict[str, Tensor]]: Generator yielding progressive \
+                sampling results from T-1 to 0.
+        """
         device = next(self.model.parameters()).device
         model_kwargs = model_kwargs
 
