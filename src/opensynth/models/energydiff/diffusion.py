@@ -154,24 +154,27 @@ class GaussianDiffusion1D(nn.Module):
         self.dpm_sampler = None
 
         # Check arguments
-        assert (
-            model_mean_type in ModelMeanType
-        ), "objective must be ModelMeanType.X_START, \
+        if not isinstance(model_mean_type, ModelMeanType):
+            raise ValueError(
+                "objective must be ModelMeanType.X_START, \
                 ModelMeanType.NOISE, ModelMeanType.V"
-        assert (
-            model_variance_type in ModelVarianceType
-        ), "model_variance_type must be ModelVarianceType.FIXED_SMALL, \
-                ModelVarianceType.FIXED_LARGE, ModelVarianceType.LEARNED_RANGE"
-        assert (
-            beta_schedule_type in BetaScheduleType
-        ), "type_beta_schedule must be one of linear, cosine"
-
-        assert (
-            self.model_variance_type == ModelVarianceType.LEARNED_RANGE
-        ) == (
-            self.model.learn_variance
-        ), "denoising_model.learn_variance must be \
+            )
+        if not isinstance(model_variance_type, ModelVarianceType):
+            raise ValueError("model variance type must be ModelVarianceType")
+        if not isinstance(beta_schedule_type, BetaScheduleType):
+            raise ValueError(
+                "type_beta_schedule must be BetaScheduleType.\
+                linear or BetaScheduleType.cosine"
+            )
+        if (
+            not self.model_variance_type
+            == ModelVarianceType.LEARNED_RANGE
+            == self.model.learn_variance
+        ):
+            raise ValueError(
+                "denoising_model.learn_variance must be \
                 consistent with diffusion_model_variance_type"
+            )
 
         if self.model_variance_type == ModelVarianceType.LEARNED_RANGE:
             raise NotImplementedError("Learned range is not implemented yet.")
