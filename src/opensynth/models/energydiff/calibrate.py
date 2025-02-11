@@ -10,10 +10,10 @@ class DataShapeType(enum.Enum):
     Enum class for data shape
     """
 
-    BATCH_CHANNEL_SEQUENCE = enum.auto()
-    BATCH_SEQUENCE = enum.auto()
-    CHANNEL_SEQUENCE = enum.auto()
-    SEQUENCE = enum.auto()
+    BATCH_CHANNEL_SEQUENCE = "batch_channel_sequence"
+    BATCH_SEQUENCE = "batch_sequence"
+    CHANNEL_SEQUENCE = "channel_sequence"
+    SEQUENCE = "sequence"
 
 
 class MultiDimECDF:

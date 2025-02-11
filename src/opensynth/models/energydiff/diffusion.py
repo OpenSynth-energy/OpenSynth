@@ -34,30 +34,30 @@ ModelPrediction = namedtuple(
 
 
 class ModelMeanType(enum.Enum):
-    X_START = enum.auto()
-    NOISE = enum.auto()
-    V = enum.auto()
+    X_START = "x_start"
+    NOISE = "noise"
+    V = "v"
 
 
 class ModelVarianceType(enum.Enum):
-    FIXED_SMALL = enum.auto()  # default, necessary for dpm-solver
-    FIXED_LARGE = enum.auto()
-    LEARNED_RANGE = enum.auto()
+    FIXED_SMALL = "fixed_small"  # default, necessary for dpm-solver
+    FIXED_LARGE = "fixed_large"
+    LEARNED_RANGE = "learned_range"
 
 
 class LossType(enum.Enum):
-    MSE = enum.auto()
-    RESCALED_MSE = enum.auto()
-    KL = enum.auto()
-    RESCALED_KL = enum.auto()
+    MSE = "mse"
+    RESCALED_MSE = "rescaled_mse"
+    KL = "kl"
+    RESCALED_KL = "rescaled_kl"
 
     def is_vb(self):
         return self in (LossType.KL, LossType.RESCALED_KL)
 
 
 class BetaScheduleType(enum.Enum):
-    LINEAR = enum.auto()
-    COSINE = enum.auto()  # default
+    LINEAR = "linear"
+    COSINE = "cosine"  # default
 
 
 def extract(a: Tensor, t: Tensor, x_shape: torch.Size) -> Tensor:
