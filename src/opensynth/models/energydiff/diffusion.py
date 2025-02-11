@@ -10,7 +10,7 @@ import enum
 import math
 from collections import namedtuple
 from functools import partial
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Tuple
 
 import pytorch_lightning as pl
 import torch
@@ -133,6 +133,22 @@ def get_beta_schedule(beta_schedule_type: BetaScheduleType, num_timestep: int):
         raise ValueError("type_beta_schedule must be one of linear, cosine")
 
 
+def get_loss_weight(
+    alpha_cumprod: Tensor, model_mean_type: ModelMeanType
+) -> Tensor:
+    # TODO unit test
+    # calculate loss weights
+    snr = alpha_cumprod / (1.0 - alpha_cumprod)
+    if model_mean_type == ModelMeanType.NOISE:
+        loss_weight = torch.ones_like(snr)
+    elif model_mean_type == ModelMeanType.X_START:
+        loss_weight = snr
+    elif model_mean_type == ModelMeanType.V:
+        loss_weight = snr / (snr + 1.0)
+
+    return loss_weight
+
+
 class GaussianDiffusion1D(nn.Module):
     def __init__(
         self,
@@ -224,20 +240,9 @@ class GaussianDiffusion1D(nn.Module):
         )
 
         # calculate loss weights
-        snr = alpha_cumprod / (1.0 - alpha_cumprod)
-        if model_mean_type == ModelMeanType.NOISE:
-            loss_weight = torch.ones_like(snr)
-        elif model_mean_type == ModelMeanType.X_START:
-            loss_weight = snr
-        elif model_mean_type == ModelMeanType.V:
-            loss_weight = snr / (snr + 1.0)
-        else:
-            raise ValueError(
-                "model_mean_type must be one of ModelMeanType.X_START, \
-                    ModelMeanType.NOISE, ModelMeanType.V"
-            )
+        loss_weight = get_loss_weight(alpha_cumprod, model_mean_type)
 
-        # convert to float32 to support mps device
+        # convert to float32 for gpu
         self.beta_schedule = self.beta_schedule.to(torch.float32)
         self.alpha_cumprod = self.alpha_cumprod.to(torch.float32)
         self.alpha_cumprod_prev = self.alpha_cumprod_prev.to(torch.float32)
@@ -387,9 +392,8 @@ class GaussianDiffusion1D(nn.Module):
             x_start = maybe_clip(x_start)
             pred_noise = self.predict_noise_from_start(x_t, t, x_start)
         else:
-            raise ValueError(
-                "model_mean_type must be one of ModelMeanType.X_START, \
-                    ModelMeanType.NOISE, ModelMeanType.V"
+            raise NotImplementedError(
+                f"model_mean_type: {self.model_mean_type} not implemented."
             )
 
         return ModelPrediction(pred_noise, x_start, model_var_factor)
@@ -795,7 +799,7 @@ class GaussianDiffusion1D(nn.Module):
         return all_sample
 
 
-class DPMSolverSampler(object):
+class DPMSolverSampler:
     def __init__(self, model: GaussianDiffusion1D, **kwargs):
         super().__init__()
         self.model = model
@@ -803,7 +807,7 @@ class DPMSolverSampler(object):
         to_torch = (
             lambda x: x.clone().detach().to(torch.float32).to(device)
         )  # noqa: E731
-        self.register_buffer("alphas_cumprod", to_torch(model.alpha_cumprod))
+        self.alphas_cumprod = to_torch(model.alpha_cumprod)
 
     def register_buffer(self, name, attr):
         if isinstance(attr, torch.Tensor):
@@ -814,46 +818,23 @@ class DPMSolverSampler(object):
     @torch.no_grad()
     def sample(
         self,
-        S,  # steps
-        batch_size,  # N
-        shape,  # (C, L)
-        conditioning=None,  # (N, *) or broadcastable (1, *)
-        callback=None,
-        normals_sequence=None,
-        img_callback=None,
-        quantize_x0=False,
-        eta=0.0,
-        mask=None,
-        x0=None,
-        temperature=1.0,
-        noise_dropout=0.0,
-        score_corrector=None,
-        corrector_kwargs=None,
-        verbose=True,
-        x_T=None,
-        log_every_t=100,
-        cfg_scale=1.0,
-        unconditional_conditioning=None,  # the unconditional-class tensor
-        **kwargs,
-    ):
-        if conditioning is not None:
-            if isinstance(conditioning, dict):
-                cbs = conditioning[list(conditioning.keys())[0]].shape[0]
-                if cbs != batch_size and cbs != 1:
-                    print(
-                        f"Warning: Got {cbs} conditionings \
-                            but batch-size is {batch_size}"
-                    )
-            else:
-                if (
-                    conditioning.shape[0] != batch_size
-                    and conditioning.shape[0] != 1
-                ):
-                    print(
-                        f"Warning: Got {conditioning.shape[0]} \
-                            conditionings but batch-size is {batch_size}"
-                    )
+        S: int,  # steps
+        batch_size: int,  # N
+        shape: Tuple[int, int],  # (C, L)
+        x_T: Tensor | None = None,
+    ) -> Tuple[Tensor, None]:
+        """generate samples from the diffusion model using DPM-Solver.
 
+        Args:
+            S (int): number of steps to sample. has to be >= 1
+            batch_size (int): batch size
+            shape (tuple): shape of one sample, (num_channel, sequence_length)
+            x_T (Tensor, optional): initial tensor to be denoised. \
+                Defaults to None.
+
+        Returns:
+            Tuple[Tensor, None]: sampled tensor, None
+        """
         # sampling
         (C, L) = shape
         size = (batch_size, C, L)
@@ -897,9 +878,9 @@ class DPMSolverSampler(object):
             ns,
             model_type=model_type,
             guidance_type="classifier-free",
-            condition=conditioning,
-            unconditional_condition=unconditional_conditioning,
-            cfg_scale=cfg_scale,
+            condition=None,
+            unconditional_condition=None,
+            cfg_scale=1.0,
         )
 
         dpm_solver = DPM_Solver(
