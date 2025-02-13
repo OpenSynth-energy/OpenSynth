@@ -96,7 +96,7 @@ def linear_beta_schedule(num_timestep: int) -> Tensor:
     )  # shape: (num_timestep,)
 
 
-def cosine_beta_schedule(num_timestep: int, s: float = 0.008):
+def cosine_beta_schedule(num_timestep: int, s: float = 0.008) -> Tensor:
     "as proposed in https://openreview.net/forum?id=-NEXDKk8gZ"
     num_step = num_timestep + 1
     x = torch.linspace(
@@ -112,7 +112,9 @@ def cosine_beta_schedule(num_timestep: int, s: float = 0.008):
     return torch.clip(beta_schedule, 0, 0.999)  # shape: (num_timestep,)
 
 
-def get_beta_schedule(beta_schedule_type: BetaScheduleType, num_timestep: int):
+def get_beta_schedule(
+    beta_schedule_type: BetaScheduleType, num_timestep: int
+) -> Tensor:
     if beta_schedule_type == BetaScheduleType.LINEAR:
         return linear_beta_schedule(num_timestep)
     elif beta_schedule_type == BetaScheduleType.COSINE:
