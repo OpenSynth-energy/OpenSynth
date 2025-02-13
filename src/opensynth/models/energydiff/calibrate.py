@@ -63,6 +63,7 @@ def _transform_to_process_shape(
         num_in_channel -- int|None, number of channels in the input data y
     """
     yndim = len(y.shape)
+    num_in_channel = None
     if yndim == 3:
         input_shape_type = DataShapeType.BATCH_CHANNEL_SEQUENCE
         num_in_channel, _ = y.shape[1], y.shape[2]
@@ -136,14 +137,15 @@ class MultiDimECDF:
         x_sorted = self.x_sorted.to(x.device)
         xndim = len(x.shape)
         input_shape_type = DataShapeType.BATCH_SEQUENCE
+        num_channel = None
         if xndim == 3:
             input_shape_type = DataShapeType.BATCH_CHANNEL_SEQUENCE
-            c, _ = x.shape[1], x.shape[2]
+            num_channel, _ = x.shape[1], x.shape[2]
             x = rearrange(x, "b c l -> b (c l)")
         elif xndim == 2:
             if x.shape[0] * x.shape[1] == self.x_sorted.shape[1]:
                 input_shape_type = DataShapeType.CHANNEL_SEQUENCE
-                c, _ = x.shape[0], x.shape[1]
+                num_channel, _ = x.shape[0], x.shape[1]
                 x = rearrange(x, "c l -> 1 (c l)")
             else:
                 input_shape_type = DataShapeType.BATCH_SEQUENCE
@@ -165,7 +167,7 @@ class MultiDimECDF:
 
         y = torch.clamp(cdf_values, 0.0, 1.0)
 
-        y = _transform_to_target_shape(y, input_shape_type, num_channel=c)
+        y = _transform_to_target_shape(y, input_shape_type, num_channel=num_channel)
 
         return y
 
