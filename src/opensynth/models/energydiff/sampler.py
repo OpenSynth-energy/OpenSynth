@@ -3,6 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #   part of this script uses
 # DPM-Solver:https://github.com/LuChengTHU/dpm-solver
+"""
+Advised to only directly use `DPMSolverSampler` in this module.
+"""
 import math
 from typing import Tuple
 
@@ -16,9 +19,6 @@ from opensynth.models.energydiff._diffusion_base import (
     ModelMeanType,
     ModelVarianceType,
 )
-
-" *** check the bottom of this script for sample functions      *** "
-" --- below is mostly DPM-Solver implementation and adaptation  ---"
 
 
 class NoiseScheduleVP:
@@ -75,7 +75,7 @@ class NoiseScheduleVP:
             else:
                 self.T = 1.0
 
-    def marginal_log_mean_coeff(self, t):
+    def marginal_log_mean_coeff(self, t: Tensor) -> Tensor:
         """
         Compute log(alpha_t) of a given continuous-time label t in [0, T].
         """
