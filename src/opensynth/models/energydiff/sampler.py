@@ -31,11 +31,9 @@ class NoiseScheduleVP:
     ):
         if schedule not in ["discrete", "linear", "cosine"]:
             raise ValueError(
-                "Unsupported noise schedule {}. \
+                f"Unsupported noise schedule {schedule}. \
                     The schedule needs to be 'discrete' \
-                        or 'linear' or 'cosine'".format(
-                    schedule
-                )
+                        or 'linear' or 'cosine'"
             )
 
         self.schedule = schedule
