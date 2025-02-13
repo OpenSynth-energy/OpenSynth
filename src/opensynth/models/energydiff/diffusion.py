@@ -8,6 +8,7 @@ Date: Nov 2024
 """
 import enum
 import math
+from abc import ABC, abstractmethod
 from collections import namedtuple
 from functools import partial
 from typing import Callable, Iterator, Tuple
@@ -18,6 +19,7 @@ import torch.nn.functional as F
 from einops import reduce
 from ema_pytorch import EMA
 from torch import Tensor, nn
+from torch.nn.parameter import Parameter
 from tqdm import tqdm
 
 from opensynth.data_modules.lcl_data_module import TrainingData
@@ -149,7 +151,33 @@ def get_loss_weight(
     return loss_weight
 
 
-class GaussianDiffusion1D(nn.Module):
+class DiffusionBase(ABC):
+    @property
+    @abstractmethod
+    def alpha_cumprod(self) -> Tensor:
+        pass
+
+    @property
+    @abstractmethod
+    def model_mean_type(self) -> ModelMeanType:
+        pass
+
+    @property
+    @abstractmethod
+    def model_variance_type(self) -> ModelVarianceType:
+        pass
+
+    @property
+    @abstractmethod
+    def model(self) -> nn.Module:
+        pass
+
+    @abstractmethod
+    def parameters(self) -> Iterator[Parameter]:
+        pass
+
+
+class GaussianDiffusion1D(nn.Module, DiffusionBase):
     def __init__(
         self,
         base_model: DenoisingTransformer,  # denoise model
@@ -160,11 +188,11 @@ class GaussianDiffusion1D(nn.Module):
         beta_schedule_type: BetaScheduleType = BetaScheduleType.COSINE,
     ):
         super().__init__()
-        self.model = base_model
+        self._model = base_model
         self.dim_in = base_model.dim_in
         self.num_timestep = num_timestep
-        self.model_mean_type = model_mean_type
-        self.model_variance_type = model_variance_type
+        self._model_mean_type = model_mean_type
+        self._model_variance_type = model_variance_type
         self.loss_type = loss_type
         self.beta_schedule_type = beta_schedule_type
         self.dpm_sampler = None
@@ -210,7 +238,7 @@ class GaussianDiffusion1D(nn.Module):
         )  # replace beginning with 1.
 
         self.beta_schedule = beta_schedule
-        self.alpha_cumprod = alpha_cumprod
+        self._alpha_cumprod = alpha_cumprod
         self.alpha_cumprod_prev = alpha_cumprod_prev
 
         self.sqrt_alpha_cumprod = torch.sqrt(alpha_cumprod)
@@ -244,7 +272,7 @@ class GaussianDiffusion1D(nn.Module):
 
         # convert to float32 for gpu
         self.beta_schedule = self.beta_schedule.to(torch.float32)
-        self.alpha_cumprod = self.alpha_cumprod.to(torch.float32)
+        self._alpha_cumprod = self._alpha_cumprod.to(torch.float32)
         self.alpha_cumprod_prev = self.alpha_cumprod_prev.to(torch.float32)
         self.sqrt_alpha_cumprod = self.sqrt_alpha_cumprod.to(torch.float32)
         self.sqrt_one_minus_alpha_cumprod = (
@@ -266,6 +294,22 @@ class GaussianDiffusion1D(nn.Module):
         self.posterior_mean_coef1 = self.posterior_mean_coef1.to(torch.float32)
         self.posterior_mean_coef2 = self.posterior_mean_coef2.to(torch.float32)
         self.loss_weight = loss_weight.to(torch.float32)
+
+    @property
+    def alpha_cumprod(self) -> torch.Tensor:
+        return self._alpha_cumprod
+
+    @property
+    def model_mean_type(self) -> ModelMeanType:
+        return self._model_mean_type
+
+    @property
+    def model_variance_type(self) -> ModelVarianceType:
+        return self._model_variance_type
+
+    @property
+    def model(self) -> nn.Module:
+        return self._model
 
     def predict_start_from_noise(
         self,
@@ -800,7 +844,7 @@ class GaussianDiffusion1D(nn.Module):
 
 
 class DPMSolverSampler:
-    def __init__(self, model: GaussianDiffusion1D, **kwargs):
+    def __init__(self, model: DiffusionBase, **kwargs):
         super().__init__()
         self.model = model
         device = next(model.parameters()).device
