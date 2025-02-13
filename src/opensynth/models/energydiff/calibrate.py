@@ -16,6 +16,74 @@ class DataShapeType(enum.Enum):
     SEQUENCE = "sequence"
 
 
+def _transform_to_target_shape(
+    x: torch.Tensor,
+    target_shape: DataShapeType,
+    num_channel: int | None = None,
+) -> torch.Tensor:
+    """transform intermediate data to target shape
+
+    Arguments:
+        x -- intermediate data of shape BATCH (CHANNEL*)SEQUENCE
+        target_shape -- DataShapeType
+    """
+    if (
+        target_shape
+        in [
+            DataShapeType.CHANNEL_SEQUENCE,
+            DataShapeType.BATCH_CHANNEL_SEQUENCE,
+        ]
+        and num_channel is None
+    ):
+        raise ValueError("num_channel should be provided")
+
+    if target_shape == DataShapeType.BATCH_CHANNEL_SEQUENCE:
+        x = rearrange(x, "b (c l) -> b c l", c=num_channel)
+    elif target_shape == DataShapeType.CHANNEL_SEQUENCE:
+        x = rearrange(x, "1 (c l) -> c l", c=num_channel)
+    elif target_shape == DataShapeType.SEQUENCE:
+        x = rearrange(x, "1 cl -> cl")
+
+    return x
+
+
+def _transform_to_process_shape(
+    y: torch.Tensor, seq_length: int
+) -> Tuple[torch.Tensor, DataShapeType, int | None]:
+    """transform input data into process shape (BATCH SEQUENCE)
+
+    Arguments:
+        y -- torch.Tensor, of shape (batch dim1 dim2) or (batch dim1)
+        seq_length -- int, equal to dim1 * dim2 (batch dim1 dim2) \
+            or dim1 (batch dim1)
+
+    Returns:
+        y -- torch.Tensor of shape (batch dim)
+        input_shape_type -- DataShapeType, shape of original input data y
+        num_in_channel -- int|None, number of channels in the input data y
+    """
+    yndim = len(y.shape)
+    if yndim == 3:
+        input_shape_type = DataShapeType.BATCH_CHANNEL_SEQUENCE
+        num_in_channel, _ = y.shape[1], y.shape[2]
+        y = rearrange(y, "b c l -> b (c l)")
+    elif yndim == 2:
+        if y.shape[0] * y.shape[1] == seq_length:
+            input_shape_type = DataShapeType.CHANNEL_SEQUENCE
+            num_in_channel, _ = y.shape[0], y.shape[1]
+            y = rearrange(y, "c l -> 1 (c l)")
+        else:
+            input_shape_type = DataShapeType.BATCH_SEQUENCE
+            pass
+    elif yndim == 1:
+        input_shape_type = DataShapeType.SEQUENCE
+        y = rearrange(y, "cl -> 1 cl")
+    else:
+        raise ValueError("Invalid input shape")
+
+    return y, input_shape_type, num_in_channel
+
+
 class MultiDimECDF:
     """
     Batched ECDF estimation.
@@ -97,16 +165,7 @@ class MultiDimECDF:
 
         y = torch.clamp(cdf_values, 0.0, 1.0)
 
-        if input_shape_type == DataShapeType.BATCH_CHANNEL_SEQUENCE:
-            y = rearrange(y, "b (c l) -> b c l", c=c)
-        elif input_shape_type == DataShapeType.CHANNEL_SEQUENCE:
-            y = rearrange(y, "1 (c l) -> c l", c=c)
-        elif input_shape_type == DataShapeType.SEQUENCE:
-            y = rearrange(y, "1 cl -> cl")
-        elif input_shape_type == DataShapeType.BATCH_SEQUENCE:
-            pass
-        else:
-            pass  # never reach here
+        y = _transform_to_target_shape(y, input_shape_type, num_channel=c)
 
         return y
 
@@ -119,24 +178,10 @@ class MultiDimECDF:
             x: input data, shape (batch_size, dim)
         """
         x_sorted = self.x_sorted.to(y.device)
-        yndim = len(y.shape)
-        if yndim == 3:
-            input_shape_type = DataShapeType.BATCH_CHANNEL_SEQUENCE
-            c, _ = y.shape[1], y.shape[2]
-            y = rearrange(y, "b c l -> b (c l)")
-        elif yndim == 2:
-            if y.shape[0] * y.shape[1] == x_sorted.shape[1]:
-                input_shape_type = DataShapeType.CHANNEL_SEQUENCE
-                c, _ = y.shape[0], y.shape[1]
-                y = rearrange(y, "c l -> 1 (c l)")
-            else:
-                input_shape_type = DataShapeType.BATCH_SEQUENCE
-                pass
-        elif yndim == 1:
-            input_shape_type = DataShapeType.SEQUENCE
-            y = rearrange(y, "cl -> 1 cl")
-        else:
-            raise ValueError("Invalid input shape")
+        y, input_shape_type, num_in_channel = _transform_to_process_shape(
+            y,
+            seq_length=x_sorted.shape[1],
+        )  # y shape: (batch_size, dim)
 
         y = torch.clamp(y, 0.0, 1.0)
         y_scaled = y * self.num_sample
@@ -146,14 +191,8 @@ class MultiDimECDF:
         )  # range bounded by x_sorted
         x = xlower
 
-        if input_shape_type == DataShapeType.BATCH_CHANNEL_SEQUENCE:
-            x = rearrange(x, "b (c l) -> b c l", c=c)
-        elif input_shape_type == DataShapeType.CHANNEL_SEQUENCE:
-            x = rearrange(x, "1 (c l) -> c l", c=c)
-        elif input_shape_type == DataShapeType.SEQUENCE:
-            x = rearrange(x, "1 cl -> cl")
-        elif input_shape_type == DataShapeType.BATCH_SEQUENCE:
-            pass
+        x = _transform_to_target_shape(x, input_shape_type, num_in_channel)
+
         return x
 
     def re_estimate(self, x):
