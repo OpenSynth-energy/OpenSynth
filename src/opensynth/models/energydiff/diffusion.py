@@ -263,11 +263,15 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
 
         # if learned variance range, split the mean and variance prediction
         if self.model_variance_type == ModelVarianceType.LEARNED_RANGE:
-            assert model_output.shape == (
+            if not model_output.shape == (
                 x_t.shape[0],
                 x_t.shape[1],
                 2 * x_t.shape[2],
-            )
+            ):
+                raise ValueError(
+                    "model output shape does not match expected shape."
+                )
+
             model_output, model_var_factor = torch.split(
                 model_output, x_t.shape[2], dim=-1
             )
@@ -365,12 +369,17 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
 
         model_mean, *_ = self.q_posterior_mean_variance(pred_x_start, x_t, t)
 
-        assert (
+        if not (
             model_mean.shape
             == model_log_variance.shape
             == model_variance.shape
             == x_t.shape
-        )
+        ):
+            raise ValueError(
+                f"inconsistent shape: {model_mean.shape}, \
+                {model_log_variance.shape}, {model_variance.shape}, \
+                    {x_t.shape}"
+            )
 
         return {
             "model_mean": model_mean,
@@ -566,7 +575,8 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
                     out["pred_x_start"], t, pred_noise
                 ),
             }[self.model_mean_type]
-            assert target.shape == source.shape
+            if not target.shape == source.shape:
+                raise ValueError("target and source shape mismatch.")
 
             mse_loss = reduce(
                 F.mse_loss(source, target, reduction="none"),
@@ -590,7 +600,8 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         "return scalar loss. averaged over batch already."
         B, L, D = x_start.shape
         device = x_start.device
-        assert D == self.dim_in, f"Dimension mismatch: {D} != {self.dim_in}"
+        if not D == self.dim_in:
+            raise ValueError(f"Dimension mismatch: {D} != {self.dim_in}")
 
         t = torch.randint(0, self.num_timestep, (B,), device=device)
         loss_terms = self.train_losses(x_start, t, noise)

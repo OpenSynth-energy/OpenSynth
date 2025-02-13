@@ -26,7 +26,8 @@ class SinusoidalPosEmb(nn.Module):
 
     def __init__(self, dim: int):
         super().__init__()
-        assert dim % 2 == 0, "dimension must be even"
+        if dim % 2 != 0:
+            raise ValueError("dimension must be even")
         self.dim = dim
 
     def forward(self, pos: Tensor) -> Tensor:
