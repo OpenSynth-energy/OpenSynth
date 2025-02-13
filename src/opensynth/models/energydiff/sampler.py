@@ -1,4 +1,6 @@
 # Disclaimer
+# Copyright Contributors to the Opensynth-energy Project.
+# SPDX-License-Identifier: Apache-2.0
 #   part of this script uses
 # DPM-Solver:https://github.com/LuChengTHU/dpm-solver
 import math
