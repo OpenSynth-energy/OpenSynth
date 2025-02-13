@@ -4,9 +4,17 @@
 #   part of this script uses
 # DPM-Solver:https://github.com/LuChengTHU/dpm-solver
 import math
+from typing import Tuple
 
 import torch
+from torch import Tensor
 from tqdm.auto import tqdm
+
+from opensynth.models.energydiff._diffusion_base import (
+    DiffusionBase,
+    ModelMeanType,
+    ModelVarianceType,
+)
 
 " *** check the bottom of this script for sample functions      *** "
 " --- below is mostly DPM-Solver implementation and adaptation  ---"
@@ -1228,3 +1236,103 @@ def interpolate_fn(x, xp, yp):
 
 def expand_dims(v, dims):
     return v[(...,) + (None,) * (dims - 1)]
+
+
+# the sampler interfaced with Diffusion Model
+class DPMSolverSampler:
+    def __init__(self, model: DiffusionBase, **kwargs):
+        super().__init__()
+        self.model = model
+        device = next(model.parameters()).device
+        to_torch = (
+            lambda x: x.clone().detach().to(torch.float32).to(device)
+        )  # noqa: E731
+        self.alphas_cumprod = to_torch(model.alpha_cumprod)
+
+    def register_buffer(self, name, attr):
+        if isinstance(attr, torch.Tensor):
+            if attr.device != next(self.model.parameters()).device:
+                attr = attr.to(next(self.model.parameters()).device)
+        setattr(self, name, attr)
+
+    @torch.no_grad()
+    def sample(
+        self,
+        S: int,  # steps
+        batch_size: int,  # N
+        shape: Tuple[int, int],  # (C, L)
+        x_T: Tensor | None = None,
+    ) -> Tuple[Tensor, None]:
+        """generate samples from the diffusion model using DPM-Solver.
+
+        Args:
+            S (int): number of steps to sample. has to be >= 1
+            batch_size (int): batch size
+            shape (tuple): shape of one sample, (num_channel, sequence_length)
+            x_T (Tensor, optional): initial tensor to be denoised. \
+                Defaults to None.
+
+        Returns:
+            Tuple[Tensor, None]: sampled tensor, None
+        """
+        # sampling
+        (C, L) = shape
+        size = (batch_size, C, L)
+
+        # print(f'Data shape for DPM-Solver sampling \
+        # is {size}, sampling steps {S}')
+
+        device = next(self.model.parameters()).device
+        if x_T is None:
+            img = torch.randn(size, device=device)
+        else:
+            img = x_T
+
+        ns = NoiseScheduleVP("discrete", alphas_cumprod=self.alphas_cumprod)
+
+        # original model function
+        def apply_model(x, t, c=None):
+            out = self.model.model.forward(x, t)
+            if (
+                self.model.model_variance_type
+                == ModelVarianceType.LEARNED_RANGE
+            ):  # GaussianDiffusion1D.model_variance_type
+                out = torch.split(out, out.shape[1] // 2, dim=1)[
+                    0
+                ]  # discard the learned variance
+            return out
+
+        # model mean type
+        if self.model.model_mean_type == ModelMeanType.NOISE:
+            model_type = "noise"
+        elif self.model.model_mean_type == ModelMeanType.X_START:
+            model_type = "x_start"
+        elif self.model.model_mean_type == ModelMeanType.V:
+            model_type = "v"
+        else:
+            raise ValueError(
+                f"Unknown model mean type {self.model.model_mean_type}"
+            )
+        model_fn = model_wrapper(
+            apply_model,
+            ns,
+            model_type=model_type,
+            guidance_type="classifier-free",
+            condition=None,
+            unconditional_condition=None,
+            cfg_scale=1.0,
+        )
+
+        dpm_solver = DPM_Solver(
+            model_fn, ns, predict_x0=True, thresholding=False
+        )
+        x = dpm_solver.sample(
+            img,
+            steps=S,
+            skip_type="time_uniform",
+            method="multistep",
+            order=3,
+            lower_order_final=True,
+        )
+
+        return x.to(device), None
