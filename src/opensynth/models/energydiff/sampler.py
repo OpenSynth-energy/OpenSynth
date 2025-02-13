@@ -11,6 +11,7 @@ from torch import Tensor
 from tqdm.auto import tqdm
 
 from opensynth.models.energydiff._diffusion_base import (
+    BetaScheduleType,
     DiffusionBase,
     ModelMeanType,
     ModelVarianceType,
@@ -23,21 +24,17 @@ from opensynth.models.energydiff._diffusion_base import (
 class NoiseScheduleVP:
     def __init__(
         self,
-        schedule="discrete",
+        schedule=BetaScheduleType.DISCRETE,
         betas=None,
         alphas_cumprod=None,
         continuous_beta_0=0.1,
         continuous_beta_1=20.0,
     ):
-        if schedule not in ["discrete", "linear", "cosine"]:
-            raise ValueError(
-                f"Unsupported noise schedule {schedule}. \
-                    The schedule needs to be 'discrete' \
-                        or 'linear' or 'cosine'"
-            )
+        if not isinstance(schedule, BetaScheduleType):
+            raise ValueError("Schedule must be a BetaScheduleType.")
 
         self.schedule = schedule
-        if schedule == "discrete":
+        if schedule == BetaScheduleType.DISCRETE:
             if betas is not None:
                 log_alphas = 0.5 * torch.log(1 - betas).cumsum(dim=0)
             else:
@@ -73,7 +70,7 @@ class NoiseScheduleVP:
                 math.cos(self.cosine_s / (1.0 + self.cosine_s) * math.pi / 2.0)
             )
             self.schedule = schedule
-            if schedule == "cosine":
+            if schedule == BetaScheduleType.COSINE:
                 self.T = 0.9946
             else:
                 self.T = 1.0
@@ -82,18 +79,18 @@ class NoiseScheduleVP:
         """
         Compute log(alpha_t) of a given continuous-time label t in [0, T].
         """
-        if self.schedule == "discrete":
+        if self.schedule == BetaScheduleType.DISCRETE:
             return interpolate_fn(
                 t.reshape((-1, 1)),
                 self.t_array.to(t.device),
                 self.log_alpha_array.to(t.device),
             ).reshape((-1))
-        elif self.schedule == "linear":
+        elif self.schedule == BetaScheduleType.LINEAR:
             return (
                 -0.25 * t**2 * (self.beta_1 - self.beta_0)
                 - 0.5 * t * self.beta_0
             )
-        elif self.schedule == "cosine":
+        elif self.schedule == BetaScheduleType.COSINE:
 
             def log_alpha_fn(s):
                 return torch.log(
@@ -136,7 +133,7 @@ class NoiseScheduleVP:
         Compute the continuous-time label t
             in [0, T] of a given half-logSNR lambda_t.
         """
-        if self.schedule == "linear":
+        if self.schedule == BetaScheduleType.LINEAR:
             tmp = (
                 2.0
                 * (self.beta_1 - self.beta_0)
@@ -148,7 +145,7 @@ class NoiseScheduleVP:
                 / (torch.sqrt(Delta) + self.beta_0)
                 / (self.beta_1 - self.beta_0)
             )
-        elif self.schedule == "discrete":
+        elif self.schedule == BetaScheduleType.DISCRETE:
             log_alpha = -0.5 * torch.logaddexp(
                 torch.zeros((1,)).to(lamb.device), -2.0 * lamb
             )
@@ -196,7 +193,7 @@ def model_wrapper(
                 in [0, 1000 * (N - 1) / N].
         For continuous-time DPMs, we just use `t_continuous`.
         """
-        if noise_schedule.schedule == "discrete":
+        if noise_schedule.schedule == BetaScheduleType.DISCRETE:
             return (t_continuous - 1.0 / noise_schedule.total_N) * 1000.0
         else:
             return t_continuous
@@ -1286,7 +1283,9 @@ class DPMSolverSampler:
         else:
             img = x_T
 
-        ns = NoiseScheduleVP("discrete", alphas_cumprod=self.alphas_cumprod)
+        ns = NoiseScheduleVP(
+            BetaScheduleType.DISCRETE, alphas_cumprod=self.alphas_cumprod
+        )
 
         # original model function
         def apply_model(x, t, c=None):

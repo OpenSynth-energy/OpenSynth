@@ -44,6 +44,7 @@ class LossType(enum.Enum):
 
 
 class BetaScheduleType(enum.Enum):
+    DISCRETE = "discrete"
     LINEAR = "linear"
     COSINE = "cosine"  # default
 
