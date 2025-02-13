@@ -67,8 +67,7 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
                 linear or BetaScheduleType.cosine"
             )
         if (
-            not self.model_variance_type
-            == ModelVarianceType.LEARNED_RANGE
+            not (self.model_variance_type == ModelVarianceType.LEARNED_RANGE)
             == self.model.learn_variance
         ):
             raise ValueError(
