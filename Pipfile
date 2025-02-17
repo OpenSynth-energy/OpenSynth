@@ -18,6 +18,8 @@ pandas = "<2.2.2"
 matplotlib = "*"
 litdata = "*"
 zstd = "*"
+einops = ">=0.7.0"
+ema-pytorch = "==0.4.5"
 
 [dev-packages]
 pytest = "*"
