@@ -34,7 +34,9 @@ def beta_schedule_type(request) -> BetaScheduleType:
 
 
 @pytest.fixture(
-    params=["cpu", "mps"] + (["cuda"] if torch.cuda.is_available() else []),
+    params=["cpu"]
+    + (["cuda"] if torch.cuda.is_available() else [])
+    + (["mps"] if torch.backends.mps.is_available() else [])
 )
 def device(request):
     return torch.device(request.param)
