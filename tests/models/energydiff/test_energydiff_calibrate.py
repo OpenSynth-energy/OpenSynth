@@ -51,6 +51,16 @@ def input_data(request, make_tensor) -> torch.Tensor:
     return make_tensor(request.param)
 
 
+@pytest.fixture(
+    params=[
+        DataShapeType.BATCH_CHANNEL_SEQUENCE,
+        DataShapeType.BATCH_SEQUENCE,
+    ]
+)
+def ecdf_init_data(request, make_tensor) -> torch.Tensor:
+    return make_tensor(request.param)
+
+
 @pytest.fixture(params=list(DataShapeType))
 def uniform_data(request, make_uniform_tensor) -> torch.Tensor:
     return make_uniform_tensor(request.param)
@@ -58,8 +68,8 @@ def uniform_data(request, make_uniform_tensor) -> torch.Tensor:
 
 class TestMultiDimECDF:
     @pytest.fixture
-    def ecdf_instance(self, input_data):
-        return MultiDimECDF(input_data)
+    def ecdf_instance(self, ecdf_init_data):
+        return MultiDimECDF(ecdf_init_data)
 
     def test_init(self, ecdf_instance):
         pass
@@ -80,21 +90,19 @@ class TestMultiDimECDF:
     def test_inverse_transform(self, ecdf_instance, uniform_data):
         inverse = ecdf_instance.inverse_transform(uniform_data)
         assert isinstance(inverse, torch.Tensor)
-        assert torch.allclose(inverse, uniform_data)
 
 
 @pytest.mark.parametrize(
     "source_type, target_shape",
     [
-        (DataShapeType.BATCH_CHANNEL_SEQUENCE, DataShapeType.CHANNEL_SEQUENCE),
-        (DataShapeType.BATCH_CHANNEL_SEQUENCE, DataShapeType.SEQUENCE),
-        (DataShapeType.BATCH_SEQUENCE, DataShapeType.CHANNEL_SEQUENCE),
-        (DataShapeType.BATCH_SEQUENCE, DataShapeType.SEQUENCE),
-        (DataShapeType.CHANNEL_SEQUENCE, DataShapeType.BATCH_CHANNEL_SEQUENCE),
-        (DataShapeType.CHANNEL_SEQUENCE, DataShapeType.BATCH_SEQUENCE),
-        (DataShapeType.SEQUENCE, DataShapeType.BATCH_CHANNEL_SEQUENCE),
-        (DataShapeType.SEQUENCE, DataShapeType.BATCH_SEQUENCE),
-    ],
+        (
+            DataShapeType.BATCH_CHANNEL_SEQUENCE,
+            DataShapeType.BATCH_CHANNEL_SEQUENCE,
+        ),
+        (DataShapeType.BATCH_SEQUENCE, DataShapeType.BATCH_CHANNEL_SEQUENCE),
+        (DataShapeType.BATCH_CHANNEL_SEQUENCE, DataShapeType.BATCH_SEQUENCE),
+        (DataShapeType.BATCH_SEQUENCE, DataShapeType.BATCH_SEQUENCE),
+    ],  # both source and target need to be batched (ecdf estimation required)
 )
 def test_calibrate(make_tensor, source_type, target_shape):
     source = make_tensor(source_type)

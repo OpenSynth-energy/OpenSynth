@@ -93,13 +93,16 @@ class MultiDimECDF:
     def __init__(self, x):
         """
         Args:
-            x: input data, shape (n_samples, dim1, dim2) or (n_samples, dim)
+            x: input data, shape (batch, channel, sequence) \
+                or (batch, sequence)
+                NOTE: NOT ALLOWED: (channel, sequence) or (sequence) \
+                    because at you need at least a batch to calculate ECDF
         """
         # super().__init__()
-        if len(x.shape) == 2:
+        if len(x.shape) == 2:  # (batch, sequence) / (batch, channel*sequence)
             self.dim = x.shape[1]
             x = x
-        else:
+        else:  # (batch, channel, sequence)
             self.dims = (x.shape[1], x.shape[2])
             self.dim = x.shape[1] * x.shape[2]
             x = rearrange(x, "n d1 d2 -> n (d1 d2)")
@@ -167,7 +170,9 @@ class MultiDimECDF:
 
         y = torch.clamp(cdf_values, 0.0, 1.0)
 
-        y = _transform_to_target_shape(y, input_shape_type, num_channel=num_channel)
+        y = _transform_to_target_shape(
+            y, input_shape_type, num_channel=num_channel
+        )
 
         return y
 
