@@ -135,7 +135,12 @@ class Test_GaussianDiffusion1D:
     def test_init(self, diffusion_instance):
         pass
 
-    @pytest.fixture(params=[True, False])
+    @pytest.fixture(
+        params=[
+            pytest.param(True, id="given_noise"),
+            pytest.param(False, id="no_given_noise"),
+        ]
+    )
     def given_noise(self, request) -> bool:
         return request.param
 
