@@ -22,6 +22,15 @@ class SinusoidalPosEmb(nn.Module):
     1/(10000**(i/(d/2-1)))
 
     dim must be even.
+
+    Args:
+        dim (int): dimension of the input
+
+    Forward:
+        pos: (batch, sequence)
+
+    Return:
+        emb: (batch, dim)
     """
 
     def __init__(self, dim: int):
@@ -31,6 +40,10 @@ class SinusoidalPosEmb(nn.Module):
         self.dim = dim
 
     def forward(self, pos: Tensor) -> Tensor:
+        """
+        Args:
+            pos: (batch, sequence)
+        """
         device = pos.device
         half_dim = self.dim // 2
         emb = torch.exp(
@@ -117,6 +130,7 @@ class DecoderBlock(nn.Module):
     """GPT2-style decoder block
 
     input: (batch, sequence, dim)
+    condition: (batch, #sequence, dim)
     output: (batch, sequence, dim)
     """
 
@@ -208,6 +222,7 @@ class DecoderTransformer(nn.Module):
     """GPT2-style decoder-only transformer
 
     input: (batch, sequence, dim)
+    condition: (batch, #sequence, dim)
     output: (batch, sequence, dim)
     """
 
