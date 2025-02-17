@@ -58,23 +58,54 @@ def extract(a: Tensor, t: Tensor, x_shape: torch.Size) -> Tensor:
     and reshapes the result to match the shape specified by 'x_shape'.
 
     Args:
-        a (Tensor): Source tensor to extract values from.
+        a (Tensor): Source tensor to extract values from. 1D tensor.
         t (Tensor): Tensor containing positions where values should be \
-            extracted.
+            extracted. (batch,) or (batch, 1) tensor.
         x_shape (torch.Size): Target shape for the output tensor.
 
     Returns:
         Tensor: Extracted values reshaped to match x_shape.
 
+    Example:
+        >>> a = torch.tensor([0.1, 0.2, 0.3, 0.4])
+        >>> t = torch.tensor([1, 3])  # extract values at indices 1 and 3
+        >>> x_shape = (2, 3, 2)  # target shape
+        >>> result = extract(a, t, x_shape)
+        >>> result.shape
+        torch.Size([2, 3, 2])
+        >>> result[0, :, :]  # filled with 0.2 (a[1])
+        tensor([[0.2, 0.2],
+                [0.2, 0.2],
+                [0.2, 0.2]])
+        >>> result[1, :, :]  # filled with 0.4 (a[3])
+        tensor([[0.4, 0.4],
+                [0.4, 0.4],
+                [0.4, 0.4]])
+
     Note:
         The function automatically converts tensor 'a' to float32 dtype and
         matches the device of tensor 't'.
     """
+    # shape chec
+    if t.dim() > 2 or (t.dim() == 2 and t.shape[1] != 1):
+        raise ValueError("t must be a 1D tensor or 2D tensor with shape (B,1)")
+
+    if t.dim() == 2:
+        t = t.squeeze(-1)  # Convert 2D (B,1) to 1D (B,)
+
+    if t.shape[0] != x_shape[0]:
+        raise ValueError("t and x_shape must have the same batch size")
+
+    # convert a to float32 and match device
     a = a.to(device=t.device, dtype=torch.float32)  # !dtype is fixed here
     b, *_ = t.shape
     dim_x = len(x_shape)
+    # extract values from a at positions specified by t
     out = a.gather(-1, t)
+    # fill missing dimensions with singleton dimensions (braodcast)
     target_shape = (b, *(1 for _ in range(dim_x - 1)))
+    # using reshape to covert to (b, 1, ..., 1)
+    # and use "+" to broadcast to target shape
     out = out.reshape(*target_shape) + torch.zeros(x_shape, device=t.device)
 
     return out
