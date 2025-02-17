@@ -675,6 +675,11 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         # cfg_scale: float,
         clip_denoised: bool = False,
     ) -> torch.Tensor:
+        if step < 15:
+            raise ValueError(
+                "sampling step must be at least 15 due to\
+                constraint of DPM-Solver."
+            )
         if self.dpm_sampler is None:
             self._init_dpm_sampler()
         assert self.dpm_sampler is not None
