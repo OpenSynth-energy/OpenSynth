@@ -95,7 +95,7 @@ def _convert_wide_to_long(
     """
     logger.info("Converting wide to long table..")
     df = pd.DataFrame(matrix.detach().numpy())
-    df.columns = [f"{metric_name}{i+1}" for i in range(matrix.shape[1])]
+    df.columns = [f"{metric_name}{i + 1}" for i in range(matrix.shape[1])]
     df["real_outlier"] = df.index + 1
 
     df_out = pd.wide_to_long(
