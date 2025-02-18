@@ -29,6 +29,8 @@ install_requires = (
     "pandas>=1.2",
     "litdata==0.2.30",
     "zstd==1.5.5.1",
+    "einops>=0.7.0",
+    "ema-pytorch==0.4.5",
 )
 
 setup(
