@@ -291,10 +291,6 @@ class DenoisingTransformer(nn.Module):
 
     """
 
-    MAX_SEQUENCE_LENGTH = (
-        8640  # = 24h at 1s resolution. realistically enough. more = slow.
-    )
-
     def __init__(
         self,
         dim_base: int,
@@ -413,17 +409,10 @@ class DenoisingTransformer(nn.Module):
 
         # transformer
         pos_seq = torch.arange(
-            max(x.shape[1], self.MAX_SEQUENCE_LENGTH),
+            x.shape[1],
             device=x.device,
             dtype=x.dtype,
         )
-        # shape: (TIMESTEP_NORM_CONSTANT,) or (sequence,)
-        pos_seq = F.interpolate(
-            rearrange(pos_seq, "seq -> 1 1 seq"),
-            size=(x.shape[1],),
-            mode="linear",
-        )  # shape: (1, 1, sequence)
-        pos_seq = rearrange(pos_seq, "1 1 seq -> seq")  # shape: (sequence,)
         pos_emb_seq = self.transformer_pos_emb(
             pos_seq
         )  # shape: (sequence, dim_base)
