@@ -5,10 +5,13 @@
 *.zip
 *.pyc
 *.csv
+*.bin
+index.json
 data/.DS_Store
 .DS_Store
 **/lightning_logs/*
 .venv/*
+!tests/data/streaming/*
 
 # Distribution / packaging
 .Python
@@ -31,3 +34,5 @@ share/python-wheels/
 *.egg
 MANIFES
 *.pt
+*.tmp
+.venv

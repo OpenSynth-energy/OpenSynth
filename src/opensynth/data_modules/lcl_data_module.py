@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import ast
+import random
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 
 import numpy as np
 import pandas as pd
@@ -16,9 +17,26 @@ g = torch.Generator()
 g.manual_seed(RANDOM_STATE)
 
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
+class TrainingData(TypedDict):
+    kwh: torch.Tensor
+    features: dict[str, torch.Tensor]
+
+
 class LCLData(Dataset):
     """
-    Low CarbonLondon Dataset
+    Low CarbonLondon Dataset. The dataset should return
+    TrainingData(TypedDict) which contains:
+    - kwh: kWh data
+    - features: Dictionary of features
+
+    To use Faraday on custom datasets, your data module
+    should also return data in the same format.
     """
 
     def __init__(
@@ -66,27 +84,27 @@ class LCLData(Dataset):
         self.month = self.df["month"]
         self.dayofweek = self.df["dayofweek"]
 
-    def standardise(self, x: torch.tensor) -> torch.tensor:
+    def standardise(self, x: torch.Tensor) -> torch.Tensor:
         """
         Standardise kWh with mean 0 and std 1
 
         Args:
-            x (torch.tensor): Input kWh
+            x (torch.Tensor): Input kWh
 
         Returns:
-            torch.tensor: Standardised kWh
+            torch.Tensor: Standardised kWh
         """
         return (x - self.feature_mean) / self.feature_std
 
-    def reconstruct(self, xhat: torch.tensor) -> torch.tensor:
+    def reconstruct(self, xhat: torch.Tensor) -> torch.Tensor:
         """
         Reconstruct kWh from standardised values
 
         Args:
-            xhat (torch.tensor): standardised kWh
+            xhat (torch.Tensor): standardised kWh
 
         Returns:
-            torch.tensor: reconstructed kWh
+            torch.Tensor: reconstructed kWh
         """
         return (xhat * self.feature_std) + self.feature_mean
 
@@ -95,10 +113,11 @@ class LCLData(Dataset):
 
     def __getitem__(self, idx):
         standardised_kwh = self.standardise(self.kwh[idx])
-        mth = self.month[idx]
-        dow = self.dayofweek[idx]
-
-        return standardised_kwh, mth, dow
+        features: dict[str, torch.Tensor] = {
+            "month": self.month[idx],
+            "dayofweek": self.dayofweek[idx],
+        }
+        return TrainingData(kwh=standardised_kwh, features=features)
 
 
 class LCLDataModule(pl.LightningDataModule):
@@ -148,6 +167,7 @@ class LCLDataModule(pl.LightningDataModule):
             drop_last=True,
             shuffle=False,
             generator=g,
+            worker_init_fn=seed_worker,
         )
 
     def outlier_dataloader(self):
@@ -157,7 +177,8 @@ class LCLDataModule(pl.LightningDataModule):
             drop_last=True,
             shuffle=False,
             generator=g,
+            worker_init_fn=seed_worker,
         )
 
-    def reconstruct_kwh(self, xhat: torch.tensor) -> torch.tensor:
+    def reconstruct_kwh(self, xhat: torch.Tensor) -> torch.Tensor:
         return self.dataset.reconstruct(xhat)
