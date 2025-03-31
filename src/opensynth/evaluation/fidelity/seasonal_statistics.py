@@ -1,11 +1,14 @@
-import polars as pl
-import pandas as pd
 from typing import Literal
+
+import pandas as pd
+import polars as pl
 import seaborn as sns
 from scipy.stats import kstest
 
 
-def add_season(df: pl.LazyFrame, datetime_col: str = "datetime") -> pl.LazyFrame:
+def add_season(
+    df: pl.LazyFrame, datetime_col: str = "datetime"
+) -> pl.LazyFrame:
     return (
         df.with_columns(season=pl.col(datetime_col).dt.month() % 12 // 3 + 1)
         .with_columns(
@@ -19,7 +22,9 @@ def add_season(df: pl.LazyFrame, datetime_col: str = "datetime") -> pl.LazyFrame
         .with_columns(
             pl.col("season")
             .cast(str)
-            .replace({1: "winter", 2: "spring", 3: "summer", 4: "fall", 0: "fall"})
+            .replace(
+                {1: "winter", 2: "spring", 3: "summer", 4: "fall", 0: "fall"}
+            )
         )
     )
 
@@ -51,14 +56,22 @@ def seasonal_stats(
         .select(pl.all().repeat_by(with_season.shape[0]).flatten())
     )
     season_stats = (
-        (with_season.select(pl.exclude("datetime", "season")) >= filter_condition)
+        (
+            with_season.select(pl.exclude("datetime", "season"))
+            >= filter_condition
+        )
         if high_low == "high"
-        else (with_season.select(pl.exclude("datetime", "season")) <= filter_condition)
+        else (
+            with_season.select(pl.exclude("datetime", "season"))
+            <= filter_condition
+        )
     )
 
     # Collect stats per season
     season_stats = (
-        season_stats.with_columns(season=with_season.select("season")["season"])
+        season_stats.with_columns(
+            season=with_season.select("season")["season"]
+        )
         .group_by("season")
         .sum()
     )
@@ -71,7 +84,9 @@ def calculate_seasonal_stats(dfs: dict[str, pl.DataFrame]) -> pl.DataFrame:
         (
             seasonal_stats(df)
             .with_columns(
-                pl.exclude("season").truediv(df.select(pl.len()).collect().item()),
+                pl.exclude("season").truediv(
+                    df.select(pl.len()).collect().item()
+                ),
                 pl.lit(name).alias("name"),
             )
             .unpivot(index=["season", "name"])
@@ -83,7 +98,12 @@ def calculate_seasonal_stats(dfs: dict[str, pl.DataFrame]) -> pl.DataFrame:
 
 def print_seasonal_stats(df):
     print(
-        df.pivot(on="name", index="season", values="value", aggregate_function="median")
+        df.pivot(
+            on="name",
+            index="season",
+            values="value",
+            aggregate_function="median",
+        )
     )
 
 
@@ -102,8 +122,12 @@ def pairwise_seasonal_kstest(df: pl.DataFrame, a: str, b: str) -> pl.Series:
     return pl.Series(
         [
             kstest(
-                df.filter(pl.col("season") == season, pl.col("name") == a)["value"],
-                df.filter(pl.col("season") == season, pl.col("name") == b)["value"],
+                df.filter(pl.col("season") == season, pl.col("name") == a)[
+                    "value"
+                ],
+                df.filter(pl.col("season") == season, pl.col("name") == b)[
+                    "value"
+                ],
             ).statistic
             for season in ["spring", "summer", "fall", "winter"]
         ]
