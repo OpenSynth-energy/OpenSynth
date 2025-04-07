@@ -108,7 +108,7 @@ def print_seasonal_stats(df):
 
 
 def plot_seasonal_stats(df):
-    sns.boxplot(
+    ax = sns.boxplot(
         data=df,
         hue="name",
         x="season",
@@ -116,6 +116,7 @@ def plot_seasonal_stats(df):
         order=["winter", "spring", "summer", "fall"],
         fliersize=0,
     )
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
 
 
 def pairwise_seasonal_kstest(df: pl.DataFrame, a: str, b: str) -> pl.Series:
