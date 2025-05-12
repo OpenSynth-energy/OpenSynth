@@ -29,7 +29,7 @@ def add_season(
     )
 
 
-def seasonal_stats(
+def seasonal_peaks(
     df: pl.LazyFrame | pl.DataFrame | pd.DataFrame,
     datetime_col: str = "datetime",
     high_low: Literal["high", "low"] = "high",
@@ -79,10 +79,20 @@ def seasonal_stats(
     return season_stats
 
 
-def calculate_seasonal_stats(dfs: dict[str, pl.DataFrame]) -> pl.DataFrame:
+def calculate_seasonal_peaks(
+    dfs: dict[str, pl.LazyFrame],
+    datetime_col: str = "datetime",
+    high_low: Literal["high", "low"] = "high",
+    quantile: float = 0.2,
+) -> pl.DataFrame:
     result = [
         (
-            seasonal_stats(df)
+            seasonal_peaks(
+                df,
+                datetime_col=datetime_col,
+                high_low=high_low,
+                quantile=quantile,
+            )
             .with_columns(
                 pl.exclude("season").truediv(
                     df.select(pl.len()).collect().item()
@@ -96,18 +106,25 @@ def calculate_seasonal_stats(dfs: dict[str, pl.DataFrame]) -> pl.DataFrame:
     return pl.concat(result, how="vertical")
 
 
-def print_seasonal_stats(df):
+def print_seasonal_stats(
+    df: pl.DataFrame,
+    aggregate_function: (
+        Literal["min", "max", "first", "last", "sum", "mean", "median", "len"]
+        | pl.Expr
+        | None
+    ) = "median",
+):
     print(
         df.pivot(
             on="name",
             index="season",
             values="value",
-            aggregate_function="median",
+            aggregate_function=aggregate_function,
         )
     )
 
 
-def plot_seasonal_stats(df):
+def plot_seasonal_stats(df: pl.DataFrame):
     ax = sns.boxplot(
         data=df,
         hue="name",
@@ -117,19 +134,25 @@ def plot_seasonal_stats(df):
         fliersize=0,
     )
     sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
+    sns.despine()
 
 
-def pairwise_seasonal_kstest(df: pl.DataFrame, a: str, b: str) -> pl.Series:
-    return pl.Series(
+def pairwise_seasonal_kstest(df: pl.DataFrame, a: str, b: str) -> pl.DataFrame:
+    return pl.concat(
         [
-            kstest(
-                df.filter(pl.col("season") == season, pl.col("name") == a)[
-                    "value"
-                ],
-                df.filter(pl.col("season") == season, pl.col("name") == b)[
-                    "value"
-                ],
-            ).statistic
+            pl.DataFrame(
+                kstest(
+                    df.filter(pl.col("season") == season, pl.col("name") == a)[
+                        "value"
+                    ],
+                    df.filter(pl.col("season") == season, pl.col("name") == b)[
+                        "value"
+                    ],
+                )
+            )
+            .transpose()
+            .rename({"column_0": "statistic", "column_1": "p_value"})
+            .with_columns(season=pl.lit(season))
             for season in ["spring", "summer", "fall", "winter"]
         ]
     )
