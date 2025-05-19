@@ -24,6 +24,17 @@ logger = logging.getLogger(__name__)
 def load_lcl_data_by_year(
     fname: Path | str | None = None, year: int = 2013
 ) -> pl.DataFrame:
+    """Load LCL data for a specific year.
+
+    Returns a DataFrame in wide format. The first column contains the timestamp.
+
+    ArgsL
+        fname (str or Path): Location of the `train.csv` data file.
+        year (int): Year to load.
+
+    Returns:
+        pl.DataFrame with KWH/hh measurements.  
+    """
     fname = (
         Path(__file__).parents[0] / "../../../../data/raw/historical/train.csv"
         if fname is None
@@ -74,6 +85,23 @@ def generate_synthetic_samples(
     year: int = 2022,
     month: int | None = None,
 ) -> Generator[Tuple[date, float, float, np.typing.NDArray[np.float64]]]:
+    """Generate Faraday samples for a specific month/year combination.
+
+    Samples will be generated with a timestamp that fits the specified year and month.
+    If month is not specified, it can be any month. 
+
+    Args:
+        model (FaradayModel): Model
+        dm (LCLDataModule): Data module.
+        n_samples (int): Number of synthetic samples to generate.
+        year (int, optional): Year to use for timestamps.
+        month (int, optional): Month (1-based) to use. If generated samples do not
+            match the specified month, they will be discarded until enough samples
+            are specified that do match.
+
+    Yields:
+        Tuple with datetime, month, day_of_week, generated sample values
+    """
     if n_samples < 2:
         raise ValueError("n_samples must be higher than 1")
 
@@ -122,6 +150,23 @@ def generate_synthetic_sample_df(
     year: int = 2022,
     month: int | None = None,
 ) -> pl.DataFrame:
+    """Generate DataFrame Faraday samples for a specific month/year combination.
+
+    Samples will be generated with a timestamp that fits the specified year and month.
+    If month is not specified, it can be any month. 
+
+    Args:
+        model (FaradayModel): Model
+        dm (LCLDataModule): Data module.
+        n_samples (int): Number of synthetic samples to generate.
+        year (int, optional): Year to use for timestamps.
+        month (int, optional): Month (1-based) to use. If generated samples do not
+            match the specified month, they will be discarded until enough samples
+            are specified that do match.
+
+    Returns:
+        pl.DataFrame in wide format with datetime as first columns.
+    """
     return pl.DataFrame(
         np.array(
             [
