@@ -3,9 +3,10 @@ from calendar import monthrange
 from collections.abc import Generator
 from datetime import date
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Literal
 
 import numpy as np
+import pandas as pd
 import polars as pl
 import polars.selectors as cs
 import torch
@@ -22,8 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 def load_lcl_data_by_year(
-    fname: Path | str | None = None, year: int = 2013
-) -> pl.DataFrame:
+    fname: Path | str | None = None,
+    year: int = 2013,
+    fmt: Literal["pandas", "polars"] = "pandas",
+) -> pd.DataFrame | pl.DataFrame:
     """Load LCL data for a specific year.
 
     Returns a DataFrame in wide format. The first column contains the timestamp.
@@ -33,7 +36,7 @@ def load_lcl_data_by_year(
         year (int): Year to load.
 
     Returns:
-        pl.DataFrame with KWH/hh measurements.  
+        pl.DataFrame with KWH/hh measurements.
     """
     fname = (
         Path(__file__).parents[0] / "../../../../data/raw/historical/train.csv"
@@ -62,10 +65,7 @@ def load_lcl_data_by_year(
             .cast(pl.Float32, strict=False)
             .fill_null(0)
             .alias("kWH"),
-            pl.col("DateTime")
-            .str.slice(0, 16)
-            .str.to_datetime()
-            .alias("datetime"),
+            pl.col("DateTime").str.slice(0, 16).str.to_datetime().alias("datetime"),
         )
         .collect()
         .unique()
@@ -75,7 +75,12 @@ def load_lcl_data_by_year(
     )
 
     logger.info(f"Selecting year {year}")
-    return lcl.filter(pl.col("datetime").dt.year() == year)
+    lcl = lcl.filter(pl.col("datetime").dt.year() == year)
+
+    if fmt == "pandas":
+        return lcl.to_pandas()
+
+    return lcl
 
 
 def generate_synthetic_samples(
@@ -88,7 +93,7 @@ def generate_synthetic_samples(
     """Generate Faraday samples for a specific month/year combination.
 
     Samples will be generated with a timestamp that fits the specified year and month.
-    If month is not specified, it can be any month. 
+    If month is not specified, it can be any month.
 
     Args:
         model (FaradayModel): Model
@@ -127,12 +132,10 @@ def generate_synthetic_samples(
         try:
             if month is None or g_month == month:
                 yield (
-                    (
-                        sample_df.filter(
-                            pl.col("weekday") == dayofweek.numpy()[0] + 1,
-                            pl.col("month") == g_month,
-                        ).sample(1)["datetime"][0]
-                    ),
+                    sample_df.filter(
+                        pl.col("weekday") == dayofweek.numpy()[0] + 1,
+                        pl.col("month") == g_month,
+                    ).sample(1)["datetime"][0],
                     g_month,
                     dayofweek.numpy()[0],
                     values.detach().numpy(),
@@ -149,11 +152,12 @@ def generate_synthetic_sample_df(
     n_samples: int,
     year: int = 2022,
     month: int | None = None,
-) -> pl.DataFrame:
+    fmt: Literal["pandas", "polars"] = "pandas",
+) -> pd.DataFrame | pl.DataFrame:
     """Generate DataFrame Faraday samples for a specific month/year combination.
 
     Samples will be generated with a timestamp that fits the specified year and month.
-    If month is not specified, it can be any month. 
+    If month is not specified, it can be any month.
 
     Args:
         model (FaradayModel): Model
@@ -163,11 +167,12 @@ def generate_synthetic_sample_df(
         month (int, optional): Month (1-based) to use. If generated samples do not
             match the specified month, they will be discarded until enough samples
             are specified that do match.
+        fmt (str, optional): Either "pandas" or "polars", default is "pandas".
 
     Returns:
         pl.DataFrame in wide format with datetime as first columns.
     """
-    return pl.DataFrame(
+    df = pl.DataFrame(
         np.array(
             [
                 (datetime, m, d, *values)
@@ -177,12 +182,14 @@ def generate_synthetic_sample_df(
             ]
         ).tolist(),
         schema={"date": pl.Date, "month": int, "dayofweek": int}
-        | {
-            d: float
-            for d in [f"{i // 2:02d}{(i % 2) * 30:02d}" for i in range(48)]
-        },
+        | {d: float for d in [f"{i // 2:02d}{(i % 2) * 30:02d}" for i in range(48)]},
         orient="row",
     )
+
+    if fmt == "pandas":
+        return df.to_pandas()
+
+    return df
 
 
 def generate_full_synthetic_month(
@@ -190,11 +197,29 @@ def generate_full_synthetic_month(
     dm: LCLDataModule,
     year: int,
     month: int,
-    n_samples: int = 1,
-) -> pl.DataFrame:
+    n_samples: int = 2,
+    fmt: Literal["pandas", "polars"] = "pandas",
+) -> pd.DataFrame | pl.DataFrame:
+    """Generate DataFrame Faraday samples for a specific month.
+
+    Samples will be generated with a timestamp that fits the specified month.
+
+    Args:
+        model (FaradayModel): Model
+        dm (LCLDataModule): Data module.
+        year (int, optional): Year to use for timestamps.
+        month (int, optional): Month (1-based) to use. If generated samples do not
+            match the specified month, they will be discarded until enough samples
+            are specified that do match.
+        n_samples (int): Number of synthetic samples to generate.
+        fmt (str, optional): Either "pandas" or "polars", default is "pandas".
+
+    Returns:
+        pl.DataFrame in wide format with datetime as first columns.
+    """
     batch_size = 1000
     df = generate_synthetic_sample_df(
-        model, dm, batch_size, year=year, month=month
+        model, dm, batch_size, year=year, month=month, fmt="polars"
     )
 
     while (
@@ -205,38 +230,69 @@ def generate_full_synthetic_month(
             (
                 df,
                 generate_synthetic_sample_df(
-                    model, dm, batch_size, year=year, month=month
+                    model,
+                    dm,
+                    batch_size,
+                    year=year,
+                    month=month,
+                    fmt="polars",
                 ),
             )
         )
-    return pl.concat(
+    df = pl.concat(
         [p.sample(n_samples).with_row_index() for p in df.partition_by("date")]
     )
 
+    if fmt == "pandas":
+        return df.to_pandas()
+
+    return df
+
 
 def generate_full_synthetic_year(
-    model: FaradayModel, dm: LCLDataModule, year: int, n_samples: int = 1
-) -> pl.DataFrame:
+    model: FaradayModel,
+    dm: LCLDataModule,
+    year: int,
+    n_samples: int = 2,
+    fmt: Literal["pandas", "polars"] = "pandas",
+) -> pd.DataFrame | pl.DataFrame:
+    """Generate DataFrame Faraday samples for a specific year.
+
+    Samples will be generated with all timesteps for all months in the specified year.
+
+    Args:
+        model (FaradayModel): Model
+        dm (LCLDataModule): Data module.
+        year (int, optional): Year to use for timestamps.
+        n_samples (int): Number of synthetic samples to generate.
+        fmt (str, optional): Either "pandas" or "polars", default is "pandas".
+
+    Returns:
+        pl.DataFrame in wide format with datetime as first columns.
+    """
     df = pl.concat(
         [
             generate_full_synthetic_month(
-                model, dm, year, month, n_samples=n_samples
+                model, dm, year, month, n_samples=n_samples, fmt="polars"
             )
             for month in tqdm(range(1, 13))
         ]
     )
-    return (
+    df = (
         semiwide_to_wide(
             df.select(pl.exclude("month", "dayofweek")),
             date_col="date",
             datetime_name="datetime",
         )
         .with_columns(pl.col("index").cast(str))
-        .transpose(
-            column_names="index", include_header=True, header_name="datetime"
-        )
+        .transpose(column_names="index", include_header=True, header_name="datetime")
         .with_columns(pl.col("datetime").str.to_datetime())
     )
+
+    if fmt == "pandas":
+        return df.to_pandas()
+
+    return df
 
 
 def infer_date_column(df: pl.DataFrame) -> str:
@@ -260,16 +316,12 @@ def infer_date_column(df: pl.DataFrame) -> str:
 
     """
     date_columns = df.select(pl.col(pl.Date)).columns
-    date_columns = list(
-        set(df.columns).intersection(DATE_COLUMNS).union(date_columns)
-    )
+    date_columns = list(set(df.columns).intersection(DATE_COLUMNS).union(date_columns))
     canonical_columns = set(DATE_COLUMNS).intersection(date_columns)
 
     match len(date_columns):
         case 0:
-            raise ValueError(
-                "No Date or Date-like columns found in DataFrame!"
-            )
+            raise ValueError("No Date or Date-like columns found in DataFrame!")
         case 1:
             return date_columns[0]
         case _ if len(canonical_columns) == 1:
@@ -314,9 +366,7 @@ def semiwide_to_long(
     """
     on = df.select(cs.matches(r"^\d\d\d\d$")).columns if on is None else on
     date_col = infer_date_column(df) if date_col is None else date_col
-    datetime_name = (
-        DATETIME_COLUMNS[0] if datetime_name is None else datetime_name
-    )
+    datetime_name = DATETIME_COLUMNS[0] if datetime_name is None else datetime_name
     value_name = "value" if value_name is None else value_name
 
     if str(df.select(date_col).dtypes[0]) == "String":
@@ -329,11 +379,7 @@ def semiwide_to_long(
             value_name=value_name,
         )
         .with_columns(
-            (
-                pl.col(date_col).dt.strftime("%Y-%m-%d")
-                + " "
-                + pl.col("variable")
-            )
+            (pl.col(date_col).dt.strftime("%Y-%m-%d") + " " + pl.col("variable"))
             .str.to_datetime(time_unit="ns", time_zone="UTC")
             .alias(datetime_name),
         )
@@ -375,18 +421,12 @@ def semiwide_to_wide(
 
     """
     date_col = infer_date_column(df) if date_col is None else date_col
-    datetime_name = (
-        DATETIME_COLUMNS[0] if datetime_name is None else datetime_name
-    )
+    datetime_name = DATETIME_COLUMNS[0] if datetime_name is None else datetime_name
 
     return (
-        semiwide_to_long(
-            df, on=on, date_col=date_col, datetime_name=datetime_name
-        )
+        semiwide_to_long(df, on=on, date_col=date_col, datetime_name=datetime_name)
         .with_columns(
-            pl.col(datetime_name)
-            .dt.strftime("%Y-%m-%d %H:%M")
-            .alias(datetime_name)
+            pl.col(datetime_name).dt.strftime("%Y-%m-%d %H:%M").alias(datetime_name)
         )
         .pivot(on=datetime_name, values="value", aggregate_function="first")
     )
