@@ -3,7 +3,7 @@ from calendar import monthrange
 from collections.abc import Generator
 from datetime import date
 from pathlib import Path
-from typing import Optional, Tuple, Literal
+from typing import Literal, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -45,7 +45,8 @@ def load_lcl_data_by_year(
     )
     if not fname.exists():
         raise ValueError(
-            "LCL dataset not found, please download it or supply correct path to train.csv"
+            "LCL dataset not found, "
+            "please download it or supply correct path to train.csv"
         )
 
     logger.info(f"Loading LCL data from {str(fname.resolve())}...")
@@ -65,7 +66,10 @@ def load_lcl_data_by_year(
             .cast(pl.Float32, strict=False)
             .fill_null(0)
             .alias("kWH"),
-            pl.col("DateTime").str.slice(0, 16).str.to_datetime().alias("datetime"),
+            pl.col("DateTime")
+            .str.slice(0, 16)
+            .str.to_datetime()
+            .alias("datetime"),
         )
         .collect()
         .unique()
@@ -89,7 +93,9 @@ def generate_synthetic_samples(
     n_samples: int,
     year: int = 2022,
     month: int | None = None,
-) -> Generator[Tuple[date, float, float, np.typing.NDArray[np.float64]]]:
+) -> Generator[
+    Tuple[date, float, float, np.typing.NDArray[np.float64]], None, None
+]:
     """Generate Faraday samples for a specific month/year combination.
 
     Samples will be generated with a timestamp that fits the specified year and month.
@@ -182,7 +188,10 @@ def generate_synthetic_sample_df(
             ]
         ).tolist(),
         schema={"date": pl.Date, "month": int, "dayofweek": int}
-        | {d: float for d in [f"{i // 2:02d}{(i % 2) * 30:02d}" for i in range(48)]},
+        | {
+            d: float
+            for d in [f"{i // 2:02d}{(i % 2) * 30:02d}" for i in range(48)]
+        },
         orient="row",
     )
 
@@ -285,7 +294,9 @@ def generate_full_synthetic_year(
             datetime_name="datetime",
         )
         .with_columns(pl.col("index").cast(str))
-        .transpose(column_names="index", include_header=True, header_name="datetime")
+        .transpose(
+            column_names="index", include_header=True, header_name="datetime"
+        )
         .with_columns(pl.col("datetime").str.to_datetime())
     )
 
@@ -316,12 +327,16 @@ def infer_date_column(df: pl.DataFrame) -> str:
 
     """
     date_columns = df.select(pl.col(pl.Date)).columns
-    date_columns = list(set(df.columns).intersection(DATE_COLUMNS).union(date_columns))
+    date_columns = list(
+        set(df.columns).intersection(DATE_COLUMNS).union(date_columns)
+    )
     canonical_columns = set(DATE_COLUMNS).intersection(date_columns)
 
     match len(date_columns):
         case 0:
-            raise ValueError("No Date or Date-like columns found in DataFrame!")
+            raise ValueError(
+                "No Date or Date-like columns found in DataFrame!"
+            )
         case 1:
             return date_columns[0]
         case _ if len(canonical_columns) == 1:
@@ -347,18 +362,20 @@ def semiwide_to_long(
     default in "%HH%mm" format.
 
     Args:
-        df (polars.DataFrame): DataFrame in semi-wide wide format, containing DateTime-compatible
-            column names.
-        on (list, optional): Columns to use as timepoints. By default, all columns that match the pattern
-            '[0-9][0-9][0-9][0-9]' will be used.
+        df (polars.DataFrame): DataFrame in semi-wide wide format, containing DateTime-
+            compatible column names.
+        on (list, optional): Columns to use as timepoints. By default, all columns that
+            match the pattern '[0-9][0-9][0-9][0-9]' will be used.
         date_col (str, optional): Column that contains the Date values. By default,
-            a column that is in Date format, or that is a Date-compatible string, will be used,
-            if there is only one column in that format. If there are multiple Date-compatible,
-            columns, but only one matches a canonical name such as DATUM, that column will be
-            used. Otherwise, this method will fail, and the date_col needs to be explicitly specified.
-        datetime_name (str, optional): Name for the DateTime column in the long DataFrame,
-            "DATUM_TIJD" by default.
-        value_name (str, optional): Name to give to the value column. Defaults to "value".
+            a column that is in Date format, or that is a Date-compatible string, will
+            be used, if there is only one column in that format. If there are multiple
+            Date-compatible, columns, but only one matches a canonical name such as
+            DATUM, that column will be used. Otherwise, this method will fail, and the
+            date_col needs to be explicitly specified.
+        datetime_name (str, optional): Name for the DateTime column in the long
+            DataFrame, "DATUM_TIJD" by default.
+        value_name (str, optional): Name to give to the value column. Defaults to
+            "value".
 
     Returns:
         polars.DataFrame in long format.
@@ -366,7 +383,9 @@ def semiwide_to_long(
     """
     on = df.select(cs.matches(r"^\d\d\d\d$")).columns if on is None else on
     date_col = infer_date_column(df) if date_col is None else date_col
-    datetime_name = DATETIME_COLUMNS[0] if datetime_name is None else datetime_name
+    datetime_name = (
+        DATETIME_COLUMNS[0] if datetime_name is None else datetime_name
+    )
     value_name = "value" if value_name is None else value_name
 
     if str(df.select(date_col).dtypes[0]) == "String":
@@ -379,7 +398,11 @@ def semiwide_to_long(
             value_name=value_name,
         )
         .with_columns(
-            (pl.col(date_col).dt.strftime("%Y-%m-%d") + " " + pl.col("variable"))
+            (
+                pl.col(date_col).dt.strftime("%Y-%m-%d")
+                + " "
+                + pl.col("variable")
+            )
             .str.to_datetime(time_unit="ns", time_zone="UTC")
             .alias(datetime_name),
         )
@@ -404,29 +427,36 @@ def semiwide_to_wide(
     default in "%HH%mm" format.
 
     Args:
-        df (polars.DataFrame): DataFrame in semi-wide wide format, containing DateTime-compatible
-            column names.
-        on (list, optional): Columns to use as timepoints. By default, all columns that match the pattern
-            '[0-9][0-9][0-9][0-9]' will be used.
+        df (polars.DataFrame): DataFrame in semi-wide wide format, containing
+            DateTime-compatible column names.
+        on (list, optional): Columns to use as timepoints. By default, all
+            columns that match the pattern '[0-9][0-9][0-9][0-9]' will be used.
         date_col (str, optional): Column that contains the Date values. By default,
-            a column that is in Date format, or that is a Date-compatible string, will be used,
-            if there is only one column in that format. If there are multiple Date-compatible,
-            columns, but only one matches a canonical name such as DATUM, that column will be
-            used. Otherwise, this method will fail, and the date_col needs to be explicitly specified.
-        datetime_name (str, optional): Name for the DateTime column in the long DataFrame,
-            "DATUM_TIJD" by default.
+            a column that is in Date format, or that is a Date-compatible string,
+            will be used, if there is only one column in that format. If there are
+            multiple Date-compatible, columns, but only one matches a canonical name
+            such as DATUM, that column will be used. Otherwise, this method will fail,
+            and the date_col needs to be explicitly specified.
+        datetime_name (str, optional): Name for the DateTime column in the long
+            DataFrame, "datetime" by default.
 
     Returns:
         polars.DataFrame in wide format.
 
     """
     date_col = infer_date_column(df) if date_col is None else date_col
-    datetime_name = DATETIME_COLUMNS[0] if datetime_name is None else datetime_name
+    datetime_name = (
+        DATETIME_COLUMNS[0] if datetime_name is None else datetime_name
+    )
 
     return (
-        semiwide_to_long(df, on=on, date_col=date_col, datetime_name=datetime_name)
+        semiwide_to_long(
+            df, on=on, date_col=date_col, datetime_name=datetime_name
+        )
         .with_columns(
-            pl.col(datetime_name).dt.strftime("%Y-%m-%d %H:%M").alias(datetime_name)
+            pl.col(datetime_name)
+            .dt.strftime("%Y-%m-%d %H:%M")
+            .alias(datetime_name)
         )
         .pivot(on=datetime_name, values="value", aggregate_function="first")
     )

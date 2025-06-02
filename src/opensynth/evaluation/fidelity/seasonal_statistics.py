@@ -49,7 +49,9 @@ def _(
         .with_columns(
             pl.col("season")
             .cast(str)
-            .replace({1: "winter", 2: "spring", 3: "summer", 4: "fall", 0: "fall"})
+            .replace(
+                {1: "winter", 2: "spring", 3: "summer", 4: "fall", 0: "fall"}
+            )
         )
     )
 
@@ -73,10 +75,10 @@ def seasonal_peaks(
     Args:
         df (DataFrame): Input DataFrame or LazyFrame.
         datetime_col (str, optional): Name of the column used as a datetime column
-            ("datetime" by default). If `df` is a pandas DataFrame, `datetime_col` can also
-            be the name of the index.
-        high_low (str, optional): Either "high" or "low". Determines if the seasonal peaks are
-            calculated for the high or for low peaks. Default is "high".
+            ("datetime" by default). If `df` is a pandas DataFrame, `datetime_col` can
+            also be the name of the index.
+        high_low (str, optional): Either "high" or "low". Determines if the seasonal
+            peaks are calculated for the high or for low peaks. Default is "high".
         quantile (float, option): Quantile used to determine peaks. Default is 0.2 / 0.8.
 
     Returns:
@@ -108,14 +110,22 @@ def _(
     )
 
     season_stats = (
-        (with_season.select(pl.exclude("datetime", "season")) >= filter_condition)
+        (
+            with_season.select(pl.exclude("datetime", "season"))
+            >= filter_condition
+        )
         if high_low == "high"
-        else (with_season.select(pl.exclude("datetime", "season")) <= filter_condition)
+        else (
+            with_season.select(pl.exclude("datetime", "season"))
+            <= filter_condition
+        )
     )
 
     # Collect stats per season
     season_stats = (
-        season_stats.with_columns(season=with_season.select("season")["season"])
+        season_stats.with_columns(
+            season=with_season.select("season")["season"]
+        )
         .group_by("season")
         .sum()
     )
@@ -170,10 +180,10 @@ def calculate_seasonal_peaks(
     Args:
         dfs (dict): Input with name (`str`) as key and DataFrame or LazyFrame as value.
         datetime_col (str, optional): Name of the column used as a datetime column
-            ("datetime" by default). If `df` is a pandas DataFrame, `datetime_col` can also
-            be the name of the index.
-        high_low (str, optional): Either "high" or "low". Determines if the seasonal peaks are
-            calculated for the high or for low peaks. Default is "high".
+            ("datetime" by default). If `df` is a pandas DataFrame, `datetime_col` can
+            also be the name of the index.
+        high_low (str, optional): Either "high" or "low". Determines if the seasonal
+            peaks are calculated for the high or for low peaks. Default is "high".
         quantile (float, option): Quantile used to determine peaks. Default is 0.2 / 0.8.
 
     Returns:
@@ -195,7 +205,8 @@ def calculate_seasonal_peaks(
     ]
 
     result = [
-        pl.from_pandas(df) if isinstance(df, pd.DataFrame) else df for df in result
+        pl.from_pandas(df) if isinstance(df, pd.DataFrame) else df
+        for df in result
     ]
     result = [
         (
@@ -257,7 +268,9 @@ def _(
         | None
     ) = "median",
 ) -> None:
-    print_seasonal_stats(pl.from_pandas(df), aggregate_function=aggregate_function)
+    print_seasonal_stats(
+        pl.from_pandas(df), aggregate_function=aggregate_function
+    )
 
 
 def plot_seasonal_stats(df: pd.DataFrame | pl.DataFrame) -> None:
@@ -304,8 +317,12 @@ def _(df: pl.DataFrame, a: str, b: str) -> pl.DataFrame:
         [
             pl.DataFrame(
                 kstest(
-                    df.filter(pl.col("season") == season, pl.col("name") == a)["value"],
-                    df.filter(pl.col("season") == season, pl.col("name") == b)["value"],
+                    df.filter(pl.col("season") == season, pl.col("name") == a)[
+                        "value"
+                    ],
+                    df.filter(pl.col("season") == season, pl.col("name") == b)[
+                        "value"
+                    ],
                 )
             )
             .transpose()

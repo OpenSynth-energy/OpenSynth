@@ -33,7 +33,9 @@ def calculate_auto_correlation_for_column(
 
 @calculate_auto_correlation_for_column.register
 def _(df: pl.DataFrame, column: str, datetime_col="datetime", shifts=None):
-    per_hour = int(datetime.timedelta(seconds=3600) / df[datetime_col].diff().mode()[0])
+    per_hour = int(
+        datetime.timedelta(seconds=3600) / df[datetime_col].diff().mode()[0]
+    )
 
     default_shifts = {
         "hour": per_hour,
@@ -46,10 +48,18 @@ def _(df: pl.DataFrame, column: str, datetime_col="datetime", shifts=None):
     shifts = default_shifts if shifts is None else shifts
     result = {}
     for time_delta, delta in shifts.items():
+        if delta > df.shape[0]:
+            result[time_delta] = np.nan
+            continue
+
         tmp = df.select(column).with_columns(
             pl.col(column).shift(delta).alias(time_delta)
         )
+        # print("TMP", tmp)
         nrows = tmp.shape[0] - delta
+        # print("NROWS:", nrows)
+        # print(tmp[column].tail(nrows).fill_null(0))
+        # print(tmp[time_delta].tail(nrows).fill_null(0))
         result[time_delta] = pearsonr(
             tmp[column].tail(nrows).fill_null(0),
             tmp[time_delta].tail(nrows).fill_null(0),
@@ -94,7 +104,12 @@ def _(df: pl.LazyFrame | pl.DataFrame, datetime_col="datetime", shifts=None):
     columns = df.select(pl.exclude(datetime_col)).columns
 
     return pl.concat(
-        [calculate_auto_correlation_for_column(df, col) for col in columns]
+        [
+            calculate_auto_correlation_for_column(
+                df, col, datetime_col=datetime_col, shifts=shifts
+            )
+            for col in columns
+        ]
     )
 
 
@@ -142,7 +157,8 @@ def calculate_auto_correlation(
     ]
 
     result = [
-        pl.from_pandas(df) if isinstance(df, pd.DataFrame) else df for df in result
+        pl.from_pandas(df) if isinstance(df, pd.DataFrame) else df
+        for df in result
     ]
 
     corr_metrics = pl.concat(
@@ -213,4 +229,6 @@ def _(df: pl.DataFrame, a: str, b: str) -> pl.DataFrame:
 
 @pairwise_autocorrelation_kstest.register
 def _(df: pd.DataFrame, a: str, b: str) -> pd.DataFrame:
-    return pairwise_autocorrelation_kstest(pl.from_pandas(df), a=a, b=b).to_pandas()
+    return pairwise_autocorrelation_kstest(
+        pl.from_pandas(df), a=a, b=b
+    ).to_pandas()
