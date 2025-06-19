@@ -35,7 +35,7 @@ def split_household_ids(
     random.shuffle(unique_ids)
 
     train_ids = unique_ids[:sample_size]
-    holdout_ids = unique_ids[-sample_size:]
+    holdout_ids = unique_ids[sample_size:]
 
     return train_ids, holdout_ids
 
