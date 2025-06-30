@@ -31,7 +31,7 @@ def load_lcl_data_by_year(
 
     Returns a DataFrame in wide format. The first column contains the timestamp.
 
-    ArgsL
+    Args:
         fname (str or Path): Location of the `train.csv` data file.
         year (int): Year to load.
 
@@ -44,7 +44,7 @@ def load_lcl_data_by_year(
         else Path(fname)
     )
     if not fname.exists():
-        raise ValueError(
+        raise FileNotFoundError(
             "LCL dataset not found, "
             "please download it or supply correct path to train.csv"
         )
