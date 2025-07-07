@@ -9,7 +9,7 @@ from scipy.stats import kstest
 
 
 @singledispatch
-def add_season(   # pragma: no cover
+def add_season(  # pragma: no cover
     df,
     datetime_col,
 ):
@@ -64,7 +64,7 @@ def _(df: pd.DataFrame, datetime_col: str = "datetime") -> pd.DataFrame:
 
 
 @singledispatch
-def seasonal_peaks(   # pragma: no cover
+def seasonal_peaks(  # pragma: no cover
     df,
     datetime_col: str = "datetime",
     high_low: Literal["high", "low"] = "high",

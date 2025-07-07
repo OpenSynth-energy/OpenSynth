@@ -80,7 +80,9 @@ def _(df: pd.DataFrame, column: str, datetime_col="datetime", shifts=None):
 
 
 @singledispatch
-def calculate_auto_correlation_for_dataframe(df, datetime_col, shifts):  # pragma: no cover
+def calculate_auto_correlation_for_dataframe(
+    df, datetime_col, shifts
+):  # pragma: no cover
     """Calculate auto-correlation values for all columns in a DataFrame.
 
     Args:
@@ -188,7 +190,7 @@ def plot_autocorrelation_stats(df: pd.DataFrame | pl.DataFrame):
 
 
 @singledispatch
-def pairwise_autocorrelation_kstest(df, a: str, b: str): # pragma: no cover
+def pairwise_autocorrelation_kstest(df, a: str, b: str):  # pragma: no cover
     """Pairwise Kolmogorov-Smirnov test of the auto-correlation resuls.
 
     Test the distribution of correlation values between two data sets in the input
