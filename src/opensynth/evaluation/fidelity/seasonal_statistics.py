@@ -9,7 +9,7 @@ from scipy.stats import kstest
 
 
 @singledispatch
-def add_season(
+def add_season(   # pragma: no cover
     df,
     datetime_col,
 ):
@@ -64,7 +64,7 @@ def _(df: pd.DataFrame, datetime_col: str = "datetime") -> pd.DataFrame:
 
 
 @singledispatch
-def seasonal_peaks(
+def seasonal_peaks(   # pragma: no cover
     df,
     datetime_col: str = "datetime",
     high_low: Literal["high", "low"] = "high",
@@ -226,7 +226,7 @@ def calculate_seasonal_peaks(
 
 
 @singledispatch
-def print_seasonal_stats(
+def print_seasonal_stats(  # pragma: no cover
     df,
     aggregate_function,
 ) -> None:
@@ -293,7 +293,7 @@ def plot_seasonal_stats(df: pd.DataFrame | pl.DataFrame) -> None:
 
 
 @singledispatch
-def pairwise_seasonal_kstest(df, a: str, b: str):
+def pairwise_seasonal_kstest(df, a: str, b: str):  # pragma: no cover
     """Pairwise Kolmogorov-Smirnov test of the seasonal peaks.
 
     Test the distribution of peak number between two data sets in the input
