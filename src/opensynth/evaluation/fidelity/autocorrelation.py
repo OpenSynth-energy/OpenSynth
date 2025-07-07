@@ -7,10 +7,15 @@ import polars as pl
 import seaborn as sns
 from scipy.stats import kstest, pearsonr
 
+ShiftsType = dict[str, int] | None
+
 
 @singledispatch
 def calculate_auto_correlation_for_column(  # pragma: no cover
-    df, column, datetime_col="datetime", shifts=None
+    df: pl.DataFrame | pd.DataFrame,
+    column: str,
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
 ):
     """Generate auto-correlation values for different time windows.
 
@@ -32,7 +37,12 @@ def calculate_auto_correlation_for_column(  # pragma: no cover
 
 
 @calculate_auto_correlation_for_column.register
-def _(df: pl.DataFrame, column: str, datetime_col="datetime", shifts=None):
+def _(
+    df: pl.DataFrame,
+    column: str,
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
+) -> pl.DataFrame:
     per_hour = int(
         datetime.timedelta(seconds=3600) / df[datetime_col].diff().mode()[0]
     )
@@ -69,7 +79,12 @@ def _(df: pl.DataFrame, column: str, datetime_col="datetime", shifts=None):
 
 
 @calculate_auto_correlation_for_column.register
-def _(df: pd.DataFrame, column: str, datetime_col="datetime", shifts=None):
+def _(
+    df: pd.DataFrame,
+    column: str,
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
+) -> pd.DataFrame:
     include_index = isinstance(df.index, pd.DatetimeIndex)
     return calculate_auto_correlation_for_column(
         pl.from_pandas(df, include_index=include_index),
@@ -81,7 +96,9 @@ def _(df: pd.DataFrame, column: str, datetime_col="datetime", shifts=None):
 
 @singledispatch
 def calculate_auto_correlation_for_dataframe(
-    df, datetime_col, shifts
+    df: pd.DataFrame | pl.DataFrame | pl.LazyFrame,
+    datetime_col: str,
+    shifts: ShiftsType,
 ):  # pragma: no cover
     """Calculate auto-correlation values for all columns in a DataFrame.
 
@@ -100,7 +117,11 @@ def calculate_auto_correlation_for_dataframe(
 
 
 @calculate_auto_correlation_for_dataframe.register
-def _(df: pl.LazyFrame | pl.DataFrame, datetime_col="datetime", shifts=None):
+def _(
+    df: pl.LazyFrame | pl.DataFrame,
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
+) -> pl.DataFrame:
     df = df.sort(datetime_col)
     df = df.collect() if isinstance(df, pl.LazyFrame) else df
     columns = df.select(pl.exclude(datetime_col)).columns
@@ -116,7 +137,9 @@ def _(df: pl.LazyFrame | pl.DataFrame, datetime_col="datetime", shifts=None):
 
 
 @calculate_auto_correlation_for_dataframe.register
-def _(df: pd.DataFrame, datetime_col="datetime", shifts=None):
+def _(
+    df: pd.DataFrame, datetime_col: str = "datetime", shifts: ShiftsType = None
+) -> pd.DataFrame:
     include_index = isinstance(df.index, pd.DatetimeIndex)
     return calculate_auto_correlation_for_dataframe(
         pl.from_pandas(df, include_index=include_index),
@@ -127,9 +150,9 @@ def _(df: pd.DataFrame, datetime_col="datetime", shifts=None):
 
 def calculate_auto_correlation(
     dfs: dict[str, pd.DataFrame | pl.DataFrame | pl.LazyFrame],
-    datetime_col="datetime",
-    shifts=None,
-):
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
+) -> pd.DataFrame | pl.DataFrame:
     """Calculate auto-correlation values for all columns in a DataFrame.
 
     Args:
@@ -178,7 +201,7 @@ def calculate_auto_correlation(
     return corr_metrics
 
 
-def plot_autocorrelation_stats(df: pd.DataFrame | pl.DataFrame):
+def plot_autocorrelation_stats(df: pd.DataFrame | pl.DataFrame) -> None:
     """CDF plot of the auto-correlation results.
 
     Args:
