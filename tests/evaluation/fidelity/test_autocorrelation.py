@@ -3,7 +3,11 @@ from datetime import datetime
 import numpy as np
 import polars as pl
 import pytest
-from numpy.testing import assert_almost_equal, assert_array_almost_equal, assert_allclose
+from numpy.testing import (
+    assert_allclose,
+    assert_almost_equal,
+    assert_array_almost_equal,
+)
 
 from opensynth.evaluation.fidelity.autocorrelation import (
     calculate_auto_correlation,
@@ -218,18 +222,15 @@ def test_calculate_auto_correlation_for_dataframe(
 @pytest.mark.parametrize(
     "df_fixture",
     (
-        "test_dataframe_half_hour", 
+        "test_dataframe_half_hour",
         "test_dataframe_half_hour_pandas",
-
     ),
 )
 def test_calculate_auto_correlation(df_fixture, request):
     df = request.getfixturevalue(df_fixture)
 
-    result = calculate_auto_correlation({"df1":df, "df2":df})
-    assert result.shape == (20,3)
-    assert list(sorted(result['name'].unique())) == ["df1", "df2"]
-    values = np.array(result['correlation'])
+    result = calculate_auto_correlation({"df1": df, "df2": df})
+    assert result.shape == (20, 3)
+    assert list(sorted(result["name"].unique())) == ["df1", "df2"]
+    values = np.array(result["correlation"])
     assert_allclose(values[~np.isnan(values)], 1, atol=0.02)
-
-
