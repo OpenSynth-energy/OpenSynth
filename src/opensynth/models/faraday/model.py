@@ -102,7 +102,7 @@ class FaradayModel:
 
     @staticmethod
     def get_feature_range(
-        features: dict[str, torch.Tensor]
+        features: dict[str, torch.Tensor],
     ) -> dict[str, dict[str, int]]:
         """
         Get the max and min values of numerically encoded features

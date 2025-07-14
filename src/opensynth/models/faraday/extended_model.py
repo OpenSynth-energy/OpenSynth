@@ -90,8 +90,6 @@ class ExtendedFaradayModel:
                     "Invalid period, should be either 'month' or 'year'"
                 )
 
-        
-        
         return df
 
     def _generate_full_synthetic_month(
@@ -146,9 +144,8 @@ class ExtendedFaradayModel:
             ]
         )
 
-        
-        df = df.filter(pl.col('index') != df['index'].max())
- 
+        df = df.filter(pl.col("index") != df["index"].max())
+
         if fmt == "pandas":
             return df.to_pandas()
 
