@@ -1,5 +1,6 @@
 import datetime
 from functools import singledispatch
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -12,11 +13,11 @@ ShiftsType = dict[str, int] | None
 
 @singledispatch
 def calculate_auto_correlation_for_column(  # pragma: no cover
-    df: pl.DataFrame | pd.DataFrame,
+    df: Any,
     column: str,
     datetime_col: str = "datetime",
     shifts: ShiftsType = None,
-):
+) -> Any:
     """Generate auto-correlation values for different time windows.
 
     Note: input DataFrame should be sorted by the datetime column!
@@ -65,15 +66,15 @@ def _(
         tmp = df.select(column).with_columns(
             pl.col(column).shift(delta).alias(time_delta)
         )
-        # print("TMP", tmp)
+
         nrows = tmp.shape[0] - delta
-        # print("NROWS:", nrows)
-        # print(tmp[column].tail(nrows).fill_null(0))
-        # print(tmp[time_delta].tail(nrows).fill_null(0))
-        result[time_delta] = pearsonr(
-            tmp[column].tail(nrows).fill_null(0),
-            tmp[time_delta].tail(nrows).fill_null(0),
-        )[0]
+
+        result[time_delta] = float(
+            pearsonr(
+                tmp[column].tail(nrows).fill_null(0),
+                tmp[time_delta].tail(nrows).fill_null(0),
+            )[0]
+        )
 
     return pl.DataFrame(result)
 
@@ -86,20 +87,23 @@ def _(
     shifts: ShiftsType = None,
 ) -> pd.DataFrame:
     include_index = isinstance(df.index, pd.DatetimeIndex)
-    return calculate_auto_correlation_for_column(
-        pl.from_pandas(df, include_index=include_index),
-        column=column,
-        datetime_col=datetime_col,
-        shifts=shifts,
+    return cast(
+        pl.DataFrame,
+        calculate_auto_correlation_for_column(
+            pl.from_pandas(df, include_index=include_index),
+            column=column,
+            datetime_col=datetime_col,
+            shifts=shifts,
+        ),
     ).to_pandas()
 
 
 @singledispatch
 def calculate_auto_correlation_for_dataframe(
-    df: pd.DataFrame | pl.DataFrame | pl.LazyFrame,
+    df: Any,
     datetime_col: str,
     shifts: ShiftsType,
-):  # pragma: no cover
+) -> Any:  # pragma: no cover
     """Calculate auto-correlation values for all columns in a DataFrame.
 
     Args:
@@ -126,13 +130,16 @@ def _(
     df = df.collect() if isinstance(df, pl.LazyFrame) else df
     columns = df.select(pl.exclude(datetime_col)).columns
 
-    return pl.concat(
-        [
-            calculate_auto_correlation_for_column(
-                df, col, datetime_col=datetime_col, shifts=shifts
-            )
-            for col in columns
-        ]
+    return cast(
+        pl.DataFrame,
+        pl.concat(
+            [
+                calculate_auto_correlation_for_column(
+                    df, col, datetime_col=datetime_col, shifts=shifts
+                )
+                for col in columns
+            ]
+        ),
     )
 
 
@@ -141,10 +148,13 @@ def _(
     df: pd.DataFrame, datetime_col: str = "datetime", shifts: ShiftsType = None
 ) -> pd.DataFrame:
     include_index = isinstance(df.index, pd.DatetimeIndex)
-    return calculate_auto_correlation_for_dataframe(
-        pl.from_pandas(df, include_index=include_index),
-        datetime_col=datetime_col,
-        shifts=shifts,
+    return cast(
+        pl.DataFrame,
+        calculate_auto_correlation_for_dataframe(
+            pl.from_pandas(df, include_index=include_index),
+            datetime_col=datetime_col,
+            shifts=shifts,
+        ),
     ).to_pandas()
 
 
@@ -196,9 +206,9 @@ def calculate_auto_correlation(
     )
 
     if fmt == "pandas":
-        return corr_metrics.to_pandas()
+        return cast(pl.DataFrame, corr_metrics).to_pandas()
 
-    return corr_metrics
+    return cast(pl.DataFrame, corr_metrics)
 
 
 def plot_autocorrelation_stats(df: pd.DataFrame | pl.DataFrame) -> None:
@@ -213,7 +223,9 @@ def plot_autocorrelation_stats(df: pd.DataFrame | pl.DataFrame) -> None:
 
 
 @singledispatch
-def pairwise_autocorrelation_kstest(df, a: str, b: str):  # pragma: no cover
+def pairwise_autocorrelation_kstest(
+    df: Any, a: str, b: str
+) -> Any:  # pragma: no cover
     """Pairwise Kolmogorov-Smirnov test of the auto-correlation resuls.
 
     Test the distribution of correlation values between two data sets in the input
@@ -254,6 +266,7 @@ def _(df: pl.DataFrame, a: str, b: str) -> pl.DataFrame:
 
 @pairwise_autocorrelation_kstest.register
 def _(df: pd.DataFrame, a: str, b: str) -> pd.DataFrame:
-    return pairwise_autocorrelation_kstest(
-        pl.from_pandas(df), a=a, b=b
+    return cast(
+        pl.DataFrame,
+        pairwise_autocorrelation_kstest(pl.from_pandas(df), a=a, b=b),
     ).to_pandas()

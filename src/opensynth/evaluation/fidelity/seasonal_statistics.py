@@ -1,5 +1,5 @@
 from functools import singledispatch
-from typing import Literal, cast
+from typing import Any, Literal, TypeAlias, cast
 
 import numpy as np
 import pandas as pd
@@ -7,12 +7,18 @@ import polars as pl
 import seaborn as sns
 from scipy.stats import kstest
 
+AggregateFunctionType: TypeAlias = (
+    Literal["min", "max", "first", "last", "sum", "mean", "median", "len"]
+    | pl.Expr
+    | None
+)
+
 
 @singledispatch
 def add_season(  # pragma: no cover
-    df,
-    datetime_col,
-):
+    df: Any,
+    datetime_col: str,
+) -> Any:
     """Add a column with season to a DataFrame.
 
     The season is based on a datetime column. This column is `"datetime"` by default,
@@ -33,9 +39,9 @@ def add_season(  # pragma: no cover
 
 @add_season.register
 def _(
-    df: pl.LazyFrame | pl.DataFrame,
+    df: pl.DataFrame | pl.LazyFrame,
     datetime_col: str = "datetime",
-) -> pl.LazyFrame | pl.DataFrame:
+) -> pl.DataFrame | pl.LazyFrame:
     return (
         df.with_columns(season=pl.col(datetime_col).dt.month() % 12 // 3 + 1)
         .with_columns(
@@ -65,11 +71,11 @@ def _(df: pd.DataFrame, datetime_col: str = "datetime") -> pd.DataFrame:
 
 @singledispatch
 def seasonal_peaks(  # pragma: no cover
-    df,
+    df: Any,
     datetime_col: str = "datetime",
     high_low: Literal["high", "low"] = "high",
     quantile: float = 0.2,
-):
+) -> Any:
     """Calculate statistics on number of peaks per season.
 
     Args:
@@ -130,7 +136,7 @@ def _(
         .sum()
     )
 
-    return season_stats
+    return cast(pl.DataFrame, season_stats)
 
 
 @seasonal_peaks.register
@@ -140,11 +146,14 @@ def _(
     high_low: Literal["high", "low"] = "high",
     quantile: float = 0.2,
 ) -> pl.DataFrame:
-    return seasonal_peaks(
-        df.collect(),
-        datetime_col=datetime_col,
-        high_low=high_low,
-        quantile=quantile,
+    return cast(
+        pl.DataFrame,
+        seasonal_peaks(
+            df.collect(),
+            datetime_col=datetime_col,
+            high_low=high_low,
+            quantile=quantile,
+        ),
     )
 
 
@@ -158,12 +167,13 @@ def _(
     """Calculate statistics per season."""
 
     include_index = isinstance(df.index, pd.DatetimeIndex)
-    return seasonal_peaks(
+    df = seasonal_peaks(
         pl.from_pandas(df, include_index=include_index),
         datetime_col=datetime_col,
         high_low=high_low,
         quantile=quantile,
-    ).to_pandas()
+    )
+    return cast(pl.DataFrame, df).to_pandas()
 
 
 def calculate_seasonal_peaks(
@@ -171,7 +181,7 @@ def calculate_seasonal_peaks(
     datetime_col: str = "datetime",
     high_low: Literal["high", "low"] = "high",
     quantile: float = 0.2,
-):
+) -> pd.DataFrame | pl.DataFrame:
     """Calculate statistics on number of peaks per season for multiple DataFrames.
 
     This function will calculate the number of peaks for all DataFrames in the `dfs`
@@ -220,15 +230,15 @@ def calculate_seasonal_peaks(
     df = pl.concat(result, how="vertical")
 
     if fmt == "pandas":
-        return df.to_pandas()
+        return cast(pl.DataFrame, df).to_pandas()
 
-    return df
+    return cast(pl.DataFrame, df)
 
 
 @singledispatch
 def print_seasonal_stats(  # pragma: no cover
-    df,
-    aggregate_function,
+    df: Any,
+    aggregate_function: AggregateFunctionType,
 ) -> None:
     """Print summary statistics of the seasonal statistics.
 
@@ -243,11 +253,7 @@ def print_seasonal_stats(  # pragma: no cover
 @print_seasonal_stats.register
 def _(
     df: pl.DataFrame,
-    aggregate_function: (
-        Literal["min", "max", "first", "last", "sum", "mean", "median", "len"]
-        | pl.Expr
-        | None
-    ) = "median",
+    aggregate_function: AggregateFunctionType = "median",
 ) -> None:
     print(
         df.pivot(
@@ -262,11 +268,7 @@ def _(
 @print_seasonal_stats.register
 def _(
     df: pd.DataFrame,
-    aggregate_function: (
-        Literal["min", "max", "first", "last", "sum", "mean", "median", "len"]
-        | pl.Expr
-        | None
-    ) = "median",
+    aggregate_function: AggregateFunctionType = "median",
 ) -> None:
     print_seasonal_stats(
         pl.from_pandas(df), aggregate_function=aggregate_function
@@ -293,7 +295,9 @@ def plot_seasonal_stats(df: pd.DataFrame | pl.DataFrame) -> None:
 
 
 @singledispatch
-def pairwise_seasonal_kstest(df, a: str, b: str):  # pragma: no cover
+def pairwise_seasonal_kstest(
+    df: Any, a: str, b: str
+) -> Any:  # pragma: no cover
     """Pairwise Kolmogorov-Smirnov test of the seasonal peaks.
 
     Test the distribution of peak number between two data sets in the input
@@ -335,4 +339,6 @@ def _(df: pl.DataFrame, a: str, b: str) -> pl.DataFrame:
 
 @pairwise_seasonal_kstest.register
 def _(df: pd.DataFrame, a: str, b: str) -> pd.DataFrame:
-    return pairwise_seasonal_kstest(pl.from_pandas(df), a=a, b=b).to_pandas()
+    return cast(
+        pl.DataFrame, pairwise_seasonal_kstest(pl.from_pandas(df), a=a, b=b)
+    ).to_pandas()

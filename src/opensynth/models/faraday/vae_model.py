@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from typing import Optional
+from typing import Optional, Sequence
 
 import numpy as np
 import pytorch_lightning as pl
@@ -24,13 +24,16 @@ class Encoder(nn.Module):
         latent_dim: int,
         input_dim: int,
         class_dim: int,
-        layer_dims=(512, 256, 128, 64, 32),
+        layer_dims: Sequence[int] = (512, 256, 128, 64, 32),
     ):
         super().__init__()
         self.latent_dim = latent_dim
         self.input_dim = input_dim
         self.class_dim = class_dim
         self.encoder_input_dim = self.input_dim + self.class_dim
+
+        if len(layer_dims) == 0:
+            raise ValueError("Need at least the dim of one layer!")
 
         layers = [nn.Linear(self.encoder_input_dim, layer_dims[0])]
         for d1, d2 in zip(layer_dims[0:-1], layer_dims[1:]):
@@ -50,7 +53,7 @@ class Decoder(nn.Module):
         class_dim: int,
         latent_dim: int,
         output_dim: int,
-        layer_dims=(32, 64, 128, 256, 512),
+        layer_dims: Sequence[int] = (32, 64, 128, 256, 512),
     ):
         super().__init__()
         self.latent_dim = latent_dim
@@ -61,6 +64,9 @@ class Decoder(nn.Module):
         # Layers to map latent space back to FC layers
         self.latent = nn.Linear(self.decoder_input_dim, self.latent_dim)
         self.latent_activations = nn.GELU()
+
+        if len(layer_dims) == 0:
+            raise ValueError("Need at least the dim of one layer!")
 
         layers = [nn.Linear(self.latent_dim, layer_dims[0])]
         for d1, d2 in zip(layer_dims[0:-1], layer_dims[1:]):
