@@ -78,26 +78,28 @@ class ExtendedFaradayModel:
                     dm=dm,
                     year=year,
                     month=month,
-                    n_samples=n_samples + 1,
+                    n_samples=n_samples,
                     fmt=fmt,
                 )
             case "year":
                 df = self._generate_full_synthetic_year(
-                    dm=dm, year=year, n_samples=n_samples + 1, fmt=fmt
+                    dm=dm, year=year, n_samples=n_samples, fmt=fmt
                 )
             case _:
                 raise ValueError(
                     "Invalid period, should be either 'month' or 'year'"
                 )
 
-        return df.head(n_samples)
+        
+        
+        return df
 
     def _generate_full_synthetic_month(
         self,
         dm: LCLDataModule,
         year: int,
         month: int,
-        n_samples: int = 2,
+        n_samples: int = 1,
         fmt: Literal["pandas", "polars"] = "pandas",
     ) -> pd.DataFrame | pl.DataFrame:
         """Generate DataFrame Faraday samples for a specific month.
@@ -122,7 +124,7 @@ class ExtendedFaradayModel:
         )
 
         while (
-            df.group_by("date").len().min()["len"][0] < n_samples
+            df.group_by("date").len().min()["len"][0] < n_samples + 1
             or len(df["date"].unique()) < monthrange(year, month)[1]
         ):
             df = pl.concat(
@@ -139,11 +141,14 @@ class ExtendedFaradayModel:
             )
         df = pl.concat(
             [
-                p.sample(n_samples).with_row_index()
+                p.sample(n_samples + 1).with_row_index()
                 for p in df.partition_by("date")
             ]
         )
 
+        
+        df = df.filter(pl.col('index') != df['index'].max())
+ 
         if fmt == "pandas":
             return df.to_pandas()
 
@@ -153,7 +158,7 @@ class ExtendedFaradayModel:
         self,
         dm: LCLDataModule,
         year: int,
-        n_samples: int = 2,
+        n_samples: int = 1,
         fmt: Literal["pandas", "polars"] = "pandas",
     ) -> pd.DataFrame | pl.DataFrame:
         """Generate DataFrame Faraday samples for a specific year.
