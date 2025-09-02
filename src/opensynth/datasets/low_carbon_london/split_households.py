@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def split_household_ids(
     df: pd.DataFrame,
     id_col: str,
-    sample_size: int,
+    sample_fraction: float = 0.75,
 ) -> Tuple[List[str], List[str]]:
     """
     Split LCL id into training vs holdout households.
@@ -25,7 +25,7 @@ def split_household_ids(
     Args:
         df (pd.DataFrame): LCL dataset
         id_col (str): ID column
-        sample_size (int): Number of household ids in each split
+        sample_fraction (float): Fraction of household ids to include in training set
 
     Returns:
         Tuple[List[str], List[str]]: List of training and holdout household ids
@@ -33,9 +33,10 @@ def split_household_ids(
     logger.info("Splitting households into train and holdout households")
     unique_ids = df[id_col].unique().tolist()
     random.shuffle(unique_ids)
+    sample_size = int(len(unique_ids) * sample_fraction)
 
     train_ids = unique_ids[:sample_size]
-    holdout_ids = unique_ids[-sample_size:]
+    holdout_ids = unique_ids[sample_size:]
 
     return train_ids, holdout_ids
 
@@ -70,7 +71,7 @@ def split_historical_future_periods(
     return df_historical, df_future
 
 
-def split_lcl_data(csv_filename: Path, sample_size: int = 2000):
+def split_lcl_data(csv_filename: Path, sample_fraction: float = 0.75):
     """
     Split LCL dataset 4 ways:
     1) Historical Train household data
@@ -82,7 +83,7 @@ def split_lcl_data(csv_filename: Path, sample_size: int = 2000):
     Future data is used for TSTR evaluation.
 
     Args:
-        sample_size (int, optional): _description_. Defaults to 2000.
+        sample_fraction (float): _description_. Defaults to 0.75.
     """
 
     logger.info(f"👀 Reading LCL data from: {csv_filename}")
@@ -92,7 +93,7 @@ def split_lcl_data(csv_filename: Path, sample_size: int = 2000):
     train_ids, holdout_ids = split_household_ids(
         df,
         id_col="LCLid",
-        sample_size=sample_size,
+        sample_fraction=sample_fraction,
     )
     logger.info(f"Train len: {len(train_ids)}")
     logger.info(f"Holdout len: {len(holdout_ids)}")

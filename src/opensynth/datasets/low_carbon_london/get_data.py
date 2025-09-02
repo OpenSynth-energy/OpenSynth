@@ -44,6 +44,6 @@ def get_lcl_data(download: bool, split: bool, preprocess: bool):
     if download:
         datasets_utils.download_data(LCL_URL, FILE_NAME)
     if split:
-        split_households.split_lcl_data(CSV_FILE_NAME, 2000)
+        split_households.split_lcl_data(CSV_FILE_NAME, 0.75)
     if preprocess:
         preprocess_lcl.preprocess_lcl_data()
