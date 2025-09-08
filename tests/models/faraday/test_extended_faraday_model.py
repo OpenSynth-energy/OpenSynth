@@ -1,6 +1,5 @@
 import pytest
 import torch
-import torch.nn as nn
 
 from opensynth.models.faraday import ExtendedFaradayModel
 
@@ -16,53 +15,10 @@ def dm_mock():
 
 @pytest.fixture
 def extended_faraday_model():
-
-    class Encoder(nn.Module):
-        def __init__(self, latent_dim: int, input_dim: int, class_dim: int):
-            super().__init__()
-            self.latent_dim = latent_dim
-            self.input_dim = input_dim
-            self.class_dim = class_dim
-            self.encoder_input_dim = self.input_dim + self.class_dim
-
-            # Encoder layers
-            self.encoder_layers = nn.Sequential(
-                nn.Linear(self.encoder_input_dim, 512),
-                nn.GELU(),
-                nn.Linear(512, 32),
-                nn.GELU(),
-                nn.Linear(32, self.latent_dim),
-            )
-
-        def forward(self, x):
-            return self.encoder_layers(x)
-
-    class Decoder(nn.Module):
-        def __init__(self, class_dim: int, latent_dim: int, output_dim: int):
-            super().__init__()
-            self.latent_dim = latent_dim
-            self.class_dim = class_dim
-            self.output_dim = output_dim
-            self.decoder_input_dim = self.latent_dim + self.class_dim
-
-            # Layers to map latent space back to FC layers
-            self.latent = nn.Linear(self.decoder_input_dim, self.latent_dim)
-            self.latent_activations = nn.GELU()
-
-            # Decoder layers
-            self.decoder_layers = nn.Sequential(
-                nn.Linear(self.latent_dim, 32),
-                nn.GELU(),
-                nn.Linear(32, 512),
-                nn.GELU(),
-                nn.Linear(512, self.output_dim),
-            )
-
-        def forward(self, x):
-            outputs = self.latent(x)
-            outputs = self.latent_activations(outputs)
-            outputs = self.decoder_layers(outputs)
-            return outputs
+    from opensynth.models.faraday.vae_model import (  # noqa: F401
+        Decoder,
+        Encoder,
+    )
 
     faraday_model = torch.load(
         "tests/data/evaluation/faraday_model_for_testing", weights_only=False
@@ -88,6 +44,7 @@ def test_generate_synthetic_samples(
             n_samples=n_samples,
         )
     ]
+    print(result)
 
     # test number of samples
     assert len(result) == n_samples

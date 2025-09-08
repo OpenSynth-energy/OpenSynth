@@ -1,4 +1,5 @@
 import datetime
+import logging
 from functools import singledispatch
 from typing import Any, cast
 
@@ -10,7 +11,11 @@ import seaborn as sns
 from polars.datatypes.group import NUMERIC_DTYPES
 from scipy.stats import kstest, pearsonr
 
-ShiftsType = dict[str, int] | None
+ShiftsType = dict[str, int | float] | None
+StrictShiftsType = dict[str, int]
+
+
+logger = logging.getLogger(__name__)
 
 
 @singledispatch
@@ -39,14 +44,26 @@ def calculate_auto_correlation_for_column(  # pragma: no cover
     return pl.DataFrame()
 
 
-@calculate_auto_correlation_for_column.register
-def _(
+def _check_autocorrelation_shifts(
     df: pl.DataFrame,
-    column: str,
-    datetime_col: str = "datetime",
     shifts: ShiftsType = None,
-) -> pl.DataFrame:
-    per_hour = int(
+    datetime_col: str = "datetime",
+) -> StrictShiftsType:
+    """Ensure provided shifts for auto-correlation are valid.
+
+    Args:
+        df (pd.DataFrame or pd.DataFrame): Input DataFrame.
+        shifts (dict, optional): Be default, correlation will be calculated
+            for hour, half_day, day, week and half_year. The `shifts` argument can be
+            use to specify custom periods. The input is dictionary with name as key
+            and number of rows to use (shift) as value.
+        datetime_col (str, optional): Column with datetime values.
+
+    Returns:
+        dictionary with valid shifts.
+
+    """
+    per_hour = (
         datetime.timedelta(seconds=3600) / df[datetime_col].diff().mode()[0]
     )
 
@@ -58,9 +75,41 @@ def _(
         "half_year": per_hour * 24 * 7 * 26,
     }
 
-    shifts = default_shifts if shifts is None else shifts
+    checked_shifts = {}
+    for name, shift in (default_shifts if shifts is None else shifts).items():
+        # Check for shifts smaller than the time interval in the DataFrame.
+        if shift < 1:
+            logger.warning(
+                f"Skipping shift '{name}' as it is smaller than the timeseries interval."
+            )
+            continue
+
+        # Check for shifts that are not multiple of the time interval.
+        if not np.isclose(shift, float(int(shift)), atol=1e-8, rtol=1e-8):
+            logger.warning(
+                f"Skipping shift '{name}' as it is not an integer number."
+            )
+            continue
+
+        checked_shifts[name] = int(shift)
+
+    return checked_shifts
+
+
+@calculate_auto_correlation_for_column.register
+def _(
+    df: pl.DataFrame,
+    column: str,
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
+) -> pl.DataFrame:
+
+    valid_shifts = _check_autocorrelation_shifts(
+        df, shifts=shifts, datetime_col=datetime_col
+    )
+
     result = {}
-    for time_delta, delta in shifts.items():
+    for time_delta, delta in valid_shifts.items():
         if delta > df.shape[0]:
             result[time_delta] = np.nan
             continue

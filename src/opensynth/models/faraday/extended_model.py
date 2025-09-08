@@ -1,7 +1,9 @@
+import logging
 from calendar import monthrange
 from collections.abc import Generator
 from datetime import date
-from typing import Literal, Tuple
+from functools import cached_property
+from typing import Literal, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -15,6 +17,8 @@ from opensynth.utils.polars import semiwide_to_wide
 from .model import FaradayModel
 
 DEFAULT_YEAR = 2024
+
+logger = logging.getLogger(__name__)
 
 
 class ExtendedFaradayModel:
@@ -37,9 +41,41 @@ class ExtendedFaradayModel:
             )
     """
 
-    def __init__(self, fm: FaradayModel):
+    required_features = ["month", "dayofweek"]
 
+    def __init__(self, fm: FaradayModel):
         self.model = fm
+
+    @property
+    def model(self):
+        print("Returning", self._model)
+        return self._model
+
+    @model.setter
+    def model(self, model):
+        is_valid_model = True
+        for feature in self.required_features:
+            if feature not in model.feature_list:
+                logger.error(
+                    f"Feature '{feature}' not present in trained model,"
+                    " but this feature is needed for sampling."
+                )
+                is_valid_model = False
+
+        if not is_valid_model:
+            raise ValueError(
+                "Please provide a model with the required features."
+            )
+
+        self._model = model
+
+    @cached_property
+    def optional_features(self) -> list[str]:
+        return [
+            f
+            for f in self.model.feature_list
+            if f not in self.required_features
+        ]
 
     def generate_extended_samples(
         self,
@@ -202,7 +238,11 @@ class ExtendedFaradayModel:
         )
         df = (
             semiwide_to_wide(
-                df.select(pl.exclude("month", "dayofweek")),
+                df.select(
+                    pl.exclude(
+                        *self.required_features, *self.optional_features
+                    )
+                ),
                 date_col="date",
                 datetime_name="datetime",
             )
@@ -227,7 +267,15 @@ class ExtendedFaradayModel:
         year: int = DEFAULT_YEAR,
         month: int | None = None,
     ) -> Generator[
-        Tuple[date, float, float, np.typing.NDArray[np.float64]], None, None
+        Tuple[
+            date,
+            float,
+            float,
+            np.typing.NDArray[np.float64],
+            np.typing.NDArray[np.float64],
+        ],
+        None,
+        None,
     ]:
         """Generate Faraday samples for a specific month/year combination.
 
@@ -262,38 +310,44 @@ class ExtendedFaradayModel:
         n_generated = 0
         for _ in range(10):  # 1000 times should be enough
             gmm_samples = self.model.sample_gmm(n_batch)
-            gmm_samples_reconstructed = dm.reconstruct_kwh(gmm_samples["kwh"])
-            gmm_samples_reconstructed = (
-                torch.clip(gmm_samples_reconstructed, min=0).detach().numpy()
+
+            # Get the features in a numpy array
+            feature_samples = np.hstack(
+                [
+                    gmm_samples["features"][f].numpy()
+                    for f in self.model.feature_list
+                ]
             )
+            # Get the kwh values in a numpy array
+            kwh_samples = dm.reconstruct_kwh(gmm_samples["kwh"])
+            kwh_samples = torch.clip(kwh_samples, min=0).detach().numpy()
 
             # Randomly order the generated samples. We get a sample-size dependent effect
             # otherwise.
-            np.random.default_rng().shuffle(gmm_samples_reconstructed)
-
-            for torch_month, dayofweek, values in zip(
-                gmm_samples["features"]["month"],
-                gmm_samples["features"]["dayofweek"],
-                gmm_samples_reconstructed,
-            ):
-                g_month = torch_month.numpy()[0]
+            indices = list(range(feature_samples.shape[0]))
+            np.random.default_rng().shuffle(indices)
+            for i in indices:
+                feature_sample = feature_samples[i]
+                kwh_sample = kwh_samples[i]
+                g_month, dayofweek = feature_sample[:2]
                 try:
                     if month is None or g_month == month:
                         yield (
                             sample_df.filter(
-                                pl.col("weekday") == dayofweek.numpy()[0] + 1,
+                                pl.col("weekday") == dayofweek + 1,
                                 pl.col("month") == g_month,
                             ).sample(1)["datetime"][0],
                             g_month,
-                            dayofweek.numpy()[0],
-                            values,
+                            dayofweek,
+                            feature_sample[2:],
+                            cast(np.typing.NDArray[np.float64], kwh_sample),
                         )
                         n_generated += 1
                         if n_generated >= n_samples:
                             return
 
                 except Exception as e:
-                    print(e)
+                    logger.warning(f"Skipping sample due to error: {e}")
                     continue
 
     def _generate_synthetic_sample_df(
@@ -325,13 +379,14 @@ class ExtendedFaradayModel:
         df = pl.DataFrame(
             np.array(
                 [
-                    (datetime, m, d, *values)
-                    for datetime, m, d, values in self._generate_synthetic_samples(
+                    (datetime, m, d, *f, *v)
+                    for datetime, m, d, f, v in self._generate_synthetic_samples(
                         dm, n_samples, year=year, month=month
                     )
                 ]
             ).tolist(),
             schema={"date": pl.Date, "month": int, "dayofweek": int}
+            | {f: float for f in self.optional_features}
             | {
                 d: float
                 for d in [f"{i // 2:02d}{(i % 2) * 30:02d}" for i in range(48)]
