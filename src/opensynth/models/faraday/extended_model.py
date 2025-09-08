@@ -3,7 +3,7 @@ from calendar import monthrange
 from collections.abc import Generator
 from datetime import date
 from functools import cached_property
-from typing import Literal, Tuple, cast
+from typing import Literal, Tuple
 
 import numpy as np
 import pandas as pd
@@ -340,7 +340,7 @@ class ExtendedFaradayModel:
                             g_month,
                             dayofweek,
                             feature_sample[2:],
-                            cast(np.typing.NDArray[np.float64], kwh_sample),
+                            kwh_sample,
                         )
                         n_generated += 1
                         if n_generated >= n_samples:
