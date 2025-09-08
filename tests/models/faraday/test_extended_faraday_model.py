@@ -71,9 +71,11 @@ def extended_faraday_model():
     return model
 
 
-def test_generate_synthetic_samples(dm_mock, extended_faraday_model):
+@pytest.mark.parametrize("n_samples", (1, 10))
+def test_generate_synthetic_samples(
+    dm_mock, extended_faraday_model, n_samples
+):
     """Test generation of synthetic samples for one month."""
-    n_samples = 10
     test_year = 2024
     test_month = 10
 
@@ -98,12 +100,15 @@ def test_generate_synthetic_samples(dm_mock, extended_faraday_model):
         assert full_date.year == test_year
 
 
-def test_generate_synthetic_sample_df(extended_faraday_model, dm_mock):
+@pytest.mark.parametrize("n_samples", (1, 3))
+def test_generate_synthetic_sample_df(
+    extended_faraday_model, dm_mock, n_samples
+):
     df = extended_faraday_model._generate_synthetic_sample_df(
         dm=dm_mock,
-        n_samples=3,
+        n_samples=n_samples,
         year=2024,
         month=1,
         fmt="pandas",
     )
-    assert df.shape == (3, 51)
+    assert df.shape == (n_samples, 51)
