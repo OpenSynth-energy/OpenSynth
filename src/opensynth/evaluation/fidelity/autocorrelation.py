@@ -5,7 +5,9 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 import polars as pl
+import polars.selectors as cs
 import seaborn as sns
+from polars.datatypes.group import NUMERIC_DTYPES
 from scipy.stats import kstest, pearsonr
 
 ShiftsType = dict[str, int] | None
@@ -128,7 +130,7 @@ def _(
 ) -> pl.DataFrame:
     df = df.sort(datetime_col)
     df = df.collect() if isinstance(df, pl.LazyFrame) else df
-    columns = df.select(pl.exclude(datetime_col)).columns
+    columns = df.select(cs.by_dtype(NUMERIC_DTYPES)).columns
 
     return cast(
         pl.DataFrame,
