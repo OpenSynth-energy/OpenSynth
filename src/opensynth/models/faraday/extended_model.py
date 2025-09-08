@@ -249,9 +249,13 @@ class ExtendedFaradayModel:
         for _ in range(10):  # 1000 times should be enough
             gmm_samples = self.model.sample_gmm(n_batch)
             gmm_samples_reconstructed = dm.reconstruct_kwh(gmm_samples["kwh"])
-            gmm_samples_reconstructed = torch.clip(
-                gmm_samples_reconstructed, min=0
+            gmm_samples_reconstructed = (
+                torch.clip(gmm_samples_reconstructed, min=0).detach().numpy()
             )
+            # Randomly order the generated samples. We get a sample-size dependent effect
+            # otherwise.
+            np.random.default_rng().shuffle(gmm_samples_reconstructed)
+
             for torch_month, dayofweek, values in zip(
                 gmm_samples["features"]["month"],
                 gmm_samples["features"]["dayofweek"],
@@ -267,7 +271,7 @@ class ExtendedFaradayModel:
                             ).sample(1)["datetime"][0],
                             g_month,
                             dayofweek.numpy()[0],
-                            values.detach().numpy(),
+                            values,
                         )
                         n_generated += 1
                         if n_generated >= n_samples:
