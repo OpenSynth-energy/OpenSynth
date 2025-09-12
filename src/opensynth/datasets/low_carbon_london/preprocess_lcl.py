@@ -44,19 +44,34 @@ def get_current_month_end(df: pd.DataFrame, date_col="dt"):
     return df
 
 
-def load_data(
-    file_path: Path,
+def load_data(file_path: Path) -> pd.DataFrame:
+    """
+    Load data from csv
+
+    Args:
+        file_path (Path): Path to the csv file
+
+    Returns:
+        pd.DataFrame: dataset
+    """
+    logger.info(f"🚛 Loading data from {file_path}")
+    df = pd.read_csv(file_path)
+    return df
+
+
+def format_data(
+    df: pd.DataFrame,
     datetime_col: str,
     kwh_col: str,
     id_col: str,
-    utc: bool,
-    datetime_format: Optional[str],
+    utc: bool = True,
+    datetime_format: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Load data from csv
 
     Args:
-        files_path (str): Folder containing CSV files
+        df (pd.DataFrame): Dataset
         datetime_col (str): Name of the datetime column
         kwh_col (str): Name of the kWh column
         id_col (str): Name of the household ID column
@@ -67,8 +82,6 @@ def load_data(
     Returns:
         pd.DataFrame: dataset
     """
-    logger.info(f"🚛 Loading data from {file_path}")
-    df = pd.read_csv(file_path)
 
     logger.info("🧹 Formatting data")
     df.rename(
@@ -81,7 +94,6 @@ def load_data(
     df["kwh"] = df["kwh"].replace("Null", np.nan)
     df["kwh"] = df["kwh"].astype(float)
     df["ID"] = df["ID"].astype(str)
-
     return df
 
 
@@ -160,11 +172,13 @@ def drop_dupes_and_replace_nulls(df: pd.DataFrame) -> pd.DataFrame:
     df_out = df_out.drop_duplicates(
         subset=["ID", "date", "settlement_period"], keep="last"
     )
-    df_out = df_out.replace("Null", np.float64())
+    df_out = df_out.dropna()
     return df_out
 
 
-def filter_missing_kwh(df: pd.DataFrame, time_resolution: str) -> pd.DataFrame:
+def filter_missing_kwh(
+    df: pd.DataFrame, time_resolution: str = "half_hourly"
+) -> pd.DataFrame:
     """
     Drop dates where we don't have full 48 readings if half-hourly data,
     or 24 readings if hourly data, for a given ID and date.
@@ -329,9 +343,8 @@ def preprocess_pipeline(
             Defaults to ["stdorToU"].
     """
 
-    df = load_data(
-        file_path, datetime_col, kwh_col, id_col, utc, datetime_format
-    )
+    df = load_data(file_path)
+    df = format_data(df, datetime_col, kwh_col, id_col, utc, datetime_format)
     df = extract_date_features(df)
     df = parse_settlement_period(df)
     df = drop_dupes_and_replace_nulls(df)

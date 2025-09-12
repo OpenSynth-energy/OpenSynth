@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import pandas as pd
+import pytest
 
 from opensynth.datasets.low_carbon_london import preprocess_lcl
 from tests.utils import df_test
@@ -8,12 +9,14 @@ from tests.utils import df_test
 
 class TestPreprocessLCL:
 
-    df_date = preprocess_lcl.extract_date_features(df_test())
+    df = preprocess_lcl.format_data(
+        df_test(), datetime_col="DateTime", kwh_col="kwh", id_col="LCLid"
+    )
+    df_date = preprocess_lcl.extract_date_features(df)
     df_settlement_period = preprocess_lcl.parse_settlement_period(df_date)
     df_drop_dupes = preprocess_lcl.drop_dupes_and_replace_nulls(
         df_settlement_period
     )
-    df_drop_missing = preprocess_lcl.filter_missing_kwh(df_drop_dupes)
 
     def test_week(self):
         expected_week = pd.to_datetime(
@@ -70,20 +73,22 @@ class TestPreprocessLCL:
         ).all()
 
     def test_drop_dupes_and_replace_nulls(self):
-        assert len(self.df_drop_dupes) == 7
-        assert self.df_drop_dupes["kwh"].sum() == 2.1
+        assert len(self.df_drop_dupes) == 6
+        assert self.df_drop_dupes["kwh"].sum() == pytest.approx(2.3)
 
     def test_filter_missing_kwh(self):
         # test_df is filled with only 1 kwh per date reading
         # filter_missing_kwh checks that each date has 48 readings
         # and drop dates with < 48 readings
-        assert len(self.df_drop_missing) == 0
+        with pytest.raises(AssertionError):
+            _ = preprocess_lcl.filter_missing_kwh(self.df_drop_dupes)
 
     def test_pack_smart_meter_data_into_arrays(self):
         df_packed = preprocess_lcl.pack_smart_meter_data_into_arrays(
-            self.df_drop_dupes
+            self.df_drop_dupes,
+            feature_cols=["stdorToU"],
         )
-        assert len(df_packed) == 4
-        assert df_packed.query("LCLid=='MAC000002' and month==1 and day==15")[
+        assert len(df_packed) == 3
+        assert df_packed.query("ID=='MAC000002' and month==1 and day==15")[
             "kwh"
-        ].values.tolist()[0] == [0.0, 0.4, 0.5, 0.6]
+        ].values.tolist()[0] == [0.4, 0.4, 0.5, 0.6]

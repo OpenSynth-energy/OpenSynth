@@ -28,7 +28,7 @@ def df_test() -> pd.DataFrame:
         "2013-01-15 03:00:00",
         "2013-01-15 03:30:00",
     ]
-    kwh = [0.1, 0.2, 0.3, 0.3, "Null", 0.4, 0.5, 0.6]
+    kwh = [0.1, "Null", 0.3, 0.3, 0.4, 0.4, 0.5, 0.6]
     tariff = ["A", "A", "A", "A", "A", "A", "A", "A"]
     df = pd.DataFrame(
         {"LCLid": lcl_id, "DateTime": dt, "kwh": kwh, "stdorToU": tariff}
