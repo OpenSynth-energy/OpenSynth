@@ -17,9 +17,7 @@ class TestPreprocessLCL:
     )
     df_date = preprocess_lcl.extract_date_features(df)
     df_settlement_period = preprocess_lcl.parse_settlement_period(df_date)
-    df_drop_dupes = preprocess_lcl.drop_dupes_and_replace_nulls(
-        df_settlement_period
-    )
+    df_drop_dupes = preprocess_lcl.drop_dupes_and_nulls(df_settlement_period)
 
     def test_week(self):
         expected_week = pd.to_datetime(
@@ -75,9 +73,20 @@ class TestPreprocessLCL:
             == expected_settlement_period
         ).all()
 
-    def test_drop_dupes_and_replace_nulls(self):
+    def test_drop_dupes_and_nulls(self):
+        # Testing the original function that drops duplicates and nulls
+        # Expect duplicated row and null row dropped
         assert len(self.df_drop_dupes) == 6
         assert self.df_drop_dupes["kwh"].sum() == pytest.approx(2.3)
+
+    def test_replace_nulls(self):
+        # Testing the original function that replaces nulls with 0
+        df_drop_dupes = preprocess_lcl.drop_dupes_and_nulls(
+            self.df_settlement_period, drop_nulls=False
+        )
+        # Expect duplicated row dropped, but null replaced with 0
+        assert len(df_drop_dupes) == 7
+        assert df_drop_dupes["kwh"].sum() == pytest.approx(2.3)
 
     def test_filter_missing_kwh(self):
         # test_df is filled with only 1 kwh per date reading
@@ -107,9 +116,7 @@ class TestPreprocessHourlykWh:
     )
     df_date = preprocess_lcl.extract_date_features(df)
     df_settlement_period = preprocess_lcl.parse_settlement_period(df_date)
-    df_drop_dupes = preprocess_lcl.drop_dupes_and_replace_nulls(
-        df_settlement_period
-    )
+    df_drop_dupes = preprocess_lcl.drop_dupes_and_nulls(df_settlement_period)
 
     def test_week(self):
         expected_week = pd.to_datetime(
@@ -144,7 +151,7 @@ class TestPreprocessHourlykWh:
             == expected_settlement_period
         ).all()
 
-    def test_drop_dupes_and_replace_nulls(self):
+    def test_drop_dupes_and_nulls(self):
         assert len(self.df_drop_dupes) == 48
         # assert self.df_drop_dupes["kwh"].sum() == pytest.approx(2.3)
 

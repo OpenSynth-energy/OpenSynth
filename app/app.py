@@ -127,6 +127,14 @@ def preprocess_data(
             help="End date for future data (YYYY-MM-DD).",
         ),
     ] = "2014-12-31",
+    drop_nulls: Annotated[
+        bool,
+        typer.Option(
+            "--drop_nulls",
+            help="Whether to drop rows with NaN kwh values. If False, will \
+            replace NaN kwh values with 0.0",
+        ),
+    ] = True,
 ):
     """
     Split and preprocess your dataset.
@@ -149,6 +157,7 @@ def preprocess_data(
         historical_end,
         future_start,
         future_end,
+        drop_nulls,
     )
 
 

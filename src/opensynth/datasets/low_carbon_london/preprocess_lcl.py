@@ -154,13 +154,16 @@ def parse_settlement_period(
     return df_out
 
 
-def drop_dupes_and_replace_nulls(df: pd.DataFrame) -> pd.DataFrame:
+def drop_dupes_and_nulls(
+    df: pd.DataFrame, drop_nulls: bool = True
+) -> pd.DataFrame:
     """
     Function to drop duplicated readings and replace missing readings with 0.0
 
     Args:
         df (pd.DataFrame): Input dataframe
-
+        drop_nulls (bool): Whether to drop rows with NaN kwh values. If False,
+            will replace NaN kwh values with 0.0
     Returns:
         pd.DataFrame: Output dataframe
     """
@@ -172,7 +175,10 @@ def drop_dupes_and_replace_nulls(df: pd.DataFrame) -> pd.DataFrame:
     df_out = df_out.drop_duplicates(
         subset=["ID", "date", "settlement_period"], keep="last"
     )
-    df_out = df_out.dropna()
+    if drop_nulls:
+        df_out = df_out.dropna(subset="kwh")
+    else:
+        df_out["kwh"] = df_out["kwh"].fillna(0.0)
     return df_out
 
 
@@ -324,6 +330,7 @@ def preprocess_pipeline(
     datetime_format: Optional[str] = None,
     time_resolution: str = "half_hourly",
     feature_cols: List[str] = ["stdorToU"],
+    drop_nulls: bool = True,
 ):
     """Preprocess the raw data for Faraday training and evaluation.
     Pipeline includes:
@@ -347,13 +354,15 @@ def preprocess_pipeline(
             values: "half_hourly", "hourly". Defaults to "half_hourly".
         feature_cols (List[str], optional): List of feature columns to include.
             Defaults to ["stdorToU"].
+        drop_nulls (bool): Whether to drop rows with NaN kwh values. If False,
+            will replace NaN kwh values with 0.0
     """
 
     df = load_data(file_path)
     df = format_data(df, datetime_col, kwh_col, id_col, utc, datetime_format)
     df = extract_date_features(df)
     df = parse_settlement_period(df)
-    df = drop_dupes_and_replace_nulls(df)
+    df = drop_dupes_and_nulls(df, drop_nulls)
     df = filter_missing_kwh(df, time_resolution)
 
     mean, stdev = get_mean_and_std(df)
@@ -381,6 +390,7 @@ def preprocess_data(
     datetime_format: Optional[str] = None,
     time_resolution: str = "half_hourly",
     feature_cols: List[str] = ["stdorToU"],
+    drop_nulls: bool = True,
 ):
 
     SOURCE_DIR = f"{data_dir}/raw"
@@ -395,6 +405,7 @@ def preprocess_data(
         datetime_format=datetime_format,
         time_resolution=time_resolution,
         feature_cols=feature_cols,
+        drop_nulls=drop_nulls,
     )
     preprocess_pipeline(
         file_path=Path(f"{SOURCE_DIR}/historical/holdout.csv"),
@@ -406,6 +417,7 @@ def preprocess_data(
         datetime_format=datetime_format,
         time_resolution=time_resolution,
         feature_cols=feature_cols,
+        drop_nulls=drop_nulls,
     )
     preprocess_pipeline(
         file_path=Path(f"{SOURCE_DIR}/future/train.csv"),
@@ -417,6 +429,7 @@ def preprocess_data(
         datetime_format=datetime_format,
         time_resolution=time_resolution,
         feature_cols=feature_cols,
+        drop_nulls=drop_nulls,
     )
     preprocess_pipeline(
         file_path=Path(f"{SOURCE_DIR}/future/holdout.csv"),
@@ -428,4 +441,5 @@ def preprocess_data(
         datetime_format=datetime_format,
         time_resolution=time_resolution,
         feature_cols=feature_cols,
+        drop_nulls=drop_nulls,
     )
