@@ -91,7 +91,7 @@ def format_data(
     df["DateTime"] = pd.to_datetime(
         df["DateTime"], utc=utc, format=datetime_format
     )
-    df["kwh"] = df["kwh"].replace("Null", np.nan)
+    df["kwh"] = df["kwh"].replace("Null", np.nan)  # Replace "Null" with np.nan
     df["kwh"] = df["kwh"].astype(float)
     df["ID"] = df["ID"].astype(str)
     return df
@@ -164,7 +164,7 @@ def drop_dupes_and_replace_nulls(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Output dataframe
     """
-    logger.info("🗑 Dropping dupes and filling nulls with 0")
+    logger.info("🗑 Dropping dupes and nulls")
     df_out = df.copy()
     df_out = df_out.sort_values(
         by=["ID", "date", "settlement_period"], ascending=True
@@ -200,13 +200,19 @@ def filter_missing_kwh(
     elif time_resolution == "hourly":
         required_len = 24  # 24 h readings
     else:
-        raise ValueError("time_resolution must be 'half_hourly' or 'hourly'")
+        raise ValueError(
+            f"time_resolution must be 'half_hourly' or 'hourly', \
+        got {time_resolution}"
+        )
     df_group["required_len"] = required_len
 
     df_full_data = df_group.query("required_len==kwh")  # Has all required data
     df_out = df_full_data[merge_cols].merge(df, on=merge_cols, how="inner")
 
-    assert len(df_out) > 0, "No data left after filtering missing kwh readings"
+    if len(df_out) == 0:
+        raise ValueError(
+            "No data left after filtering days with missing kWh readings"
+        )
     return df_out
 
 
@@ -325,7 +331,7 @@ def preprocess_pipeline(
     - Extraction of time features (day of week, month of year)
     - Injection of outliers into dataset
     - Calculation of mean and std for normalisation in Faraday
-    - Re-structung the dataset so that each row corresponds to a daily load
+    - Re-structuring the dataset so that each row corresponds to a daily load
         profile.
 
     Args:

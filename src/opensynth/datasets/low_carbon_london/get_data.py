@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Optional
 
 from opensynth.datasets import datasets_utils
-from opensynth.datasets.low_carbon_london import split_households
-from src.opensynth.datasets.low_carbon_london import preprocess_lcl
+from opensynth.datasets.low_carbon_london import (
+    preprocess_lcl,
+    split_households,
+)
 
 logger = logging.getLogger(__name__)
 
