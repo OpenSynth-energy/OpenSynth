@@ -46,7 +46,9 @@ def preprocess_data(
         float,
         typer.Option(
             "--sample_fraction",
-            help="Fraction of households to sample from the dataset.",
+            help="Fraction of households to include in the training set. \
+                Remaining fraction assigned to the holdout set. \
+                Value between 0 and 1.",
         ),
     ] = 0.75,
     time_resolution: Annotated[
