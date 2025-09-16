@@ -167,7 +167,7 @@ def drop_dupes_and_nulls(
     Returns:
         pd.DataFrame: Output dataframe
     """
-    logger.info("🗑 Dropping dupes and nulls")
+    logger.info("🗑 Dropping dupes")
     df_out = df.copy()
     df_out = df_out.sort_values(
         by=["ID", "date", "settlement_period"], ascending=True
@@ -176,8 +176,10 @@ def drop_dupes_and_nulls(
         subset=["ID", "date", "settlement_period"], keep="last"
     )
     if drop_nulls:
+        logger.info("🗑 Dropping nulls")
         df_out = df_out.dropna(subset="kwh")
     else:
+        logger.info("🗑 Filling nulls with 0.0")
         df_out["kwh"] = df_out["kwh"].fillna(0.0)
     return df_out
 
