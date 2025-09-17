@@ -20,6 +20,7 @@ litdata = "*"
 zstd = "*"
 einops = ">=0.7.0"
 ema-pytorch = "==0.4.5"
+pytest = "*"
 
 [dev-packages]
 pytest = "*"

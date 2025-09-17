@@ -1,19 +1,23 @@
 from datetime import datetime
 
 import pandas as pd
+import pytest
 
 from opensynth.datasets.low_carbon_london import preprocess_lcl
-from tests.utils import df_test
+from tests.utils import df_test_half_hourly, df_test_hourly
 
 
 class TestPreprocessLCL:
 
-    df_date = preprocess_lcl.extract_date_features(df_test())
-    df_settlement_period = preprocess_lcl.parse_settlement_period(df_date)
-    df_drop_dupes = preprocess_lcl.drop_dupes_and_replace_nulls(
-        df_settlement_period
+    df = preprocess_lcl.format_data(
+        df_test_half_hourly(),
+        datetime_col="DateTime",
+        kwh_col="kwh",
+        id_col="LCLid",
     )
-    df_drop_missing = preprocess_lcl.filter_missing_kwh(df_drop_dupes)
+    df_date = preprocess_lcl.extract_date_features(df)
+    df_settlement_period = preprocess_lcl.parse_settlement_period(df_date)
+    df_drop_dupes = preprocess_lcl.drop_dupes_and_nulls(df_settlement_period)
 
     def test_week(self):
         expected_week = pd.to_datetime(
@@ -69,21 +73,114 @@ class TestPreprocessLCL:
             == expected_settlement_period
         ).all()
 
-    def test_drop_dupes_and_replace_nulls(self):
-        assert len(self.df_drop_dupes) == 7
-        assert self.df_drop_dupes["kwh"].sum() == 2.1
+    def test_drop_dupes_and_nulls(self):
+        # Testing the original function that drops duplicates and nulls
+        # Expect duplicated row and null row dropped
+        assert len(self.df_drop_dupes) == 6
+        assert self.df_drop_dupes["kwh"].sum() == pytest.approx(2.3)
+
+    def test_replace_nulls(self):
+        # Testing the original function that replaces nulls with 0
+        df_drop_dupes = preprocess_lcl.drop_dupes_and_nulls(
+            self.df_settlement_period, drop_nulls=False
+        )
+        # Expect duplicated row dropped, but null replaced with 0
+        assert len(df_drop_dupes) == 7
+        assert df_drop_dupes["kwh"].sum() == pytest.approx(2.3)
 
     def test_filter_missing_kwh(self):
         # test_df is filled with only 1 kwh per date reading
         # filter_missing_kwh checks that each date has 48 readings
-        # and drop dates with < 48 readings
-        assert len(self.df_drop_missing) == 0
+        # and drop dates with < 24 or 48 readings depending on time resolution
+        with pytest.raises(ValueError):
+            _ = preprocess_lcl.filter_missing_kwh(self.df_drop_dupes)
 
     def test_pack_smart_meter_data_into_arrays(self):
         df_packed = preprocess_lcl.pack_smart_meter_data_into_arrays(
-            self.df_drop_dupes
+            self.df_drop_dupes,
+            feature_cols=["stdorToU"],
         )
-        assert len(df_packed) == 4
-        assert df_packed.query("LCLid=='MAC000002' and month==1 and day==15")[
+        assert len(df_packed) == 3
+        assert df_packed.query("ID=='MAC000002' and month==1 and day==15")[
             "kwh"
-        ].values.tolist()[0] == [0.0, 0.4, 0.5, 0.6]
+        ].values.tolist()[0] == [0.4, 0.4, 0.5, 0.6]
+
+
+class TestPreprocessHourlykWh:
+
+    df = preprocess_lcl.format_data(
+        df_test_hourly(),
+        datetime_col="DateTime",
+        kwh_col="kwh",
+        id_col="LCLid",
+    )
+    df_date = preprocess_lcl.extract_date_features(df)
+    df_settlement_period = preprocess_lcl.parse_settlement_period(df_date)
+    df_drop_dupes = preprocess_lcl.drop_dupes_and_nulls(df_settlement_period)
+
+    def test_week(self):
+        expected_week = pd.to_datetime(
+            [
+                datetime(2013, 1, 1),
+            ]
+            * 48
+        )
+        assert (self.df_date["week"] == expected_week).all()
+
+    def test_month_end(self):
+        expected_month_end = pd.to_datetime(
+            [
+                datetime(2013, 1, 31),
+            ]
+            * 48
+        )
+        assert (self.df_date["month_end"] == expected_month_end).all()
+
+    def test_month_max(self):
+        expected_month_max = [31] * 48
+        assert (self.df_date["month_max"] == expected_month_max).all()
+
+    def test_day_of_week(self):
+        expected_day_of_week = [3] * 24 + [4] * 24
+        assert (self.df_date["dayofweek"] == expected_day_of_week).all()
+
+    def test_parse_settlement_period(self):
+        expected_settlement_period = list(range(1, 49, 2)) * 2
+        assert (
+            self.df_settlement_period["settlement_period"]
+            == expected_settlement_period
+        ).all()
+
+    def test_drop_dupes_and_nulls(self):
+        assert len(self.df_drop_dupes) == 48
+        # assert self.df_drop_dupes["kwh"].sum() == pytest.approx(2.3)
+
+    def test_filter_missing_kwh(self):
+        # No missing data expected
+        df = preprocess_lcl.filter_missing_kwh(
+            self.df_drop_dupes, time_resolution="hourly"
+        )
+        assert len(df) == 48
+
+    def test_pack_smart_meter_data_into_arrays(self):
+        df_packed = preprocess_lcl.pack_smart_meter_data_into_arrays(
+            self.df_drop_dupes,
+            feature_cols=["stdorToU"],
+        )
+        assert len(df_packed) == 2
+        assert (
+            len(
+                df_packed.query("ID=='MAC000002' and month==1 and day==3")[
+                    "kwh"
+                ].values.tolist()[0]
+            )
+            == 24
+        )
+        assert (
+            len(
+                df_packed.query("ID=='MAC000002' and month==1 and day==4")[
+                    "kwh"
+                ].values.tolist()[0]
+            )
+            == 24
+        )
