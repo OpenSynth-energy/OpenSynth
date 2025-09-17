@@ -21,6 +21,7 @@ zstd = "*"
 einops = ">=0.7.0"
 ema-pytorch = "==0.4.5"
 polars = "*"
+pytest = "*"
 
 [dev-packages]
 pytest = "*"

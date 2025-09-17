@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "5311b4b6b8b8a48942f24e05a96dfefd73c60104cb4ba5b82b4f4f6873469dd9"
+            "sha256": "dd68682398b0028488a241cde24cd53cac986d78e23d49bb0a66a60acb71d3eb"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -637,6 +637,14 @@
             ],
             "markers": "python_version >= '3.8'",
             "version": "==3.11"
+        },
+        "iniconfig": {
+            "hashes": [
+                "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730",
+                "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12"
+            ],
+            "markers": "python_version >= '3.10'",
+            "version": "==2.3.0"
         },
         "jinja2": {
             "hashes": [
@@ -1447,6 +1455,14 @@
             "markers": "python_version >= '3.10'",
             "version": "==12.0.0"
         },
+        "pluggy": {
+            "hashes": [
+                "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3",
+                "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746"
+            ],
+            "markers": "python_version >= '3.9'",
+            "version": "==1.6.0"
+        },
         "polars": {
             "hashes": [
                 "sha256:5e8057c8289ac148c793478323b726faea933d9776bd6b8a554b0ab7c03db87e",
@@ -1597,6 +1613,14 @@
             "markers": "python_version >= '3.9'",
             "version": "==0.4.1"
         },
+        "pygments": {
+            "hashes": [
+                "sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887",
+                "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b"
+            ],
+            "markers": "python_version >= '3.8'",
+            "version": "==2.19.2"
+        },
         "pyparsing": {
             "hashes": [
                 "sha256:2df8d5b7b2802ef88e8d016a2eb9c7aeaa923529cd251ed0fe4608275d4105b6",
@@ -1604,6 +1628,15 @@
             ],
             "markers": "python_version >= '3.9'",
             "version": "==3.2.5"
+        },
+        "pytest": {
+            "hashes": [
+                "sha256:3e9c069ea73583e255c3b21cf46b8d3c56f6e3a1a8f6da94ccb0fcf57b9d73c8",
+                "sha256:67be0030d194df2dfa7b556f2e56fb3c3315bd5c8822c6951162b92b32ce7dad"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.10'",
+            "version": "==9.0.1"
         },
         "python-dateutil": {
             "hashes": [

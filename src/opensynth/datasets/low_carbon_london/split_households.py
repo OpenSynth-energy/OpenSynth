@@ -95,7 +95,6 @@ def split_historical_future_periods(
     return df_historical, df_future
 
 
-<<<<<<< HEAD
 def split_data(
     data_dir: str,
     csv_filename: Path,
@@ -110,9 +109,6 @@ def split_data(
     future_start: str = "2014-01-01",
     future_end: str = "2015-12-31",
 ) -> None:
-=======
-def split_lcl_data(csv_filename: Path, sample_fraction: float = 0.75):
->>>>>>> 96ac79a (Bugfix/train test split (#76))
     """
     Split the dataset 4 ways:
     1) Historical Train household data
@@ -124,7 +120,6 @@ def split_lcl_data(csv_filename: Path, sample_fraction: float = 0.75):
     Future data is used for Train-Synthetic-Test-Real (TSTR) evaluation.
 
     Args:
-<<<<<<< HEAD
         data_dir (str): Directory to store the processed data.
         csv_filename (Path): Path to the CSV file containing the raw data.
         sample_fraction (float): Fraction of households to include in the
@@ -146,9 +141,6 @@ def split_lcl_data(csv_filename: Path, sample_fraction: float = 0.75):
         future_end (str): End date for future data. Defaults to "2014-12-31".
     Returns:
         None
-=======
-        sample_fraction (float): _description_. Defaults to 0.75.
->>>>>>> 96ac79a (Bugfix/train test split (#76))
     """
 
     logger.info(f"👀 Reading data from: {csv_filename}")
@@ -165,11 +157,7 @@ def split_lcl_data(csv_filename: Path, sample_fraction: float = 0.75):
     logger.info("🖖 Spliting households into train and holdout")
     train_ids, holdout_ids = split_household_ids(
         df,
-<<<<<<< HEAD
         id_col,
-=======
-        id_col="LCLid",
->>>>>>> 96ac79a (Bugfix/train test split (#76))
         sample_fraction=sample_fraction,
     )
     logger.info(f"Train len: {len(train_ids)}")
