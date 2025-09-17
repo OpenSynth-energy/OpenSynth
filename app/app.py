@@ -19,30 +19,147 @@ app = typer.Typer(context_settings=dict(max_content_width=800))
 
 
 @app.command()
-def get_lcl_data(
-    download: Annotated[
-        bool, typer.Option("--download", help="Downloads LCL data.")
-    ] = False,
-    split: Annotated[
-        bool,
-        typer.Option(
-            "--split", help="Splits LCL households into training/ holdout set"
-        ),
-    ] = False,
-    preprocess: Annotated[
-        bool,
-        typer.Option(
-            "--preprocess",
-            help="Preprocesses LCL data to create 48-half hour daily"
-            "load profiles",
-        ),
-    ] = False,
+def download_lcl_data(
+    data_dir: Annotated[
+        str, typer.Option("--loc", help="Downloads LCL data to <location>.")
+    ] = "./data"
 ):
     """
-    Download, split and preprocess the Low Carbon London dataset.
+    Download the Low Carbon London dataset.
     """
-    get_data.get_lcl_data(
-        download=download, split=split, preprocess=preprocess
+    get_data.get_lcl_data(data_dir)
+
+
+@app.command()
+def preprocess_data(
+    data_dir: Annotated[
+        str, typer.Option("--loc", help="Location of data directory.")
+    ] = "./data",
+    csv_data_path: Annotated[
+        str,
+        typer.Option(
+            "--csv_path",
+            help="Path to dataset CSV file containing, relative to data_dir.",
+        ),
+    ] = "raw/CC_LCL-FullData.csv",
+    sample_fraction: Annotated[
+        float,
+        typer.Option(
+            "--sample_fraction",
+            help="Fraction of households to include in the training set. \
+                Remaining fraction assigned to the holdout set. \
+                Value between 0 and 1.",
+        ),
+    ] = 0.75,
+    time_resolution: Annotated[
+        str,
+        typer.Option(
+            "--time_resolution",
+            help='Time resolution of the data, either "half_hourly" or \
+                "hourly".',
+        ),
+    ] = "half_hourly",
+    feature_cols: Annotated[
+        list[str],
+        typer.Option(
+            "--feature_cols",
+            help="List of feature columns to include in the dataset.",
+        ),
+    ] = ["stdorToU"],
+    id_col: Annotated[
+        str,
+        typer.Option(
+            "--id_col",
+            help="Name of the household ID column.",
+        ),
+    ] = "LCLid",
+    kwh_col: Annotated[
+        str,
+        typer.Option(
+            "--kwh_col",
+            help="Name of the kWh column.",
+        ),
+    ] = "KWH/hh (per half hour) ",
+    datetime_col: Annotated[
+        str,
+        typer.Option(
+            "--datetime_col",
+            help="Name of the datetime column.",
+        ),
+    ] = "DateTime",
+    utc: Annotated[
+        bool,
+        typer.Option(
+            "--utc",
+            help="Whether the datetime is in UTC.",
+        ),
+    ] = False,
+    datetime_format: Annotated[
+        str | None,
+        typer.Option(
+            "--datetime_format",
+            help="Format of the datetime column, if not standard.",
+        ),
+    ] = None,
+    historical_start: Annotated[
+        str,
+        typer.Option(
+            "--historical_start",
+            help="Start date for historical data (YYYY-MM-DD).",
+        ),
+    ] = "2012-01-01",
+    historical_end: Annotated[
+        str,
+        typer.Option(
+            "--historical_end",
+            help="End date for historical data (YYYY-MM-DD).",
+        ),
+    ] = "2013-12-31",
+    future_start: Annotated[
+        str,
+        typer.Option(
+            "--future_start",
+            help="Start date for future data (YYYY-MM-DD).",
+        ),
+    ] = "2014-01-01",
+    future_end: Annotated[
+        str,
+        typer.Option(
+            "--future_end",
+            help="End date for future data (YYYY-MM-DD).",
+        ),
+    ] = "2014-12-31",
+    drop_nulls: Annotated[
+        bool,
+        typer.Option(
+            "--drop_nulls",
+            help="Whether to drop rows with NaN kwh values. If False, will \
+            replace NaN kwh values with 0.0",
+        ),
+    ] = True,
+):
+    """
+    Split and preprocess your dataset.
+    Default args are suitable for the LCL dataset. Modify as needed for other
+    datasets.
+    """
+
+    get_data.split_preprocess_data(
+        data_dir,
+        csv_data_path,
+        sample_fraction,
+        time_resolution,
+        feature_cols,
+        id_col,
+        kwh_col,
+        datetime_col,
+        utc,
+        datetime_format,
+        historical_start,
+        historical_end,
+        future_start,
+        future_end,
+        drop_nulls,
     )
 
 
