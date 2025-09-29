@@ -1,3 +1,3 @@
-from .extended_model import ExtendedFaradayModel
+from .extended_model import StitchedFaradayModel
 
-__all__ = ["ExtendedFaradayModel"]
+__all__ = ["StitchedFaradayModel"]

@@ -3,7 +3,7 @@ import polars as pl
 import pytest
 import torch
 
-from opensynth.models.faraday import ExtendedFaradayModel
+from opensynth.models.faraday import StitchedFaradayModel
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def extended_faraday_model():
     faraday_model = torch.load(
         "tests/data/evaluation/faraday_model_for_testing", weights_only=False
     )
-    model = ExtendedFaradayModel(faraday_model)
+    model = StitchedFaradayModel(faraday_model)
     return model
 
 
@@ -102,7 +102,7 @@ def fake_model():
                 "features": {k: torch.Tensor(v) for k, v in features.items()},
             }
 
-    return ExtendedFaradayModel(FakeModel())
+    return StitchedFaradayModel(FakeModel())
 
 
 @pytest.fixture

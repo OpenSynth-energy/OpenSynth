@@ -22,13 +22,13 @@ DEFAULT_YEAR = 2024
 logger = logging.getLogger(__name__)
 
 
-class ExtendedFaradayModel:
-    """Extended Faraday model to generate longer time-series.
+class StitchedFaradayModel:
+    """Stitched Faraday model to generate longer time-series.
 
-    First instantiate an ExtendedFaradayModel instance, where `trained_model`
+    First instantiate an StitchedFaradayModel instance, where `trained_model`
     is an instance of FaradayModel(), which is already trained.
 
-    >>> model = ExtendedFaradayModel(trained_model)
+    >>> model = StitchedFaradayModel(trained_model)
 
     Then, use the `generate_extended_samples()` method to generate synthetic samples
     for a month or a year. Keep in mind that Faraday, as currently implemented,
