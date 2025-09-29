@@ -16,7 +16,7 @@ def dm_mock():
 
 
 @pytest.fixture
-def extended_faraday_model():
+def stitched_faraday_model():
     from opensynth.models.faraday.vae_model import Decoder  # noqa: F401
     from opensynth.models.faraday.vae_model import Encoder  # noqa: F401
 
@@ -29,7 +29,7 @@ def extended_faraday_model():
 
 @pytest.mark.parametrize("n_samples", (1, 10))
 def test_generate_synthetic_samples(
-    dm_mock, extended_faraday_model, n_samples
+    dm_mock, stitched_faraday_model, n_samples
 ):
     """Test generation of synthetic samples for one month."""
     test_year = 2024
@@ -37,7 +37,7 @@ def test_generate_synthetic_samples(
 
     result = [
         sample
-        for sample in extended_faraday_model._generate_synthetic_samples(
+        for sample in stitched_faraday_model._generate_synthetic_samples(
             dm=dm_mock,
             year=test_year,
             month=test_month,
@@ -58,9 +58,9 @@ def test_generate_synthetic_samples(
 
 @pytest.mark.parametrize("n_samples", (1, 3))
 def test_generate_synthetic_sample_df(
-    extended_faraday_model, dm_mock, n_samples
+    stitched_faraday_model, dm_mock, n_samples
 ):
-    df = extended_faraday_model._generate_synthetic_sample_df(
+    df = stitched_faraday_model._generate_synthetic_sample_df(
         dm=dm_mock,
         n_samples=n_samples,
         year=2024,
@@ -118,7 +118,7 @@ def fake_data_module():
 
 def test_stitching_identical_features(fake_model, fake_data_module):
     """Test if features are consistent between generated samples."""
-    result = fake_model.generate_extended_samples(
+    result = fake_model.generate_stitched_samples(
         dm=fake_data_module,
         n_samples=10,
         year=2024,
