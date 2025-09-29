@@ -1,3 +1,5 @@
+import numpy as np
+import polars as pl
 import pytest
 import torch
 
@@ -15,10 +17,8 @@ def dm_mock():
 
 @pytest.fixture
 def extended_faraday_model():
-    from opensynth.models.faraday.vae_model import (  # noqa: F401
-        Decoder,
-        Encoder,
-    )
+    from opensynth.models.faraday.vae_model import Decoder  # noqa: F401
+    from opensynth.models.faraday.vae_model import Encoder  # noqa: F401
 
     faraday_model = torch.load(
         "tests/data/evaluation/faraday_model_for_testing", weights_only=False
@@ -44,7 +44,6 @@ def test_generate_synthetic_samples(
             n_samples=n_samples,
         )
     ]
-    print(result)
 
     # test number of samples
     assert len(result) == n_samples
@@ -69,3 +68,63 @@ def test_generate_synthetic_sample_df(
         fmt="pandas",
     )
     assert df.shape == (n_samples, 51)
+
+
+@pytest.fixture
+def fake_model():
+    """Mock model with two different features."""
+
+    class FakeModel:
+        feature_list = ["month", "dayofweek", "total", "is_zero"]
+        rng = np.random.default_rng()
+
+        def sample_gmm(self, n):
+            features = {
+                "month": self.rng.integers(1, 13, n).reshape(-1, 1),
+                "dayofweek": self.rng.integers(0, 7, n).reshape(-1, 1),
+                "total": self.rng.integers(1, 4, n).reshape(-1, 1),
+                "is_zero": self.rng.integers(0, 2, n).reshape(-1, 1),
+            }
+
+            kwh = torch.Tensor(
+                np.array(
+                    [
+                        np.zeros(48) if is_zero else np.ones(48) * total
+                        for is_zero, total in zip(
+                            features["is_zero"][:, 0], features["total"][:, 0]
+                        )
+                    ]
+                )
+            )
+
+            return {
+                "kwh": kwh,
+                "features": {k: torch.Tensor(v) for k, v in features.items()},
+            }
+
+    return ExtendedFaradayModel(FakeModel())
+
+
+@pytest.fixture
+def fake_data_module():
+    """Data module for FakeModel."""
+
+    class FakeDataModule:
+        def reconstruct_kwh(self, xhat: torch.Tensor) -> torch.Tensor:
+            return xhat
+
+    return FakeDataModule()
+
+
+def test_stitching_identical_features(fake_model, fake_data_module):
+    """Test if features are consistent between generated samples."""
+    result = fake_model.generate_extended_samples(
+        dm=fake_data_module,
+        n_samples=10,
+        year=2024,
+        fmt="polars",
+        period="year",
+    )
+    # The FakeModel returns identical values for each feature set. This means
+    # that for all rows, the values should be identical
+    assert result.select(pl.exclude("datetime")).unique().shape[0] == 1

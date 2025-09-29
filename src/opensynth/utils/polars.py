@@ -1,4 +1,5 @@
 import logging
+import random
 from typing import Optional
 
 import polars as pl
@@ -165,3 +166,40 @@ def semiwide_to_wide(
         )
         .pivot(on=datetime_name, values="value", aggregate_function="first")
     )
+
+
+def randomize_index_column(
+    df: pl.DataFrame,
+    index_col_name: str = "index",
+    sample_col_name: str = "sample",
+) -> pl.DataFrame:
+    """Randomize an index column.
+
+    Args:
+        df (DataFrame): Input DataFrame.
+        index_col_name (str): Name of index column.
+        sample_col_name (str): Name of new column containing the randomized index.
+
+    Returns:
+        DataFrame with index column values randomized.
+    """
+    # Ensure the sample indices are random
+    sample_idx = sorted(df[index_col_name].unique())
+
+    # Create a new column that has the same indices randomized
+    df = df.with_columns(
+        pl.col(index_col_name)
+        .replace(
+            dict(zip(sample_idx, random.sample(sample_idx, k=len(sample_idx))))
+        )
+        .alias(sample_col_name)
+    )
+
+    # Remove original columns, if name is different
+    df = (
+        df.select(sample_col_name, pl.exclude(index_col_name, sample_col_name))
+        if index_col_name != sample_col_name
+        else df
+    )
+
+    return df

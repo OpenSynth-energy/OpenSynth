@@ -1,5 +1,4 @@
 import logging
-from calendar import monthrange
 from collections.abc import Generator
 from datetime import date
 from functools import cached_property
@@ -12,9 +11,11 @@ import torch
 from tqdm.auto import tqdm
 
 from opensynth.data_modules.lcl_data_module import LCLDataModule
-from opensynth.utils.polars import semiwide_to_wide
+from opensynth.models.faraday.model import FaradayModel
+from opensynth.utils.polars import randomize_index_column, semiwide_to_wide
 
-from .model import FaradayModel
+from .stitch import stitch_samples
+from .utils import date_per_weekday_and_month, sample_number_is_sufficient
 
 DEFAULT_YEAR = 2024
 
@@ -48,7 +49,6 @@ class ExtendedFaradayModel:
 
     @property
     def model(self):
-        print("Returning", self._model)
         return self._model
 
     @model.setter
@@ -134,13 +134,68 @@ class ExtendedFaradayModel:
 
         return df
 
+    def _get_sampled_features(self, dm, n_samples, year):
+        features = self.optional_features
+        if len(features) == 0:
+            return None
+
+        df = self._generate_synthetic_sample_df(
+            dm, n_samples, year=year, month=1, fmt="polars"
+        )
+        sampled_features = (
+            df.select(features)
+            .group_by(features)
+            .len()
+            .rename({"len": "n_required"})
+        )
+        return sampled_features
+
+    def _generate_sufficient_samples_for_month(
+        self,
+        dm,
+        sampled_features,
+        year,
+        month,
+        n_samples,
+        batch_size: int = 5000,
+    ):
+
+        # Initial batch of samples
+        df = self._generate_synthetic_sample_df(
+            dm, batch_size, year=year, month=month, fmt="polars"
+        )
+
+        while not sample_number_is_sufficient(
+            df,
+            n_samples,
+            year,
+            month,
+            sampled_features,
+        ):
+            df = pl.concat(
+                (
+                    df,
+                    self._generate_synthetic_sample_df(
+                        dm=dm,
+                        n_samples=batch_size,
+                        year=year,
+                        month=month,
+                        fmt="polars",
+                    ),
+                )
+            )
+
+        return df
+
     def _generate_full_synthetic_month(
         self,
-        dm: LCLDataModule,
+        dm,
         year: int,
         month: int,
         n_samples: int = 1,
         fmt: Literal["pandas", "polars"] = "pandas",
+        sampled_features: pl.DataFrame | None = None,
+        randomize_index: bool = True,
     ) -> pd.DataFrame | pl.DataFrame:
         """Generate DataFrame Faraday samples for a specific month.
 
@@ -164,38 +219,28 @@ class ExtendedFaradayModel:
         Returns:
             pl.DataFrame in wide format with datetime as first columns.
         """
-        batch_size = 1000
-        df = self._generate_synthetic_sample_df(
-            dm, batch_size, year=year, month=month, fmt="polars"
+
+        sampled_features = (
+            self._get_sampled_features(dm, n_samples, year=year)
+            if sampled_features is None
+            else sampled_features
+        )
+        sample_df = self._generate_sufficient_samples_for_month(
+            dm, sampled_features, year, month, n_samples
+        )
+        result = stitch_samples(sample_df, sampled_features, n_samples)
+        result = (
+            randomize_index_column(result)
+            if randomize_index
+            else result.rename({"index": "sample"})
         )
 
-        while (
-            df.group_by("date").len().min()["len"][0] < n_samples
-            or len(df["date"].unique()) < monthrange(year, month)[1]
-        ):
-            df = pl.concat(
-                (
-                    df,
-                    self._generate_synthetic_sample_df(
-                        dm=dm,
-                        n_samples=batch_size,
-                        year=year,
-                        month=month,
-                        fmt="polars",
-                    ),
-                )
-            )
-        df = pl.concat(
-            [
-                p.sample(n_samples).with_row_index()
-                for p in df.partition_by("date")
-            ]
-        )
+        result = result.sort("sample", "date")
 
         if fmt == "pandas":
-            return df.to_pandas()
+            return result.to_pandas()
 
-        return df
+        return result
 
     def _generate_full_synthetic_year(
         self,
@@ -224,18 +269,22 @@ class ExtendedFaradayModel:
         Returns:
             pl.DataFrame in wide format with datetime as first columns.
         """
-        df = pl.concat(
-            [
-                self._generate_full_synthetic_month(
-                    dm=dm,
-                    year=year,
-                    month=month,
-                    n_samples=n_samples,
-                    fmt="polars",
-                )
-                for month in tqdm(range(1, 13))
-            ]
-        )
+        sampled_features = self._get_sampled_features(dm, n_samples, year=year)
+
+        individual_months = [
+            self._generate_full_synthetic_month(
+                dm=dm,
+                year=year,
+                month=month,
+                n_samples=n_samples,
+                fmt="polars",
+                sampled_features=sampled_features,
+                randomize_index=False,
+            )
+            for month in tqdm(range(1, 13))
+        ]
+        # return individual_months
+        df = pl.concat(individual_months)
         df = (
             semiwide_to_wide(
                 df.select(
@@ -246,9 +295,9 @@ class ExtendedFaradayModel:
                 date_col="date",
                 datetime_name="datetime",
             )
-            .with_columns(pl.col("index").cast(str))
+            .with_columns(pl.col("sample").cast(str))
             .transpose(
-                column_names="index",
+                column_names="sample",
                 include_header=True,
                 header_name="datetime",
             )
@@ -260,7 +309,7 @@ class ExtendedFaradayModel:
 
         return df
 
-    def _generate_synthetic_samples(
+    def _generate_synthetic_daily_samples(
         self,
         dm: LCLDataModule,
         n_samples: int,
@@ -294,18 +343,8 @@ class ExtendedFaradayModel:
         Yields:
             Tuple with datetime, month, day_of_week, generated sample values
         """
-        sample_df = (
-            pl.date_range(
-                date(year, 1, 1), date(year, 12, 31), "1d", eager=True
-            )
-            .alias("datetime")
-            .to_frame()
-            .with_columns(
-                pl.col("datetime").dt.weekday().alias("weekday"),
-                pl.col("datetime").dt.month().alias("month"),
-            )
-        )
-
+        # Get dates assigned to weekday/month combination
+        dates = date_per_weekday_and_month(year)
         n_batch = n_samples * 100
         n_generated = 0
         for _ in range(10):  # 1000 times should be enough
@@ -318,6 +357,7 @@ class ExtendedFaradayModel:
                     for f in self.model.feature_list
                 ]
             )
+
             # Get the kwh values in a numpy array
             kwh_samples = dm.reconstruct_kwh(gmm_samples["kwh"])
             kwh_samples = torch.clip(kwh_samples, min=0).detach().numpy()
@@ -326,6 +366,7 @@ class ExtendedFaradayModel:
             # otherwise.
             indices = list(range(feature_samples.shape[0]))
             np.random.default_rng().shuffle(indices)
+
             for i in indices:
                 feature_sample = feature_samples[i]
                 kwh_sample = kwh_samples[i]
@@ -333,10 +374,7 @@ class ExtendedFaradayModel:
                 try:
                     if month is None or g_month == month:
                         yield (
-                            sample_df.filter(
-                                pl.col("weekday") == dayofweek + 1,
-                                pl.col("month") == g_month,
-                            ).sample(1)["datetime"][0],
+                            np.random.choice(dates[dayofweek][g_month]),
                             g_month,
                             dayofweek,
                             feature_sample[2:],
@@ -380,7 +418,7 @@ class ExtendedFaradayModel:
             np.array(
                 [
                     (datetime, m, d, *f, *v)
-                    for datetime, m, d, f, v in self._generate_synthetic_samples(
+                    for datetime, m, d, f, v in self._generate_synthetic_daily_samples(
                         dm, n_samples, year=year, month=month
                     )
                 ]
