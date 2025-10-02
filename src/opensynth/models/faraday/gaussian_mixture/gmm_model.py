@@ -281,7 +281,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         sample_weights_column: Optional[str] = None,
     ):
         super().__init__()
-        self.gmm_module = gmm_module
+        self.gmm = gmm_module
         self.vae_module = vae_module
         self.num_components = num_components
         self.num_features = num_features
@@ -325,14 +325,14 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         )
 
         # Run e-step
-        log_prob, log_resp = self.gmm_module.e_step(encoded_batch)
+        log_prob, log_resp = self.gmm.e_step(encoded_batch)
         # Run m-step
-        precision_cholesky, weights, means, covariances = (
-            self.gmm_module.m_step(encoded_batch, log_resp)
+        precision_cholesky, weights, means, covariances = self.gmm.m_step(
+            encoded_batch, log_resp
         )
         # Update model params. This only updates the params
         # on the current device
-        self.gmm_module.update_params(
+        self.gmm.update_params(
             weights=weights,
             means=means,
             precision_cholesky=precision_cholesky,
@@ -346,11 +346,11 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         """
 
         if self.sync_on_batch:
-            weights = self.gmm_module.weights
-            means = self.gmm_module.means
-            precision_cholesky = self.gmm_module.precision_cholesky
-            covariances = self.gmm_module.covariances
-            nll = self.gmm_module.nll
+            weights = self.gmm.weights
+            means = self.gmm.means
+            precision_cholesky = self.gmm.precision_cholesky
+            covariances = self.gmm.covariances
+            nll = self.gmm.nll
 
             # forward performs update, compute and reset metrics
             weights_reduced = self.weight_metric.forward(weights)
@@ -361,7 +361,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             covar_reduced = self.covariance_metric.forward(covariances)
             nll_reduced = self.nll.forward(nll)
 
-            self.gmm_module.update_params(
+            self.gmm.update_params(
                 weights=weights_reduced,
                 means=means_reduced,
                 precision_cholesky=prec_chol_reduced,
@@ -381,11 +381,11 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         # Then update model params using the synced values
 
         if not self.sync_on_batch:
-            weights = self.gmm_module.weights
-            means = self.gmm_module.means
-            precision_cholesky = self.gmm_module.precision_cholesky
-            covariances = self.gmm_module.covariances
-            nll = self.gmm_module.nll
+            weights = self.gmm.weights
+            means = self.gmm.means
+            precision_cholesky = self.gmm.precision_cholesky
+            covariances = self.gmm.covariances
+            nll = self.gmm.nll
 
             self.weight_metric.update(weights)
             self.mean_metric.update(means)
@@ -406,7 +406,7 @@ class GaussianMixtureLightningModule(pl.LightningModule):
                 on_epoch=True,
             )  # uses mean-reduction (default) to accumulate the metrics
 
-            self.gmm_module.update_params(
+            self.gmm.update_params(
                 weights=weights_reduced,
                 means=means_reduced,
                 precision_cholesky=prec_chol_reduced,
