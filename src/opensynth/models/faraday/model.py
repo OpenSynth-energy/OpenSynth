@@ -282,7 +282,7 @@ class FaradayModel:
         self.feature_range = self.get_feature_range(features)
         logger.info("🎉 GMM Training Completed")
 
-        self.gmm = gmm_module
+        self.gmm_module = gmm_module
 
     def sample_gmm(self, n_samples: int) -> TrainingData:
         """
@@ -295,7 +295,7 @@ class FaradayModel:
             TrainingData: Decoder output (KWH), feature labels
         """
 
-        gmm_samples: torch.Tensor = self.gmm.sample(n_samples)
+        gmm_samples: torch.Tensor = self.gmm_module.sample(n_samples)
 
         # Parse GMM samples
         gmm_samples_parsed: TrainingData = self.parse_samples(
