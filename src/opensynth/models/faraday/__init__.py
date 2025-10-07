@@ -3,7 +3,12 @@
 
 from opensynth.models.faraday.model import FaradayModel
 from opensynth.models.faraday.stitched_model import StitchedFaradayModel
-from opensynth.models.faraday.vae_model import Decoder, Encoder, FaradayVAE
+from opensynth.models.faraday.vae_model import (
+    Decoder,
+    Encoder,
+    FaradayVAE,
+    ReparametrisationModule,
+)
 
 __all__ = [
     "FaradayVAE",
@@ -11,4 +16,5 @@ __all__ = [
     "StitchedFaradayModel",
     "Encoder",
     "Decoder",
+    "ReparametrisationModule",
 ]
