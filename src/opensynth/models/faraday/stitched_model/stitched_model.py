@@ -2,7 +2,7 @@ import logging
 from collections.abc import Generator
 from datetime import date
 from functools import cached_property
-from typing import Literal, Tuple
+from typing import Literal, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -30,9 +30,10 @@ class StitchedFaradayModel:
 
     >>> model = StitchedFaradayModel(trained_model)
 
-    Then, use the `generate_stitched_samples()` method to generate synthetic samples
-    for a month or a year. Keep in mind that Faraday, as currently implemented,
-    will not impose any constraints on the consistency between different days.
+    Then, use the `generate_stitched_samples()` method to generate synthetic
+    samples for a month or a year. Keep in mind that Faraday, as currently
+    implemented, will not impose any constraints on the consistency between
+    different days.
 
     >>> generated_samples = model.generate_stitched_samples(
             dm=dm,
@@ -71,6 +72,7 @@ class StitchedFaradayModel:
 
     @cached_property
     def optional_features(self) -> list[str]:
+        """list with names of optional features"""
         return [
             f
             for f in self.model.feature_list
@@ -85,11 +87,11 @@ class StitchedFaradayModel:
         year: int = DEFAULT_YEAR,
         period: Literal["month", "year"] = "month",
         fmt: Literal["pandas", "polars"] = "polars",
-    ):
-        """Generate DataFrame with Faraday samples for a specific month or year.
+    ) -> pl.DataFrame | pd.DataFrame:
+        """Generate DataFrame with Faraday samples for a month or year.
 
-        Samples will be generated with all timesteps for all days in the specified
-        month or year.
+        Samples will be generated with all timesteps for all days in the
+        specified month or year.
 
         Args:
             dm (LCLDataModule): Data module.
@@ -100,12 +102,13 @@ class StitchedFaradayModel:
                 generating samples for January, `n_samples` * 31 will be
                 generated and stitched together to produce `n_samples` samples
                 with 31 days.
-            month (int): Specific month, used in combinatoon with `period="month"`.
+            month (int): Specific month, used in combinatoon with
+                `period="month"`.
             year (int, optional): Year to use for timestamps.
-            period (str, optional): Generate samples for a full "month", or for a "year".
-                Default is "month".
-            fmt (str, optional): DataFrame format Either "pandas" or "polars", default is
-                "polars".
+            period (str, optional): Generate samples for a full "month", or
+                for a "year". Default is "month".
+            fmt (str, optional): DataFrame format Either "pandas" or "polars",
+                default is "polars".
 
         Returns:
             DataFrame in wide format with datetime as first columns.
@@ -114,33 +117,51 @@ class StitchedFaradayModel:
             case "month":
                 if month is None:
                     raise ValueError(
-                        "The month needs to be specified when period is 'month'"
+                        "The month needs to be specified "
+                        "when period is 'month'"
                     )
                 df = self._generate_full_synthetic_month(
                     dm=dm,
                     year=year,
                     month=month,
                     n_samples=n_samples,
-                    fmt=fmt,
                 )
             case "year":
                 df = self._generate_full_synthetic_year(
-                    dm=dm, year=year, n_samples=n_samples, fmt=fmt
+                    dm=dm, year=year, n_samples=n_samples
                 )
             case _:
                 raise ValueError(
                     "Invalid period, should be either 'month' or 'year'"
                 )
 
+        if fmt == "pandas":
+            return df.to_pandas()
+
         return df
 
-    def _get_sampled_features(self, dm, n_samples, year):
+    def _get_sampled_features(
+        self, dm: LCLDataModule, n_samples: int, year: int
+    ) -> pl.DataFrame | None:
+        """Generate DataFrame with sampled features.
+
+        Generate samples and select the features.
+
+        Args:
+            dm (LCLDataModule): Data module.
+            n_samples (int): Number of synthetic samples to generate.
+            year (int, optional): Year to use for timestamps.
+
+        Returns:
+            DataFrame with sampled feature or None if there are no optional
+                features.
+        """
         features = self.optional_features
         if len(features) == 0:
             return None
 
         df = self._generate_synthetic_sample_df(
-            dm, n_samples, year=year, month=1, fmt="polars"
+            dm, n_samples, year=year, month=1
         )
         sampled_features = (
             df.select(features)
@@ -152,17 +173,44 @@ class StitchedFaradayModel:
 
     def _generate_sufficient_samples_for_month(
         self,
-        dm,
-        sampled_features,
-        year,
-        month,
-        n_samples,
+        dm: LCLDataModule,
+        sampled_features: pl.DataFrame | None,
+        year: int,
+        month: int,
+        n_samples: int,
         batch_size: int = 5000,
     ):
+        """Generate DataFrame Faraday samples for a specific month.
+
+        Samples will be generated with a timestamp that fits the specified
+        month for each day in that month. Enough samples will be generated
+        to ensure that for each of the selected combination of features at
+        least one sample will be generated for each day.
+
+        Args:
+            dm (LCLDataModule): Data module.
+            sampled_features (DataFrame or None): DataFrame with sampled
+                combinations of features or None.
+            year (int): Year to use for timestamps.
+            month (int): Month (1-based) to use. If generated
+                samples do not match the specified month, they will be
+                discarded until enough samples are specified that do match.
+            n_samples (int): Number of synthetic samples to generate for the
+                specified month. This argument specifies the number of
+                stitched-together samples. In practice, this means that more
+                samples will be generated by the Faraday model. For instance,
+                if generating samples for January, `n_samples` * 31 will be
+                generated and stitched together to produce `n_samples` samples
+                with 31 days.
+            batch_size (int, optional): Batch size, default is 5000.
+
+        Returns:
+            DataFrame with generated samples.
+        """
 
         # Initial batch of samples
         df = self._generate_synthetic_sample_df(
-            dm, batch_size, year=year, month=month, fmt="polars"
+            dm, batch_size, year=year, month=month
         )
 
         while not sample_number_is_sufficient(
@@ -180,7 +228,6 @@ class StitchedFaradayModel:
                         n_samples=batch_size,
                         year=year,
                         month=month,
-                        fmt="polars",
                     ),
                 )
             )
@@ -193,13 +240,13 @@ class StitchedFaradayModel:
         year: int,
         month: int,
         n_samples: int = 1,
-        fmt: Literal["pandas", "polars"] = "pandas",
         sampled_features: pl.DataFrame | None = None,
         randomize_index: bool = True,
-    ) -> pd.DataFrame | pl.DataFrame:
+    ) -> pl.DataFrame:
         """Generate DataFrame Faraday samples for a specific month.
 
-        Samples will be generated with a timestamp that fits the specified month.
+        Samples will be generated with a timestamp that fits the specified
+        month.
 
         Args:
             dm (LCLDataModule): Data module.
@@ -214,7 +261,14 @@ class StitchedFaradayModel:
                 if generating samples for January, `n_samples` * 31 will be
                 generated and stitched together to produce `n_samples` samples
                 with 31 days.
-            fmt (str, optional): Either "pandas" or "polars", default is "pandas".
+            sampled_features (DataFrame, optional): DataFrame with sampled
+                combinations of features. Used to ensure consistency of
+                features between different days of the same sample. Can be
+                `None` if there are no optional features to take into account.
+            randomize_index (bool, optional): Randomize the sample index. To
+                ensure that the order of samples combinations of features is
+                random.
+
 
         Returns:
             pl.DataFrame in wide format with datetime as first columns.
@@ -237,9 +291,6 @@ class StitchedFaradayModel:
 
         result = result.sort("sample", "date")
 
-        if fmt == "pandas":
-            return result.to_pandas()
-
         return result
 
     def _generate_full_synthetic_year(
@@ -247,8 +298,7 @@ class StitchedFaradayModel:
         dm: LCLDataModule,
         year: int,
         n_samples: int = 1,
-        fmt: Literal["pandas", "polars"] = "pandas",
-    ) -> pd.DataFrame | pl.DataFrame:
+    ) -> pl.DataFrame:
         """Generate DataFrame Faraday samples for a specific year.
 
         Samples will be generated with all timesteps for all months in the
@@ -264,7 +314,6 @@ class StitchedFaradayModel:
                 samples for 2024, `n_samples` * 366 samples will be generated
                 and stitched together, to produce `n_samples` yearly samples
                 with 366 days.
-            fmt (str, optional): Either "pandas" or "polars", default is "pandas".
 
         Returns:
             pl.DataFrame in wide format with datetime as first columns.
@@ -277,14 +326,13 @@ class StitchedFaradayModel:
                 year=year,
                 month=month,
                 n_samples=n_samples,
-                fmt="polars",
                 sampled_features=sampled_features,
                 randomize_index=False,
             )
             for month in tqdm(range(1, 13))
         ]
         # return individual_months
-        df = pl.concat(individual_months)
+        df = cast(pl.DataFrame, pl.concat(individual_months))
         df = (
             semiwide_to_wide(
                 df.select(
@@ -303,9 +351,6 @@ class StitchedFaradayModel:
             )
             .with_columns(pl.col("datetime").str.to_datetime())
         )
-
-        if fmt == "pandas":
-            return df.to_pandas()
 
         return df
 
@@ -362,8 +407,8 @@ class StitchedFaradayModel:
             kwh_samples = dm.reconstruct_kwh(gmm_samples["kwh"])
             kwh_samples = torch.clip(kwh_samples, min=0).detach().numpy()
 
-            # Randomly order the generated samples. We get a sample-size dependent effect
-            # otherwise.
+            # Randomly order the generated samples. We get a sample-size-
+            # dependent effect otherwise.
             indices = list(range(feature_samples.shape[0]))
             np.random.default_rng().shuffle(indices)
 
@@ -374,7 +419,9 @@ class StitchedFaradayModel:
                 try:
                     if month is None or g_month == month:
                         yield (
-                            np.random.choice(dates[dayofweek][g_month]),
+                            np.random.choice(
+                                np.array(dates[dayofweek][g_month])
+                            ),
                             g_month,
                             dayofweek,
                             feature_sample[2:],
@@ -394,35 +441,33 @@ class StitchedFaradayModel:
         n_samples: int,
         year: int = DEFAULT_YEAR,
         month: int | None = None,
-        fmt: Literal["pandas", "polars"] = "pandas",
-    ) -> pd.DataFrame | pl.DataFrame:
-        """Generate DataFrame Faraday samples for a specific month/year combination.
+    ) -> pl.DataFrame:
+        """Generate DataFrame Faraday samples for a month/year combination.
 
-        Samples will be generated with a timestamp that fits the specified year and
-        month. If month is not specified, it can be any month.
+        Samples will be generated with a timestamp that fits the specified
+        year and month. If month is not specified, it can be any month.
 
         Args:
             dm (LCLDataModule): Data module.
             n_samples (int): Number of synthetic daily samples to generate for
                 the specified month.
             year (int, optional): Year to use for timestamps.
-            month (int, optional): Month (1-based) to use. If generated samples do not
-                match the specified month, they will be discarded until enough samples
-                are specified that do match.
-            fmt (str, optional): Either "pandas" or "polars", default is "pandas".
+            month (int, optional): Month (1-based) to use. If generated
+                samples do not match the specified month, they will be
+                discarded until enough samples are specified that do match.
 
         Returns:
-            pl.DataFrame in wide format with datetime as first columns.
+            DataFrame in wide format with datetime as first columns.
         """
+        sample_data = [
+            (datetime, m, d, *f, *v)
+            for datetime, m, d, f, v in self._generate_synthetic_daily_samples(
+                dm, n_samples, year=year, month=month
+            )
+        ]
+
         df = pl.DataFrame(
-            np.array(
-                [
-                    (datetime, m, d, *f, *v)
-                    for datetime, m, d, f, v in self._generate_synthetic_daily_samples(
-                        dm, n_samples, year=year, month=month
-                    )
-                ]
-            ).tolist(),
+            np.array(sample_data).tolist(),
             schema={"date": pl.Date, "month": int, "dayofweek": int}
             | {f: float for f in self.optional_features}
             | {
@@ -431,8 +476,5 @@ class StitchedFaradayModel:
             },
             orient="row",
         )
-
-        if fmt == "pandas":
-            return df.to_pandas()
 
         return df

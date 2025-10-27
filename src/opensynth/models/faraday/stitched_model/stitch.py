@@ -2,7 +2,7 @@ import polars as pl
 
 
 def stitch_by_date(df: pl.DataFrame, n_samples: int) -> pl.DataFrame:
-    """Sample an equal number of days per date in the DataFrame.
+    """Sample an equal number of days per day (date) in the DataFrame.
 
     The sample number will be added as an additional column.
 
@@ -24,6 +24,21 @@ def stitch_by_date(df: pl.DataFrame, n_samples: int) -> pl.DataFrame:
 def stitch_by_date_and_features(
     df: pl.DataFrame, sampled_features: pl.DataFrame
 ) -> pl.DataFrame:
+    """Sample an equal number of days per day (date) in the DataFrame.
+
+    The sample number will be added as an additional column. The features
+    of all samples with the same sample number will be consistent between
+    days.
+
+    Args:
+        df (DataFrame): DataFrame with daily samples, where the
+            distribution over days, as specified by the date column,
+            can be different,
+        sampled_features (DataFrame): DataFrame with sampled features.
+
+    Returns:
+        DataFrame with an equal number of samples per day.
+    """
     features = sampled_features.select(pl.exclude("n_required")).columns
     result = pl.DataFrame()
     c = 0
