@@ -149,7 +149,7 @@ class StitchedFaradayModel:
 
         Args:
             dm (LCLDataModule): Data module.
-            n_samples (int): Number of synthetic samples to generate.
+            n_samples (int): Number of synthetic samples to generate per day.
             year (int, optional): Year to use for timestamps.
 
         Returns:

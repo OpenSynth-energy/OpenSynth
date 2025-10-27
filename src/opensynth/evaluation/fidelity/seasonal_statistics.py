@@ -1,3 +1,12 @@
+"""Seasonal statistics metrics for fidelity evaluation.
+
+Note regarding suitability of this metric: Faraday generates independent daily
+profiles, where we do not expect to generate realistic multi-day profiles for
+particular households. Although these fidelity metrics are well-suited for
+evaluating monthly/yearly synthetic profiles, Faraday is not expected to
+perform particularly well, given the current architecture.
+"""
+
 from functools import singledispatch
 from typing import Any, Literal, TypeAlias, cast
 
@@ -21,15 +30,15 @@ def add_season(  # pragma: no cover
 ) -> Any:
     """Add a column with season to a DataFrame.
 
-    The season is based on a datetime column. This column is `"datetime"` by default,
-    but can be specified with the `datetime_col` argument.
-    The season `"column"` will contain one of four values: "winter", "spring", "summer"
-    or "fall".
+    The season is based on a datetime column. This column is `"datetime"` by
+        default, but can be specified with the `datetime_col` argument.
+    The season `"column"` will contain one of four values: "winter", "spring",
+    "summer" or "fall".
 
     Args:
         df (DataFrame): Input DataFrame or LazyFrame.
-        datetime_col (str, optional): Name of the column used as a datetime column
-            ("datetime" by default).
+        datetime_col (str, optional): Name of the column used as a datetime
+            column ("datetime" by default).
 
     Returns:
         DataFrame with "season" column added.
@@ -80,12 +89,14 @@ def seasonal_peaks(  # pragma: no cover
 
     Args:
         df (DataFrame): Input DataFrame or LazyFrame.
-        datetime_col (str, optional): Name of the column used as a datetime column
-            ("datetime" by default). If `df` is a pandas DataFrame, `datetime_col` can
-            also be the name of the index.
-        high_low (str, optional): Either "high" or "low". Determines if the seasonal
-            peaks are calculated for the high or for low peaks. Default is "high".
-        quantile (float, option): Quantile used to determine peaks. Default is 0.2 / 0.8.
+        datetime_col (str, optional): Name of the column used as a datetime
+            column ("datetime" by default). If `df` is a pandas DataFrame,
+            `datetime_col` can also be the name of the index.
+        high_low (str, optional): Either "high" or "low". Determines if the
+            seasonal peaks are calculated for the high or for low peaks.
+            Default is "high".
+        quantile (float, option): Quantile used to determine peaks. Default is
+            0.2 / 0.8.
 
     Returns:
         DataFrame with statistics per season.
@@ -182,19 +193,22 @@ def calculate_seasonal_peaks(
     high_low: Literal["high", "low"] = "high",
     quantile: float = 0.2,
 ) -> pd.DataFrame | pl.DataFrame:
-    """Calculate statistics on number of peaks per season for multiple DataFrames.
+    """Calculate statistics on peak number per season for multiple DataFrames.
 
-    This function will calculate the number of peaks for all DataFrames in the `dfs`
-    input dictionary.
+    This function will calculate the number of peaks for all DataFrames in the
+    `dfs` input dictionary.
 
     Args:
-        dfs (dict): Input with name (`str`) as key and DataFrame or LazyFrame as value.
-        datetime_col (str, optional): Name of the column used as a datetime column
-            ("datetime" by default). If `df` is a pandas DataFrame, `datetime_col` can
-            also be the name of the index.
-        high_low (str, optional): Either "high" or "low". Determines if the seasonal
-            peaks are calculated for the high or for low peaks. Default is "high".
-        quantile (float, option): Quantile used to determine peaks. Default is 0.2 / 0.8.
+        dfs (dict): Input with name (`str`) as key and DataFrame or LazyFrame
+            as value.
+        datetime_col (str, optional): Name of the column used as a datetime
+            column ("datetime" by default). If `df` is a pandas DataFrame,
+            `datetime_col` can also be the name of the index.
+        high_low (str, optional): Either "high" or "low". Determines if the
+            seasonal peaks are calculated for the high or for low peaks.
+            Default is "high".
+        quantile (float, option): Quantile used to determine peaks. Default is
+            0.2 / 0.8.
 
     Returns:
         DataFrame with statistics per season for each data set.
@@ -245,8 +259,8 @@ def print_seasonal_stats(  # pragma: no cover
     Args:
         df: df (DataFrame): Input DataFrame or LazyFrame, output of
             `calculate_seasonal_peaks()`.
-        aggregate_function (str or pl.Expr): Aggregate function to use, "median" by
-            default.
+        aggregate_function (str or pl.Expr): Aggregate function to use,
+            "median" by default.
     """
 
 

@@ -1,3 +1,12 @@
+"""Auto-correlation metrics for fidelity evaluation.
+
+Note regarding suitability of this metric: Faraday generates independent daily
+profiles, where we do not expect to generate realistic multi-day profiles for
+particular households. Although these fidelity metrics are well-suited for
+evaluating monthly/yearly synthetic profiles, Faraday is not expected to
+perform particularly well, given the current architecture.
+"""
+
 import datetime
 import logging
 from functools import singledispatch
@@ -34,9 +43,9 @@ def calculate_auto_correlation_for_column(  # pragma: no cover
         column (str): Column with values to use for calculation of correlation.
         datetime_col (str, optional): Column with datetime values.
         shifts (dict, optional): Be default, correlation will be calculated
-            for hour, half_day, day, week and half_year. The `shifts` argument can be
-            use to specify custom periods. The input is dictionary with name as key
-            and number of rows to use (shift) as value.
+            for hour, half_day, day, week and half_year. The `shifts` argument
+            can be use to specify custom periods. The input is dictionary with
+            name as key and number of rows to use (shift) as value.
 
     Returns:
         DataFrame with auto-correlation result.
@@ -54,9 +63,9 @@ def _check_autocorrelation_shifts(
     Args:
         df (pd.DataFrame or pd.DataFrame): Input DataFrame.
         shifts (dict, optional): Be default, correlation will be calculated
-            for hour, half_day, day, week and half_year. The `shifts` argument can be
-            use to specify custom periods. The input is dictionary with name as key
-            and number of rows to use (shift) as value.
+            for hour, half_day, day, week and half_year. The `shifts` argument
+            can be use to specify custom periods. The input is dictionary with
+            name as key and number of rows to use (shift) as value.
         datetime_col (str, optional): Column with datetime values.
 
     Returns:
@@ -80,7 +89,8 @@ def _check_autocorrelation_shifts(
         # Check for shifts smaller than the time interval in the DataFrame.
         if shift < 1:
             logger.warning(
-                f"Skipping shift '{name}' as it is smaller than the timeseries interval."
+                f"Skipping shift '{name}' "
+                "as it is smaller than the timeseries interval."
             )
             continue
 
@@ -161,9 +171,9 @@ def calculate_auto_correlation_for_dataframe(
         df (DataFrame or LazyFrame): Input DataFrame.
         datetime_col (str, optional): Column with datetime values.
         shifts (dict, optional): Be default, correlation will be calculated
-            for hour, half_day, day, week and half_year. The `shifts` argument can be
-            use to specify custom periods. The input is dictionary with name as key
-            and number of rows to use (shift) as value.
+            for hour, half_day, day, week and half_year. The `shifts` argument
+            can be use to specify custom periods. The input is dictionary with
+            name as key and number of rows to use (shift) as value.
 
     Returns:
         DataFrame with auto-correlation values.
@@ -217,12 +227,13 @@ def calculate_auto_correlation(
     """Calculate auto-correlation values for all columns in a DataFrame.
 
     Args:
-        dfs (dict): Input with name (`str`) as key and DataFrame or LazyFrame as value.
+        dfs (dict): Input with name (`str`) as key and DataFrame or LazyFrame
+            as value.
         datetime_col (str, optional): Column with datetime values.
         shifts (dict, optional): Be default, correlation will be calculated
-            for hour, half_day, day, week and half_year. The `shifts` argument can be
-            use to specify custom periods. The input is dictionary with name as key
-            and number of rows to use (shift) as value.
+            for hour, half_day, day, week and half_year. The `shifts` argument
+            can be use to specify custom periods. The input is dictionary with
+            name as key and number of rows to use (shift) as value.
 
     Returns:
         DataFrame with auto-correlation values.
@@ -266,7 +277,8 @@ def plot_autocorrelation_stats(df: pd.DataFrame | pl.DataFrame) -> None:
     """CDF plot of the auto-correlation results.
 
     Args:
-        df: df (DataFrame): Input DataFrame, output of`calculate_auto_correlation()`.
+        df: df (DataFrame): Input DataFrame, output of
+            `calculate_auto_correlation()`.
     """
     g = sns.FacetGrid(df, col="time_delta", hue="name")
     g.map(sns.ecdfplot, "correlation")
@@ -279,11 +291,12 @@ def pairwise_autocorrelation_kstest(
 ) -> Any:  # pragma: no cover
     """Pairwise Kolmogorov-Smirnov test of the auto-correlation resuls.
 
-    Test the distribution of correlation values between two data sets in the input
-    DataFrame `df`.
+    Test the distribution of correlation values between two data sets in the
+    input DataFrame `df`.
 
     Args:
-        df: df (DataFrame): Input DataFrame, output of `calculate_auto_correlation()`.
+        df: df (DataFrame): Input DataFrame, output of
+            `calculate_auto_correlation()`.
         a (str): Name of data set to compare.
         b (str): Name of other data set to compare.
 
