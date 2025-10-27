@@ -37,7 +37,7 @@ def test_generate_synthetic_samples(
 
     result = [
         sample
-        for sample in stitched_faraday_model._generate_synthetic_samples(
+        for sample in stitched_faraday_model._generate_synthetic_daily_samples(
             dm=dm_mock,
             year=test_year,
             month=test_month,
