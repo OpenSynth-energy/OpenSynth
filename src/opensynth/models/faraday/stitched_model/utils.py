@@ -53,7 +53,18 @@ def sample_number_is_sufficient(
 
 
 def date_per_weekday_and_month(year: int) -> dict[int, dict[int, list[date]]]:
+    """Return dictionary of dates in a year.
 
+    This will create a nested dictionary with day of week as first key, and
+    month as the second key.
+
+    Args:
+        year (int): Year.
+
+    Returns:
+        Dictionary with all days of the year as values and day_of_week and
+            month as keys.
+    """
     sample_df = (
         pl.date_range(date(year, 1, 1), date(year, 12, 31), "1d", eager=True)
         .alias("datetime")
