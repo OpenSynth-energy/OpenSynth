@@ -5,7 +5,7 @@ import csv
 import logging
 import os
 from pathlib import Path
-from typing import Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -46,17 +46,54 @@ def get_current_month_end(df: pd.DataFrame, date_col="dt"):
 
 def load_data(file_path: Path) -> pd.DataFrame:
     """
-    Load LCL data from csv
+    Load data from csv
 
     Args:
-        files_path (str): Folder containing CSV files
+        file_path (Path): Path to the csv file
 
     Returns:
-        pd.DataFrame: LCL dataset
+        pd.DataFrame: dataset
     """
     logger.info(f"🚛 Loading data from {file_path}")
     df = pd.read_csv(file_path)
-    df = df.rename(columns={"KWH/hh (per half hour) ": "kwh"})
+    return df
+
+
+def format_data(
+    df: pd.DataFrame,
+    datetime_col: str,
+    kwh_col: str,
+    id_col: str,
+    utc: bool = True,
+    datetime_format: Optional[str] = None,
+) -> pd.DataFrame:
+    """
+    Load data from csv
+
+    Args:
+        df (pd.DataFrame): Dataset
+        datetime_col (str): Name of the datetime column
+        kwh_col (str): Name of the kWh column
+        id_col (str): Name of the household ID column
+        utc (bool): Whether the datetime is in UTC
+        datetime_format (str, optional): Format of the datetime column. If
+            None, will try to infer the format. Defaults to None.
+
+    Returns:
+        pd.DataFrame: dataset
+    """
+
+    logger.info("🧹 Formatting data")
+    df.rename(
+        columns={datetime_col: "DateTime", kwh_col: "kwh", id_col: "ID"},
+        inplace=True,
+    )
+    df["DateTime"] = pd.to_datetime(
+        df["DateTime"], utc=utc, format=datetime_format
+    )
+    df["kwh"] = df["kwh"].replace("Null", np.nan)  # Replace "Null" with np.nan
+    df["kwh"] = df["kwh"].astype(float)
+    df["ID"] = df["ID"].astype(str)
     return df
 
 
@@ -117,59 +154,89 @@ def parse_settlement_period(
     return df_out
 
 
-def drop_dupes_and_replace_nulls(df: pd.DataFrame) -> pd.DataFrame:
+def drop_dupes_and_nulls(
+    df: pd.DataFrame, drop_nulls: bool = True
+) -> pd.DataFrame:
     """
     Function to drop duplicated readings and replace missing readings with 0.0
 
     Args:
         df (pd.DataFrame): Input dataframe
-
+        drop_nulls (bool): Whether to drop rows with NaN kwh values. If False,
+            will replace NaN kwh values with 0.0
     Returns:
         pd.DataFrame: Output dataframe
     """
-    logger.info("🗑 Dropping dupes and filling nulls with 0")
+    logger.info("🗑 Dropping dupes")
     df_out = df.copy()
     df_out = df_out.sort_values(
-        by=["LCLid", "date", "settlement_period"], ascending=True
+        by=["ID", "date", "settlement_period"], ascending=True
     )
     df_out = df_out.drop_duplicates(
-        subset=["LCLid", "date", "settlement_period"], keep="last"
+        subset=["ID", "date", "settlement_period"], keep="last"
     )
-    df_out["kwh"] = df_out["kwh"].replace("Null", np.float64())
-    df_out["kwh"] = df_out["kwh"].astype(float)
+    if drop_nulls:
+        logger.info("🗑 Dropping nulls")
+        df_out = df_out.dropna(subset="kwh")
+    else:
+        logger.info("🗑 Filling nulls with 0.0")
+        df_out["kwh"] = df_out["kwh"].fillna(0.0)
     return df_out
 
 
-def filter_missing_kwh(df: pd.DataFrame) -> pd.DataFrame:
+def filter_missing_kwh(
+    df: pd.DataFrame, time_resolution: str = "half_hourly"
+) -> pd.DataFrame:
     """
-    Drop dates where we don't have full 48 readings
-    for a given LCLid and date.
+    Drop dates where we don't have full 48 readings if half-hourly data,
+    or 24 readings if hourly data, for a given ID and date.
 
     Args:
-        df (pd.DataFrame): _description_
+        df (pd.DataFrame): dataset
+        time_resolution (str): Time resolution of the data. Allowed values:
+            "half_hourly", "hourly".
 
     Returns:
-        pd.DataFrame: _description_
+        pd.DataFrame: filtered dataset
     """
     logger.info("🔍 Filtering missing kwh readings")
-    id_col = ["LCLid"]
-    merge_cols = id_col + ["date"]
+    merge_cols = ["ID", "date"]
     df_group = df.groupby(merge_cols)[["kwh"]].count().reset_index()
-    df_group["required_len"] = 48  # 48 hh readings
+
+    if time_resolution == "half_hourly":
+        required_len = 48  # 48 hh readings
+    elif time_resolution == "hourly":
+        required_len = 24  # 24 h readings
+    else:
+        raise ValueError(
+            f"time_resolution must be 'half_hourly' or 'hourly', \
+        got {time_resolution}"
+        )
+    df_group["required_len"] = required_len
 
     df_full_data = df_group.query("required_len==kwh")  # Has all required data
     df_out = df_full_data[merge_cols].merge(df, on=merge_cols, how="inner")
+
+    if len(df_out) == 0:
+        raise ValueError(
+            "No data left after filtering days with missing kWh readings"
+        )
     return df_out
 
 
-def pack_smart_meter_data_into_arrays(df: pd.DataFrame) -> pd.DataFrame:
+def pack_smart_meter_data_into_arrays(
+    df: pd.DataFrame, feature_cols: List[str]
+) -> pd.DataFrame:
     """
-    Pack smart meter data into 48-dimensional arrays.
+    Pack smart meter data into 48- or 24-dimensional arrays,
+    depending on whether half-hourly or hourly data.
     Note: LCL dataset are all given in UTC. We should expect
     48-readings per day.
 
     Args:
         df (pd.DataFrame): Input dataframe
+        feature_cols (List[str]): List of feature columns to include in
+            processed dataset.
 
     Returns:
         pd.DataFrame: Output dataframe
@@ -177,9 +244,9 @@ def pack_smart_meter_data_into_arrays(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("👝 Packing time series into arrays")
     df_out = df.copy()
     df_out = df_out.sort_values(
-        by=["LCLid", "date", "settlement_period"], ascending=True
+        by=["ID", "date", "settlement_period"], ascending=True
     )
-    groupby_cols = ["LCLid", "stdorToU", "month_end", "month"]
+    groupby_cols = ["ID", "month_end", "month"] + feature_cols
     groupby_cols = groupby_cols + ["dayofweek", "day", "date"]
 
     df_out = pd.DataFrame(
@@ -207,7 +274,7 @@ def get_mean_and_std(df: pd.DataFrame) -> Tuple[float, float]:
 
 
 def create_outliers(
-    df: pd.DataFrame, mean: float, mean_factor: int = 20
+    df: pd.DataFrame, time_resolution: str, mean: float, mean_factor: int = 20
 ) -> pd.DataFrame:
     """
     Function to generate outliers based on gaussian and gamma distribution.
@@ -222,12 +289,19 @@ def create_outliers(
         pd.DataFrame: Dataframe consisting of noisy outliers
     """
 
+    if time_resolution == "half_hourly":
+        n = 48
+    elif time_resolution == "hourly":
+        n = 24
+    else:
+        raise ValueError("time_resolution must be 'half_hourly' or 'hourly'")
+
     gaussian_generator = NoiseFactory(
         noise_type=NoiseType.GAUSSIAN,
         mean=mean,
         scale=1.0,
         mean_factor=mean_factor,
-        size=(50, 48),
+        size=(50, n),
     )
 
     gamma_generator = NoiseFactory(
@@ -235,7 +309,7 @@ def create_outliers(
         mean=mean,
         scale=1.0,
         mean_factor=mean_factor,
-        size=(50, 48),
+        size=(50, n),
     )
     logger.info(
         "🎲 Generating unseen outliers with mean:"
@@ -248,21 +322,58 @@ def create_outliers(
     return df_noise
 
 
-def preprocess_pipeline(file_path: Path, out_path: Path):
+def preprocess_pipeline(
+    file_path: Path,
+    out_path: Path,
+    datetime_col: str = "DateTime",
+    kwh_col: str = "kwh",
+    id_col: str = "ID",
+    utc: bool = True,
+    datetime_format: Optional[str] = None,
+    time_resolution: str = "half_hourly",
+    feature_cols: List[str] = ["stdorToU"],
+    drop_nulls: bool = True,
+):
+    """Preprocess the raw data for Faraday training and evaluation.
+    Pipeline includes:
+    - Data cleaning
+    - Extraction of time features (day of week, month of year)
+    - Injection of outliers into dataset
+    - Calculation of mean and std for normalisation in Faraday
+    - Re-structuring the dataset so that each row corresponds to a daily load
+        profile.
+
+    Args:
+        file_path (Path): Path to the raw CSV file
+        out_path (Path): Path to save the processed data
+        datetime_col (str, optional): datetime column. Defaults to "DateTime".
+        kwh_col (str, optional): kWh column. Defaults to "kwh".
+        id_col (str, optional): Household ID column. Defaults to "ID".
+        utc (bool, optional): Whether the datetime is in UTC. Defaults to True.
+        datetime_format (str, optional): Format of the datetime column. If
+            None, will try to infer the format. Defaults to None.
+        time_resolution (str, optional): Time resolution of the data. Allowed
+            values: "half_hourly", "hourly". Defaults to "half_hourly".
+        feature_cols (List[str], optional): List of feature columns to include.
+            Defaults to ["stdorToU"].
+        drop_nulls (bool): Whether to drop rows with NaN kwh values. If False,
+            will replace NaN kwh values with 0.0
+    """
 
     df = load_data(file_path)
+    df = format_data(df, datetime_col, kwh_col, id_col, utc, datetime_format)
     df = extract_date_features(df)
     df = parse_settlement_period(df)
-    df = drop_dupes_and_replace_nulls(df)
-    df = filter_missing_kwh(df)
+    df = drop_dupes_and_nulls(df, drop_nulls)
+    df = filter_missing_kwh(df, time_resolution)
 
     mean, stdev = get_mean_and_std(df)
-    df = pack_smart_meter_data_into_arrays(df)
+    df = pack_smart_meter_data_into_arrays(df, feature_cols)
 
-    df_noise = create_outliers(df, mean)
+    df_noise = create_outliers(df, time_resolution, mean)
 
     os.makedirs(out_path, exist_ok=True)
-    df.to_csv(f"{out_path}/lcl_data.csv", index=False)
+    df.to_csv(f"{out_path}/data.csv", index=False)
     df_noise.to_csv(f"{out_path}/outliers.csv", index=False)
 
     mean_std_dict = {"mean": mean, "stdev": stdev}
@@ -272,27 +383,65 @@ def preprocess_pipeline(file_path: Path, out_path: Path):
         w.writerow(mean_std_dict)
 
 
-def preprocess_lcl_data():
+def preprocess_data(
+    data_dir: str,
+    datetime_col: str = "DateTime",
+    kwh_col: str = "kwh",
+    id_col: str = "ID",
+    utc: bool = True,
+    datetime_format: Optional[str] = None,
+    time_resolution: str = "half_hourly",
+    feature_cols: List[str] = ["stdorToU"],
+    drop_nulls: bool = True,
+):
 
-    SOURCE_DIR = "data/raw"
-    OUT_DIR = "data/processed"
+    SOURCE_DIR = f"{data_dir}/raw"
+    OUT_DIR = f"{data_dir}/processed"
     preprocess_pipeline(
-        file_path=f"{SOURCE_DIR}/historical/train.csv",
-        out_path=f"{OUT_DIR}/historical/train",
+        file_path=Path(f"{SOURCE_DIR}/historical/train.csv"),
+        out_path=Path(f"{OUT_DIR}/historical/train"),
+        datetime_col=datetime_col,
+        kwh_col=kwh_col,
+        id_col=id_col,
+        utc=utc,
+        datetime_format=datetime_format,
+        time_resolution=time_resolution,
+        feature_cols=feature_cols,
+        drop_nulls=drop_nulls,
     )
     preprocess_pipeline(
-        file_path=f"{SOURCE_DIR}/historical/holdout.csv",
-        out_path=f"{OUT_DIR}/historical/holdout",
+        file_path=Path(f"{SOURCE_DIR}/historical/holdout.csv"),
+        out_path=Path(f"{OUT_DIR}/historical/holdout"),
+        datetime_col=datetime_col,
+        kwh_col=kwh_col,
+        id_col=id_col,
+        utc=utc,
+        datetime_format=datetime_format,
+        time_resolution=time_resolution,
+        feature_cols=feature_cols,
+        drop_nulls=drop_nulls,
     )
     preprocess_pipeline(
-        file_path=f"{SOURCE_DIR}/future/train.csv",
-        out_path=f"{OUT_DIR}/future/train",
+        file_path=Path(f"{SOURCE_DIR}/future/train.csv"),
+        out_path=Path(f"{OUT_DIR}/future/train"),
+        datetime_col=datetime_col,
+        kwh_col=kwh_col,
+        id_col=id_col,
+        utc=utc,
+        datetime_format=datetime_format,
+        time_resolution=time_resolution,
+        feature_cols=feature_cols,
+        drop_nulls=drop_nulls,
     )
     preprocess_pipeline(
-        file_path=f"{SOURCE_DIR}/future/holdout.csv",
-        out_path=f"{OUT_DIR}/future/holdout",
+        file_path=Path(f"{SOURCE_DIR}/future/holdout.csv"),
+        out_path=Path(f"{OUT_DIR}/future/holdout"),
+        datetime_col=datetime_col,
+        kwh_col=kwh_col,
+        id_col=id_col,
+        utc=utc,
+        datetime_format=datetime_format,
+        time_resolution=time_resolution,
+        feature_cols=feature_cols,
+        drop_nulls=drop_nulls,
     )
-
-
-if __name__ == "__main__":
-    preprocess_lcl_data()

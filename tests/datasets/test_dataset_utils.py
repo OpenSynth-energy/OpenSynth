@@ -2,11 +2,11 @@ import numpy as np
 import pytest
 
 from opensynth.datasets.datasets_utils import NoiseFactory, NoiseType
-from tests.utils import df_test
+from tests.utils import df_test_half_hourly
 
 
 class TestNoiseFactory:
-    df_test = df_test()
+    df_test = df_test_half_hourly()
 
     @pytest.mark.parametrize(
         "noise_type",

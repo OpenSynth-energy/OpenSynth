@@ -1,7 +1,10 @@
+from datetime import datetime, timedelta
+
+import numpy as np
 import pandas as pd
 
 
-def df_test() -> pd.DataFrame:
+def df_test_half_hourly() -> pd.DataFrame:
     """
     Test Dataframe
 
@@ -28,8 +31,33 @@ def df_test() -> pd.DataFrame:
         "2013-01-15 03:00:00",
         "2013-01-15 03:30:00",
     ]
-    kwh = [0.1, 0.2, 0.3, 0.3, "Null", 0.4, 0.5, 0.6]
+    kwh = [0.1, "Null", 0.3, 0.3, 0.4, 0.4, 0.5, 0.6]
     tariff = ["A", "A", "A", "A", "A", "A", "A", "A"]
+    df = pd.DataFrame(
+        {"LCLid": lcl_id, "DateTime": dt, "kwh": kwh, "stdorToU": tariff}
+    )
+    return df
+
+
+def df_test_hourly() -> pd.DataFrame:
+    """
+    Test Dataframe
+
+    Returns:
+        pd.DataFrame: Test Dataframe
+    """
+    lcl_id = ["MAC000002"] * 48
+
+    # start time
+    start = datetime(2013, 1, 3, 0, 0, 0)
+    # generate 48 timestamps, 1 hour apart
+    dt = [
+        (start + timedelta(hours=i)).strftime("%Y-%m-%d %H:%M:%S")
+        for i in range(48)
+    ]
+
+    kwh = np.random.rand(48).round(2).tolist()
+    tariff = ["A"] * 48
     df = pd.DataFrame(
         {"LCLid": lcl_id, "DateTime": dt, "kwh": kwh, "stdorToU": tariff}
     )
