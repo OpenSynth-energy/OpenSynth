@@ -37,7 +37,10 @@ class MembershipInferenceAttackSamples:
 
 
 def _create_unseen_outliers(
-    df: pd.DataFrame, mean: float, mean_factor: int = 20
+    df: pd.DataFrame,
+    mean: float,
+    mean_factor: int = 20,
+    time_resolution: str = "half_hourly",
 ) -> torch.Tensor:
     """
     Creates unseen outliers. Calls unpon the method
@@ -52,7 +55,9 @@ def _create_unseen_outliers(
     Returns:
         torch.Tensor: Generated unseen outliers.
     """
-    outliers = create_outliers(df, mean, mean_factor=mean_factor)
+    outliers = create_outliers(
+        df, time_resolution, mean, mean_factor=mean_factor
+    )
     return torch.from_numpy(np.array(outliers["kwh"].values.tolist()))
 
 
@@ -102,11 +107,23 @@ def _create_attack_samples(
     df_train = dm_train.dataset.df[
         dm_train.dataset.df["segment"].isna()
     ].copy()
+
+    if train_samples.shape[1] == 48:
+        time_resolution = "half_hourly"
+    elif train_samples.shape[1] == 24:
+        time_resolution = "hourly"
+    else:
+        raise ValueError("Unsupported time resolution.")
+
+    time_resolution = "half_hourly"
     outlier_unseen_same_samples = _create_unseen_outliers(
-        df_train, dm_train.dataset.feature_mean, mean_factor
+        df_train, dm_train.dataset.feature_mean, mean_factor, time_resolution
     )
     outlier_unseen_diff_samples = _create_unseen_outliers(
-        df_train, mean=0, mean_factor=mean_factor
+        df_train,
+        mean=0,
+        mean_factor=mean_factor,
+        time_resolution=time_resolution,
     )
 
     return MembershipInferenceAttackSamples(
