@@ -74,39 +74,59 @@ def test_generate_synthetic_sample_df(
     assert df.shape == (n_samples, 51)
 
 
+class FakeModel:
+    rng = np.random.default_rng()
+
+    def __init__(self, change_order=False):
+        self.feature_list = (
+            [
+                "total",
+                "dayofweek",
+                "is_zero",
+                "month",
+            ]
+            if change_order
+            else ["month", "dayofweek", "total", "is_zero"]
+        )
+
+    def sample_gmm(self, n):
+        features = {
+            "month": self.rng.integers(1, 13, n).reshape(-1, 1),
+            "dayofweek": self.rng.integers(0, 7, n).reshape(-1, 1),
+            "total": self.rng.integers(1, 4, n).reshape(-1, 1),
+            "is_zero": self.rng.integers(0, 2, n).reshape(-1, 1),
+        }
+        features = {f: features[f] for f in self.feature_list}
+
+        kwh = torch.Tensor(
+            np.array(
+                [
+                    np.zeros(48) if is_zero else np.ones(48) * total
+                    for is_zero, total in zip(
+                        features["is_zero"][:, 0], features["total"][:, 0]
+                    )
+                ]
+            )
+        )
+
+        return {
+            "kwh": kwh,
+            "features": {k: torch.Tensor(v) for k, v in features.items()},
+        }
+
+
 @pytest.fixture
 def fake_model():
     """Mock model with two different features."""
 
-    class FakeModel:
-        feature_list = ["month", "dayofweek", "total", "is_zero"]
-        rng = np.random.default_rng()
-
-        def sample_gmm(self, n):
-            features = {
-                "month": self.rng.integers(1, 13, n).reshape(-1, 1),
-                "dayofweek": self.rng.integers(0, 7, n).reshape(-1, 1),
-                "total": self.rng.integers(1, 4, n).reshape(-1, 1),
-                "is_zero": self.rng.integers(0, 2, n).reshape(-1, 1),
-            }
-
-            kwh = torch.Tensor(
-                np.array(
-                    [
-                        np.zeros(48) if is_zero else np.ones(48) * total
-                        for is_zero, total in zip(
-                            features["is_zero"][:, 0], features["total"][:, 0]
-                        )
-                    ]
-                )
-            )
-
-            return {
-                "kwh": kwh,
-                "features": {k: torch.Tensor(v) for k, v in features.items()},
-            }
-
     return StitchedFaradayModel(FakeModel())
+
+
+@pytest.fixture
+def fake_model_different_order():
+    """Mock model with different feature order."""
+
+    return StitchedFaradayModel(FakeModel(change_order=True))
 
 
 @pytest.fixture
@@ -120,15 +140,20 @@ def fake_data_module():
     return FakeDataModule()
 
 
-def test_stitching_identical_features(fake_model, fake_data_module):
+@pytest.mark.parametrize(
+    "model_name", ("fake_model", "fake_model_different_order")
+)
+def test_stitching_identical_features(request, model_name, fake_data_module):
     """Test if features are consistent between generated samples."""
-    result = fake_model.generate_stitched_samples(
+    model = request.getfixturevalue(model_name)
+    result = model.generate_stitched_samples(
         dm=fake_data_module,
         n_samples=10,
         year=2024,
         fmt="polars",
         period="year",
     )
+
     # The FakeModel returns identical values for each feature set. This means
     # that for all rows, the values should be identical
     assert result.select(pl.exclude("datetime")).unique().shape[0] == 1
