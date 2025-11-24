@@ -29,10 +29,11 @@ def sample_number_is_sufficient(
     n_days = monthrange(year, month)[1]
 
     if sampled_features is None:
-        # No check on features.
+        # No check on features. All days should have enough samples and every
+        # day in the month should be represented.
         return (
-            not df.group_by("date").len().min()["len"][0] < n_samples
-            or len(df["date"].unique()) < n_days
+            df.group_by("date").len().min()["len"][0] >= n_samples
+            and len(df["date"].unique()) >= n_days
         )
     else:
         # Checks if sufficient samples are present for specific combibations

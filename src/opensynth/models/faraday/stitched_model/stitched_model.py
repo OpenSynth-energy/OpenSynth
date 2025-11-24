@@ -53,7 +53,7 @@ class StitchedFaradayModel:
         return self._model
 
     @model.setter
-    def model(self, model):
+    def model(self, model: FaradayModel):
         is_valid_model = True
         for feature in self.required_features:
             if feature not in model.feature_list:
@@ -392,6 +392,7 @@ class StitchedFaradayModel:
         dates = date_per_weekday_and_month(year)
         n_batch = n_samples * 100
         n_generated = 0
+        feature_index = {f: i for i, f in enumerate(self.model.feature_list)}
         for _ in range(10):  # 1000 times should be enough
             gmm_samples = self.model.sample_gmm(n_batch)
 
@@ -415,7 +416,11 @@ class StitchedFaradayModel:
             for i in indices:
                 feature_sample = feature_samples[i]
                 kwh_sample = kwh_samples[i]
-                g_month, dayofweek = feature_sample[:2]
+                g_month, dayofweek = (
+                    feature_sample[feature_index["month"]],
+                    feature_sample[feature_index["dayofweek"]],
+                )
+
                 try:
                     if month is None or g_month == month:
                         yield (
@@ -424,7 +429,11 @@ class StitchedFaradayModel:
                             ),
                             g_month,
                             dayofweek,
-                            feature_sample[2:],
+                            [
+                                feature_sample[j]
+                                for f, j in feature_index.items()
+                                if f not in ["month", "dayofweek"]
+                            ],
                             kwh_sample,
                         )
                         n_generated += 1

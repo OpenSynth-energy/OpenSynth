@@ -65,7 +65,6 @@ def test_generate_synthetic_sample_df(
         n_samples=n_samples,
         year=2024,
         month=1,
-        fmt="pandas",
     )
     assert df.shape == (n_samples, 51)
 
