@@ -1,9 +1,14 @@
+from datetime import date
+
 import numpy as np
 import polars as pl
 import pytest
 import torch
 
 from opensynth.models.faraday import StitchedFaradayModel
+from opensynth.models.faraday.stitched_model.utils import (
+    sample_number_is_sufficient,
+)
 
 
 @pytest.fixture
@@ -127,3 +132,45 @@ def test_stitching_identical_features(fake_model, fake_data_module):
     # The FakeModel returns identical values for each feature set. This means
     # that for all rows, the values should be identical
     assert result.select(pl.exclude("datetime")).unique().shape[0] == 1
+
+
+def test_sample_number_is_sufficient_valid():
+    """Should return True when enough days are present"""
+    df = pl.DataFrame(
+        {
+            "date": pl.date_range(
+                start=date(2024, 1, 1), end=date(2024, 1, 31), eager=True
+            )
+        }
+    )
+    assert sample_number_is_sufficient(
+        df=df, n_samples=1, year=2024, month=1, sampled_features=None
+    )
+    assert sample_number_is_sufficient(
+        df=pl.concat((df, df), how="vertical"),
+        n_samples=2,
+        year=2024,
+        month=1,
+        sampled_features=None,
+    )
+
+
+def test_sample_number_is_sufficient_invalid():
+    """Should return False when not enough days are present"""
+    df = pl.DataFrame(
+        {
+            "date": pl.date_range(
+                start=date(2024, 1, 1), end=date(2024, 1, 31), eager=True
+            )
+        }
+    )
+    assert not sample_number_is_sufficient(
+        df=df.head(30), n_samples=1, year=2024, month=1, sampled_features=None
+    )
+    assert not sample_number_is_sufficient(
+        df=pl.concat((df, df.head(30)), how="vertical"),
+        n_samples=2,
+        year=2024,
+        month=1,
+        sampled_features=None,
+    )
