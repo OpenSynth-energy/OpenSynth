@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from typing import Optional
+from typing import Optional, Sequence
 
 import numpy as np
 import pytorch_lightning as pl
@@ -19,34 +19,42 @@ logger = logging.getLogger(__name__)
 
 
 class Encoder(nn.Module):
-    def __init__(self, latent_dim: int, input_dim: int, class_dim: int):
+    def __init__(
+        self,
+        latent_dim: int,
+        input_dim: int,
+        class_dim: int,
+        layer_dims: Sequence[int] = (512, 256, 128, 64, 32),
+    ):
         super().__init__()
         self.latent_dim = latent_dim
         self.input_dim = input_dim
         self.class_dim = class_dim
         self.encoder_input_dim = self.input_dim + self.class_dim
 
+        if len(layer_dims) == 0:
+            raise ValueError("Need at least the dim of one layer!")
+
+        layers = [nn.Linear(self.encoder_input_dim, layer_dims[0])]
+        for d1, d2 in zip(layer_dims[0:-1], layer_dims[1:]):
+            layers += [nn.GELU(), nn.Linear(d1, d2)]
+        layers += [nn.GELU(), nn.Linear(layer_dims[-1], self.latent_dim)]
+
         # Encoder layers
-        self.encoder_layers = nn.Sequential(
-            nn.Linear(self.encoder_input_dim, 512),
-            nn.GELU(),
-            nn.Linear(512, 256),
-            nn.GELU(),
-            nn.Linear(256, 128),
-            nn.GELU(),
-            nn.Linear(128, 64),
-            nn.GELU(),
-            nn.Linear(64, 32),
-            nn.GELU(),
-            nn.Linear(32, self.latent_dim),
-        )
+        self.encoder_layers = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.encoder_layers(x)
 
 
 class Decoder(nn.Module):
-    def __init__(self, class_dim: int, latent_dim: int, output_dim: int):
+    def __init__(
+        self,
+        class_dim: int,
+        latent_dim: int,
+        output_dim: int,
+        layer_dims: Sequence[int] = (32, 64, 128, 256, 512),
+    ):
         super().__init__()
         self.latent_dim = latent_dim
         self.class_dim = class_dim
@@ -57,20 +65,16 @@ class Decoder(nn.Module):
         self.latent = nn.Linear(self.decoder_input_dim, self.latent_dim)
         self.latent_activations = nn.GELU()
 
+        if len(layer_dims) == 0:
+            raise ValueError("Need at least the dim of one layer!")
+
+        layers = [nn.Linear(self.latent_dim, layer_dims[0])]
+        for d1, d2 in zip(layer_dims[0:-1], layer_dims[1:]):
+            layers += [nn.GELU(), nn.Linear(d1, d2)]
+        layers += [nn.GELU(), nn.Linear(layer_dims[-1], self.output_dim)]
+
         # Decoder layers
-        self.decoder_layers = nn.Sequential(
-            nn.Linear(self.latent_dim, 32),
-            nn.GELU(),
-            nn.Linear(32, 64),
-            nn.GELU(),
-            nn.Linear(64, 128),
-            nn.GELU(),
-            nn.Linear(128, 256),
-            nn.GELU(),
-            nn.Linear(256, 512),
-            nn.GELU(),
-            nn.Linear(512, self.output_dim),
-        )
+        self.decoder_layers = nn.Sequential(*layers)
 
     def forward(self, x):
         outputs = self.latent(x)

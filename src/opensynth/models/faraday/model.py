@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+from functools import cached_property
 from typing import Optional, Union
 
 import numpy as np
@@ -102,7 +103,7 @@ class FaradayModel:
 
     @staticmethod
     def get_feature_range(
-        features: dict[str, torch.Tensor]
+        features: dict[str, torch.Tensor],
     ) -> dict[str, dict[str, int]]:
         """
         Get the max and min values of numerically encoded features
@@ -209,6 +210,13 @@ class FaradayModel:
             ][mask]
         return sampled_data
 
+    @cached_property
+    def feature_list(self) -> list[str]:
+        """
+        list[str]: Feature list of features provided in training.
+        """
+        return self.vae_module.feature_list
+
     def train_gmm(self, dm: Union[StreamDataModule, LCLDataModule]):
         """
         Train Gaussian Mixture Module
@@ -228,8 +236,7 @@ class FaradayModel:
         obtained_feature_list = list(features.keys())
         num_features = self.vae_module.latent_dim + len(obtained_feature_list)
 
-        expected_feature_list = self.vae_module.feature_list
-        if obtained_feature_list != expected_feature_list:
+        if obtained_feature_list != self.feature_list:
             logger.error(
                 """Feature list required by `vae_module` and does not match
                 features specified by the data module.

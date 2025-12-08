@@ -1,0 +1,336 @@
+"""Auto-correlation metrics for fidelity evaluation.
+
+Note regarding suitability of this metric: Faraday generates independent daily
+profiles, where we do not expect to generate realistic multi-day profiles for
+particular households. Although these fidelity metrics are well-suited for
+evaluating monthly/yearly synthetic profiles, Faraday is not expected to
+perform particularly well, given the current architecture.
+"""
+
+import datetime
+import logging
+from functools import singledispatch
+from typing import Any, cast
+
+import numpy as np
+import pandas as pd
+import polars as pl
+import polars.selectors as cs
+import seaborn as sns
+from polars.datatypes.group import NUMERIC_DTYPES
+from scipy.stats import kstest, pearsonr
+
+ShiftsType = dict[str, int | float] | None
+StrictShiftsType = dict[str, int]
+
+
+logger = logging.getLogger(__name__)
+
+
+@singledispatch
+def calculate_auto_correlation_for_column(  # pragma: no cover
+    df: Any,
+    column: str,
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
+) -> Any:
+    """Generate auto-correlation values for different time windows.
+
+    Note: input DataFrame should be sorted by the datetime column!
+
+    Args:
+        df (pd.DataFrame or pd.DataFrame): Input DataFrame.
+        column (str): Column with values to use for calculation of correlation.
+        datetime_col (str, optional): Column with datetime values.
+        shifts (dict, optional): Be default, correlation will be calculated
+            for hour, half_day, day, week and half_year. The `shifts` argument
+            can be use to specify custom periods. The input is dictionary with
+            name as key and number of rows to use (shift) as value.
+
+    Returns:
+        DataFrame with auto-correlation result.
+    """
+    return pl.DataFrame()
+
+
+def _check_autocorrelation_shifts(
+    df: pl.DataFrame,
+    shifts: ShiftsType = None,
+    datetime_col: str = "datetime",
+) -> StrictShiftsType:
+    """Ensure provided shifts for auto-correlation are valid.
+
+    Args:
+        df (pd.DataFrame or pd.DataFrame): Input DataFrame.
+        shifts (dict, optional): Be default, correlation will be calculated
+            for hour, half_day, day, week and half_year. The `shifts` argument
+            can be use to specify custom periods. The input is dictionary with
+            name as key and number of rows to use (shift) as value.
+        datetime_col (str, optional): Column with datetime values.
+
+    Returns:
+        dictionary with valid shifts.
+
+    """
+    per_hour = (
+        datetime.timedelta(seconds=3600) / df[datetime_col].diff().mode()[0]
+    )
+
+    default_shifts = {
+        "hour": per_hour,
+        "half_day": per_hour * 12,
+        "day": per_hour * 24,
+        "week": per_hour * 24 * 7,
+        "half_year": per_hour * 24 * 7 * 26,
+    }
+
+    checked_shifts = {}
+    for name, shift in (default_shifts if shifts is None else shifts).items():
+        # Check for shifts smaller than the time interval in the DataFrame.
+        if shift < 1:
+            logger.warning(
+                f"Skipping shift '{name}' "
+                "as it is smaller than the timeseries interval."
+            )
+            continue
+
+        # Check for shifts that are not multiple of the time interval.
+        if not np.isclose(shift, float(int(shift)), atol=1e-8, rtol=1e-8):
+            logger.warning(
+                f"Skipping shift '{name}' as it is not an integer number."
+            )
+            continue
+
+        checked_shifts[name] = int(shift)
+
+    return checked_shifts
+
+
+@calculate_auto_correlation_for_column.register
+def _(
+    df: pl.DataFrame,
+    column: str,
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
+) -> pl.DataFrame:
+
+    valid_shifts = _check_autocorrelation_shifts(
+        df, shifts=shifts, datetime_col=datetime_col
+    )
+
+    result = {}
+    for time_delta, delta in valid_shifts.items():
+        if delta > df.shape[0]:
+            result[time_delta] = np.nan
+            continue
+
+        tmp = df.select(column).with_columns(
+            pl.col(column).shift(delta).alias(time_delta)
+        )
+
+        nrows = tmp.shape[0] - delta
+
+        result[time_delta] = float(
+            pearsonr(
+                tmp[column].tail(nrows).fill_null(0),
+                tmp[time_delta].tail(nrows).fill_null(0),
+            )[0]
+        )
+
+    return pl.DataFrame(result)
+
+
+@calculate_auto_correlation_for_column.register
+def _(
+    df: pd.DataFrame,
+    column: str,
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
+) -> pd.DataFrame:
+    include_index = isinstance(df.index, pd.DatetimeIndex)
+    return cast(
+        pl.DataFrame,
+        calculate_auto_correlation_for_column(
+            pl.from_pandas(df, include_index=include_index),
+            column=column,
+            datetime_col=datetime_col,
+            shifts=shifts,
+        ),
+    ).to_pandas()
+
+
+@singledispatch
+def calculate_auto_correlation_for_dataframe(
+    df: Any,
+    datetime_col: str,
+    shifts: ShiftsType,
+) -> Any:  # pragma: no cover
+    """Calculate auto-correlation values for all columns in a DataFrame.
+
+    Args:
+        df (DataFrame or LazyFrame): Input DataFrame.
+        datetime_col (str, optional): Column with datetime values.
+        shifts (dict, optional): Be default, correlation will be calculated
+            for hour, half_day, day, week and half_year. The `shifts` argument
+            can be use to specify custom periods. The input is dictionary with
+            name as key and number of rows to use (shift) as value.
+
+    Returns:
+        DataFrame with auto-correlation values.
+    """
+    raise NotImplementedError("Unknown type for df")
+
+
+@calculate_auto_correlation_for_dataframe.register
+def _(
+    df: pl.LazyFrame | pl.DataFrame,
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
+) -> pl.DataFrame:
+    df = df.sort(datetime_col)
+    df = df.collect() if isinstance(df, pl.LazyFrame) else df
+    columns = df.select(cs.by_dtype(NUMERIC_DTYPES)).columns
+
+    return cast(
+        pl.DataFrame,
+        pl.concat(
+            [
+                calculate_auto_correlation_for_column(
+                    df, col, datetime_col=datetime_col, shifts=shifts
+                )
+                for col in columns
+            ]
+        ),
+    )
+
+
+@calculate_auto_correlation_for_dataframe.register
+def _(
+    df: pd.DataFrame, datetime_col: str = "datetime", shifts: ShiftsType = None
+) -> pd.DataFrame:
+    include_index = isinstance(df.index, pd.DatetimeIndex)
+    return cast(
+        pl.DataFrame,
+        calculate_auto_correlation_for_dataframe(
+            pl.from_pandas(df, include_index=include_index),
+            datetime_col=datetime_col,
+            shifts=shifts,
+        ),
+    ).to_pandas()
+
+
+def calculate_auto_correlation(
+    dfs: dict[str, pd.DataFrame | pl.DataFrame | pl.LazyFrame],
+    datetime_col: str = "datetime",
+    shifts: ShiftsType = None,
+) -> pd.DataFrame | pl.DataFrame:
+    """Calculate auto-correlation values for all columns in a DataFrame.
+
+    Args:
+        dfs (dict): Input with name (`str`) as key and DataFrame or LazyFrame
+            as value.
+        datetime_col (str, optional): Column with datetime values.
+        shifts (dict, optional): Be default, correlation will be calculated
+            for hour, half_day, day, week and half_year. The `shifts` argument
+            can be use to specify custom periods. The input is dictionary with
+            name as key and number of rows to use (shift) as value.
+
+    Returns:
+        DataFrame with auto-correlation values.
+    """
+    fmt = (
+        "pandas"
+        if np.any([isinstance(df, pd.DataFrame) for df in dfs.values()])
+        else "polars"
+    )
+
+    result = [
+        calculate_auto_correlation_for_dataframe(
+            df,
+            datetime_col=datetime_col,
+            shifts=shifts,
+        )
+        for df in dfs.values()
+    ]
+
+    result = [
+        pl.from_pandas(df) if isinstance(df, pd.DataFrame) else df
+        for df in result
+    ]
+
+    corr_metrics = pl.concat(
+        [
+            df.unpivot(
+                value_name="correlation", variable_name="time_delta"
+            ).with_columns(pl.lit(name).alias("name"))
+            for name, df in zip(dfs.keys(), result)
+        ]
+    )
+
+    if fmt == "pandas":
+        return cast(pl.DataFrame, corr_metrics).to_pandas()
+
+    return cast(pl.DataFrame, corr_metrics)
+
+
+def plot_autocorrelation_stats(df: pd.DataFrame | pl.DataFrame) -> None:
+    """CDF plot of the auto-correlation results.
+
+    Args:
+        df: df (DataFrame): Input DataFrame, output of
+            `calculate_auto_correlation()`.
+    """
+    g = sns.FacetGrid(df, col="time_delta", hue="name")
+    g.map(sns.ecdfplot, "correlation")
+    g.add_legend()
+
+
+@singledispatch
+def pairwise_autocorrelation_kstest(
+    df: Any, a: str, b: str
+) -> Any:  # pragma: no cover
+    """Pairwise Kolmogorov-Smirnov test of the auto-correlation resuls.
+
+    Test the distribution of correlation values between two data sets in the
+    input DataFrame `df`.
+
+    Args:
+        df: df (DataFrame): Input DataFrame, output of
+            `calculate_auto_correlation()`.
+        a (str): Name of data set to compare.
+        b (str): Name of other data set to compare.
+
+    Return:
+        DataFrame with test results.
+    """
+    return df
+
+
+@pairwise_autocorrelation_kstest.register
+def _(df: pl.DataFrame, a: str, b: str) -> pl.DataFrame:
+    return pl.concat(
+        [
+            pl.DataFrame(
+                kstest(
+                    part_df.filter(pl.col("name") == a)["correlation"]
+                    .drop_nans()
+                    .drop_nulls(),
+                    part_df.filter(pl.col("name") == b)["correlation"]
+                    .drop_nans()
+                    .drop_nulls(),
+                )
+            )
+            .transpose()
+            .rename({"column_0": "statistic", "column_1": "p_value"})
+            .with_columns(time_delta=pl.lit(part_df["time_delta"][0]))
+            for part_df in df.partition_by("time_delta")
+        ]
+    )
+
+
+@pairwise_autocorrelation_kstest.register
+def _(df: pd.DataFrame, a: str, b: str) -> pd.DataFrame:
+    return cast(
+        pl.DataFrame,
+        pairwise_autocorrelation_kstest(pl.from_pandas(df), a=a, b=b),
+    ).to_pandas()

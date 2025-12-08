@@ -12,6 +12,8 @@ data/.DS_Store
 **/lightning_logs/*
 .venv/*
 !tests/data/streaming/*
+!tests/data/evaluation/*
+**/.ipynb_checkpoints/*
 
 # Distribution / packaging
 .Python
