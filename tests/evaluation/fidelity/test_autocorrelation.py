@@ -47,7 +47,10 @@ def test_dataframe_half_hour_pandas(test_dataframe_half_hour):
 
 @pytest.fixture(scope="module")
 def test_dataframe_quarterly():
-    """ "DataFrame with 15-minute timesteps and high correlation with a week time-lag."""
+    """
+    DataFrame with 15-minute timesteps and high correlation with a week
+    time-lag.
+    """
     n_minutes = 15
     n_values = 60 // n_minutes * 24 * 7  # 1 week
     n_timesteps = 35041
