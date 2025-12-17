@@ -1,3 +1,6 @@
+# Copyright Contributors to the Opensynth-energy Project.
+# SPDX-License-Identifier: Apache-2.0
+
 """Seasonal statistics metrics for fidelity evaluation.
 
 Note regarding suitability of this metric: Faraday generates independent daily
