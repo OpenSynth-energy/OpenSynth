@@ -15,11 +15,12 @@ logger = logging.getLogger(__name__)
 def infer_date_column(df: pl.DataFrame) -> str:
     """Return column name for a Date columns in input DataFrame.
 
-    Returns the column name of a column in Date format, or a String column that
-    matches a Date string. If the DataFrame contains only one matching column,
-    this function will return that column name. If multiple columns match, it will
-    return the column name that matches a canonical Date name, such as "DATUM".
-    In all other cases the function will raise a ValueError().
+    Returns the column name of a column in Date format, or a String
+    column that matches a Date string. If the DataFrame contains only
+    one matching column, this function will return that column name.
+    If multiple columns match, it will return the column name that
+    matches a canonical Date name, such as "DATUM". In all other
+    cases the function will raise a ValueError().
 
     Args:
         df (pl.DataFrame): DataFrame.
@@ -28,8 +29,8 @@ def infer_date_column(df: pl.DataFrame) -> str:
         str: column name of a column in Date or Date-like format.
 
     Raises:
-        ValueError: if no columns are in a Date-like format or multiple columns are
-        in Date-like format and match a canonical name.
+        ValueError: if no columns are in a Date-like format or multiple
+        columns are in Date-like format and match a canonical name.
 
     """
     date_columns = df.select(pl.col(pl.Date)).columns
@@ -49,7 +50,8 @@ def infer_date_column(df: pl.DataFrame) -> str:
             return list(canonical_columns)[0]
         case _:
             raise ValueError(
-                "Multiple Date-like columns found with a matching canonical name!"
+                "Multiple Date-like columns found with a matching canonical \
+                name!"
             )
 
 
@@ -62,26 +64,28 @@ def semiwide_to_long(
 ) -> pl.DataFrame:
     """Convert polars DataFrame from semi-wide to long format.
 
-    The semi-wide format is based on a split between date (rows) and time
-    (columns). Therefore, this function will only work on a DateFrame with
-    a Date column that contains dates and at least one timestamp column, by
-    default in "%HH%mm" format.
+    The semi-wide format is based on a split between date (rows) and
+    time (columns). Therefore, this function will only work on a
+    DateFrame with a Date column that contains dates and at least one
+    timestamp column, by default in "%HH%mm" format.
 
     Args:
-        df (polars.DataFrame): DataFrame in semi-wide wide format, containing DateTime-
-            compatible column names.
-        on (list, optional): Columns to use as timepoints. By default, all columns that
-            match the pattern '[0-9][0-9][0-9][0-9]' will be used.
-        date_col (str, optional): Column that contains the Date values. By default,
-            a column that is in Date format, or that is a Date-compatible string, will
-            be used, if there is only one column in that format. If there are multiple
-            Date-compatible, columns, but only one matches a canonical name such as
-            DATUM, that column will be used. Otherwise, this method will fail, and the
-            date_col needs to be explicitly specified.
-        datetime_name (str, optional): Name for the DateTime column in the long
-            DataFrame, "DATUM_TIJD" by default.
-        value_name (str, optional): Name to give to the value column. Defaults to
-            "value".
+        df (polars.DataFrame): DataFrame in semi-wide wide format,
+            containing DateTime-compatible column names.
+        on (list, optional): Columns to use as timepoints. By default,
+            all columns that match the pattern '[0-9][0-9][0-9][0-9]'
+            will be used.
+        date_col (str, optional): Column that contains the Date values.
+            By default, a column that is in Date format, or that is a
+            Date-compatible string, will be used, if there is only one
+            column in that format. If there are multiple Date-compatible,
+            columns, but only one matches a canonical name such as DATUM,
+            that column will be used. Otherwise, this method will fail,
+            and the date_col needs to be explicitly specified.
+        datetime_name (str, optional): Name for the DateTime column in
+            the long DataFrame, "DATUM_TIJD" by default.
+        value_name (str, optional): Name to give to the value column.
+            Defaults to "value".
 
     Returns:
         polars.DataFrame in long format.
@@ -127,24 +131,26 @@ def semiwide_to_wide(
 ) -> pl.DataFrame:
     """Convert polars DataFrame from semi-wide to wide format.
 
-    The semi-wide format is based on a split between date (rows) and time
-    (columns). Therefore, this function will only work on a DateFrame with
-    a Date column that contains dates and at least one timestamp column, by
-    default in "%HH%mm" format.
+    The semi-wide format is based on a split between date (rows) and
+    time (columns). Therefore, this function will only work on a
+    DateFrame with a Date column that contains dates and at least one
+    timestamp column, by default in "%HH%mm" format.
 
     Args:
-        df (polars.DataFrame): DataFrame in semi-wide wide format, containing
-            DateTime-compatible column names.
-        on (list, optional): Columns to use as timepoints. By default, all
-            columns that match the pattern '[0-9][0-9][0-9][0-9]' will be used.
-        date_col (str, optional): Column that contains the Date values. By default,
-            a column that is in Date format, or that is a Date-compatible string,
-            will be used, if there is only one column in that format. If there are
-            multiple Date-compatible, columns, but only one matches a canonical name
-            such as DATUM, that column will be used. Otherwise, this method will fail,
+        df (polars.DataFrame): DataFrame in semi-wide wide format,
+            containing DateTime-compatible column names.
+        on (list, optional): Columns to use as timepoints. By default,
+            all columns that match the pattern '[0-9][0-9][0-9][0-9]'
+            will be used.
+        date_col (str, optional): Column that contains the Date values.
+            By default, a column that is in Date format, or that is a
+            Date-compatible string, will be used, if there is only one
+            column in that format. If there are multiple Date-compatible,
+            columns, but only one matches a canonical name such as DATUM,
+            that column will be used. Otherwise, this method will fail,
             and the date_col needs to be explicitly specified.
-        datetime_name (str, optional): Name for the DateTime column in the long
-            DataFrame, "datetime" by default.
+        datetime_name (str, optional): Name for the DateTime column in
+            the long DataFrame, "datetime" by default.
 
     Returns:
         polars.DataFrame in wide format.
@@ -178,7 +184,8 @@ def randomize_index_column(
     Args:
         df (DataFrame): Input DataFrame.
         index_col_name (str): Name of index column.
-        sample_col_name (str): Name of new column containing the randomized index.
+        sample_col_name (str): Name of new column containing the
+            randomized index.
 
     Returns:
         DataFrame with index column values randomized.
