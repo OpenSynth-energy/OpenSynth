@@ -34,6 +34,8 @@ def download_lcl_data(data_dir: str = "./data"):
 
 
 def split_preprocess_data(
+    split: bool,
+    preprocess: bool,
     data_dir: str,
     csv_data_path: str,
     sample_fraction: float,
@@ -93,38 +95,46 @@ def split_preprocess_data(
         f"Reading data from {CSV_FILE_NAME}. Storing data in {data_dir}."
     )
 
-    # Split dataset into training/ holdout sets
-    split_households.split_data(
-        data_dir,
-        CSV_FILE_NAME,
-        sample_fraction=sample_fraction,
-        id_col=id_col,
-        kwh_col=kwh_col,
-        datetime_col=datetime_col,
-        utc=utc,
-        datetime_format=datetime_format,
-        historical_start=historical_start,
-        historical_end=historical_end,
-        future_start=future_start,
-        future_end=future_end,
-    )
-    # Preprocess the data into daily load profiles
-    preprocess_lcl.preprocess_data(
-        data_dir,
-        datetime_col=datetime_col,
-        kwh_col=kwh_col,
-        id_col=id_col,
-        utc=utc,
-        datetime_format=datetime_format,
-        time_resolution=time_resolution,
-        feature_cols=feature_cols,
-        drop_nulls=drop_nulls,
-    )
+    if split:
+        # Split dataset into training/ holdout sets
+        split_households.split_data(
+            data_dir,
+            CSV_FILE_NAME,
+            sample_fraction=sample_fraction,
+            id_col=id_col,
+            kwh_col=kwh_col,
+            datetime_col=datetime_col,
+            utc=utc,
+            datetime_format=datetime_format,
+            historical_start=historical_start,
+            historical_end=historical_end,
+            future_start=future_start,
+            future_end=future_end,
+        )
+    if preprocess:
+        # Preprocess the data into daily load profiles
+        preprocess_lcl.preprocess_data(
+            data_dir,
+            datetime_col=datetime_col,
+            kwh_col=kwh_col,
+            id_col=id_col,
+            utc=utc,
+            datetime_format=datetime_format,
+            time_resolution=time_resolution,
+            feature_cols=feature_cols,
+            drop_nulls=drop_nulls,
+        )
 
 
 if __name__ == "__main__":
+    # Whether to split and/or preprocess the data
+    split = True
+    preprocess = True
+
+    # Data directory
     data_dir = "./data"
 
+    # Fraction of households to include in training set
     sample_fraction = 0.75
 
     # Dataset location
@@ -147,6 +157,8 @@ if __name__ == "__main__":
     drop_nulls = True
 
     split_preprocess_data(
+        split,
+        preprocess,
         data_dir,
         csv_data_path,
         sample_fraction,

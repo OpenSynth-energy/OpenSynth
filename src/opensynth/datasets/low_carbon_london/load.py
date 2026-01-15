@@ -1,3 +1,6 @@
+# Copyright Contributors to the Opensynth-energy Project.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 from pathlib import Path
 from typing import Literal
@@ -15,7 +18,8 @@ def load_lcl_data_by_year(
 ) -> pd.DataFrame | pl.DataFrame:
     """Load LCL data for a specific year.
 
-    Returns a DataFrame in wide format. The first column contains the timestamp.
+    Returns a DataFrame in wide format.
+    The first column contains the timestamp.
 
     Args:
         fname (str or Path): Location of the `train.csv` data file.
@@ -25,7 +29,7 @@ def load_lcl_data_by_year(
         pl.DataFrame with KWH/hh measurements.
     """
     fname = (
-        Path(__file__).parents[0] / "../../../../data/raw/historical/train.csv"
+        Path(__file__).parents[0] / "./data/raw/historical/train.csv"
         if fname is None
         else Path(fname)
     )

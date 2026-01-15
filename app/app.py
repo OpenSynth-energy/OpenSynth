@@ -32,6 +32,19 @@ def download_lcl_data(
 
 @app.command()
 def preprocess_data(
+    split: Annotated[
+        bool,
+        typer.Option(
+            "--split", help="Splits LCL households into training/holdout set"
+        ),
+    ] = False,
+    preprocess: Annotated[
+        bool,
+        typer.Option(
+            "--preprocess",
+            help="Preprocesses LCL data into daily load profiles",
+        ),
+    ] = False,
     data_dir: Annotated[
         str, typer.Option("--loc", help="Location of data directory.")
     ] = "./data",
@@ -145,6 +158,8 @@ def preprocess_data(
     """
 
     get_data.split_preprocess_data(
+        split,
+        preprocess,
         data_dir,
         csv_data_path,
         sample_fraction,
