@@ -19,6 +19,7 @@ import torch.nn.functional as F
 from einops import einsum, rearrange
 from einops.layers.torch import Rearrange
 from torch import Tensor, nn
+import numpy as np
 
 # model components
 
@@ -326,6 +327,12 @@ class DenoisingTransformer(nn.Module):
             nn.GELU(),
             nn.Linear(self.dim_base, self.dim_base * 3),
         )  # scale, shift, input_to_decoder_blocks
+        # covariable: gerenrical treatment
+        self.cov_mlp = nn.Sequential(
+            nn.Linear(1, dim_base),
+            nn.GELU(),
+            nn.Linear(dim_base, dim_base), 
+        )
 
         _transformer_pos_emb = SinusoidalPosEmb(self.dim_base)
         self.transformer_pos_emb = nn.Sequential(
@@ -399,6 +406,7 @@ class DenoisingTransformer(nn.Module):
         self,
         x: Tensor,
         time: Tensor,
+        model_kwargs: None | dict = None,  # kwargs for model_prediction
     ) -> Tensor:
         # encoder time
         _encoded_t = self.time_mlp(time)  # shape: (batch, dim_base * 3)
@@ -406,6 +414,16 @@ class DenoisingTransformer(nn.Module):
         scale, shift, encoded_t = _encoded_t.chunk(
             3, dim=2
         )  # shape: 3 * (batch, 1, dim_base)
+        if model_kwargs != None and 'temperature' in model_kwargs.keys(): #conditioning
+            covariable = torch.tensor(model_kwargs['temperature']).to(x.device).float().reshape(-1, 1)
+            encoded_cov = self.cov_mlp(covariable)  # (batch, 1, dim_base)
+            encoded_cov = rearrange(encoded_cov, "batch dim -> batch 1 dim")  # (batch, 1, dim_base)
+        else: #non conditionning but we put a null tensor in cov so all parameters are defined
+            batch_size = x.shape[0]
+            covariable = torch.zeros(batch_size, self.cov_mlp[0].in_features, dtype=encoded_t.dtype, device=encoded_t.device)
+            encoded_cov = self.cov_mlp(covariable) * 0.0  # zeroed-out, but stays in graph
+            encoded_cov = rearrange(encoded_cov, "batch dim -> batch 1 dim")
+        c = encoded_t + encoded_cov  # (batch, 1, dim_base)
 
         # init projection
         x = self.init_proj(x)  # shape: (batch, sequence, dim_base)
@@ -428,7 +446,7 @@ class DenoisingTransformer(nn.Module):
         x = x + pos_emb_seq
 
         x = self.transformer(
-            x, encoded_t
+            x, c
         )  # shape: (batch, sequence, dim_base)
 
         # final adaln modulation
