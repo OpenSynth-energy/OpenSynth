@@ -4,13 +4,13 @@
 import logging
 import os
 import subprocess
+import urllib.request
 from enum import StrEnum
 from os import path
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import wget
 
 
 def check_redownload(file_path: Path) -> bool:
@@ -45,7 +45,16 @@ def download_data(url: str, filename: Path, unzip: bool = False):
         if filename.exists():
             os.remove(filename)
         logging.info(f"Downloading data from: {url}")
-        wget.download(url, str(filename))
+        # Some data hosts (e.g. data.london.gov.uk) reject requests
+        # without a browser-like User-Agent with HTTP 403
+        request = urllib.request.Request(
+            url, headers={"User-Agent": "Mozilla/5.0"}
+        )
+        filename.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(request) as response:
+            with open(filename, "wb") as f:
+                while chunk := response.read(1 << 20):
+                    f.write(chunk)
     else:
         logging.info("Skipping download")
 
