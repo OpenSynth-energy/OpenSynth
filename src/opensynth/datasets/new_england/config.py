@@ -113,9 +113,11 @@ EV_ENERGY_STD_KWH = 2.5
 EV_WINTER_ENERGY_FACTOR = 1.3  # applies when temp_bin <= 2
 EV_DAILY_CHARGE_PROB = 0.75
 
-# PV augmentation: normalized PVWatts hourly shapes precomputed for
-# one northern and one southern reference site, committed as small
-# resource CSVs. Sizes drawn uniformly from PV_SIZES_KW.
+# PV augmentation: normalized hourly shapes (PVWatts simplified model
+# on Open-Meteo ERA5 2018 irradiance, PVGIS-NSRDB cross-checked; see
+# scripts/fetch_pv_shapes.py) precomputed for one northern and one
+# southern reference site, committed under resources/. Sizes drawn
+# uniformly from PV_SIZES_KW.
 PV_SIZES_KW = [4, 6, 8]
 PV_SHAPE_SITES = {
     "north": "Concord, NH",

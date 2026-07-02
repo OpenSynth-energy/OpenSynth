@@ -5,6 +5,8 @@
 *.zip
 *.pyc
 *.csv
+# Committed data resources are exempt from the CSV rule
+!src/opensynth/datasets/*/resources/*.csv
 *.bin
 index.json
 data/.DS_Store
