@@ -15,6 +15,7 @@ account, or use the EIA v2 API) and load it with
 """
 
 import logging
+import os
 import time
 import urllib.error
 from concurrent.futures import ThreadPoolExecutor
@@ -39,9 +40,30 @@ METADATA_COLS = [
 ]
 
 
+def _valid_parquet_footer(path: Path) -> bool:
+    """
+    Check the parquet magic footer.
+
+    A download interrupted by a kill signal leaves a truncated file
+    on disk that the skip-if-exists resume would otherwise trust.
+
+    Args:
+        path (Path): Parquet file path.
+
+    Returns:
+        bool: True if the file ends with the parquet magic bytes.
+    """
+    try:
+        with open(path, "rb") as f:
+            f.seek(-4, os.SEEK_END)
+            return f.read(4) == b"PAR1"
+    except OSError:
+        return False
+
+
 def _download_if_missing(url: str, out_path: Path) -> bool:
     """
-    Download a file unless it already exists.
+    Download a file unless it already exists and is intact.
 
     Args:
         url (str): Source URL
@@ -51,7 +73,10 @@ def _download_if_missing(url: str, out_path: Path) -> bool:
         bool: True if the file was downloaded, False if skipped
     """
     if out_path.exists():
-        return False
+        if out_path.suffix != ".parquet" or _valid_parquet_footer(out_path):
+            return False
+        logger.warning(f"⚠️ Re-downloading truncated file: {out_path}")
+        out_path.unlink()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     for attempt in range(1, DOWNLOAD_RETRIES + 1):
         try:
