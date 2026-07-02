@@ -13,7 +13,7 @@ STATE_ENCODING = {state: i for i, state in enumerate(NE_STATES)}
 
 # Archetype from EULP metadata column `in.geometry_building_type_recs`.
 # Multi-family 2-4 and 5+ unit values collapse to one archetype.
-# Verify raw metadata values on first download before relying on this.
+# Keys verified against NH release-2 metadata (2026-07-01).
 ARCHETYPE_ENCODING = {
     "Single-Family Detached": 0,
     "Single-Family Attached": 1,
@@ -50,9 +50,9 @@ FEATURE_COLS = [
     "temp_bin",
 ]
 
-# One GHCN-Daily station per state (airport stations, hourly-quality
-# daily summaries). 2018 is the EULP AMY weather year.
-# Verify IDs against the GHCN-D station inventory on first download.
+# One GHCN-Daily station per state (airport stations). 2018 is the
+# EULP AMY weather year. All six IDs verified to return 2018
+# TMAX/TMIN via the NCEI data service (2026-07-01).
 GHCN_STATIONS = {
     "CT": "USW00014740",  # Hartford Bradley Intl
     "MA": "USW00094746",  # Worcester Regional
@@ -65,10 +65,9 @@ GHCN_STATIONS = {
 WEATHER_YEAR = 2018
 
 # EULP ResStock AMY2018 release 2 on the OEDI data lake (public,
-# anonymous HTTPS). The per-building timeseries key layout below is
-# verified: 1,200 building files (200 per NE state) were downloaded
-# with it in June 2026. The metadata key layout still needs a
-# `curl -I` check on first use.
+# anonymous HTTPS). Both key layouts verified: 1,200 building
+# timeseries files downloaded June 2026, metadata HEAD-checked
+# 2026-07-01.
 EULP_BASE_URL = (
     "https://oedi-data-lake.s3.amazonaws.com/nrel-pds-building-stock/"
     "end-use-load-profiles-for-us-building-stock/2024/"
@@ -83,6 +82,20 @@ EULP_METADATA_URL = (
     EULP_BASE_URL
     + "/metadata_and_annual_results/by_state/state={state}/parquet/"
     + "{state}_baseline_metadata_and_annual_results.parquet"
+)
+
+# RECS 2020 state microdata (public domain). 56 MB CSV.
+RECS_URL = (
+    "https://www.eia.gov/consumption/residential/data/2020/csv/"
+    "recs2020_public_v7.csv"
+)
+
+# NCEI data service for GHCN-Daily summaries (anonymous, CSV).
+GHCN_DATA_URL = (
+    "https://www.ncei.noaa.gov/access/services/data/v1"
+    "?dataset=daily-summaries&stations={station}"
+    "&startDate={year}-01-01&endDate={year}-12-31"
+    "&dataTypes=TMAX,TMIN&format=csv"
 )
 
 # Stratified sampling of the training corpus.

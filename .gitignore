@@ -43,3 +43,4 @@ MANIFES
 /data/raw/new_england/
 *.parquet
 !tests/data/**/*.parquet
+!tests/data/new_england/*
