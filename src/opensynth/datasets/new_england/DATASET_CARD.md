@@ -1,8 +1,9 @@
 # Dataset Card — OpenSynth New England Synthetic Residential AMI v1.0
 
-> **Status: DRAFT.** Fields marked `{TBD:...}` are filled from
-> `data/models/new_england/eval_metrics_k*.json` and the final
-> generation run before release.
+> **Status: RELEASE CANDIDATE.** All evaluation and generation fields
+> are final. Remaining `{TBD:...}` markers are release logistics only:
+> Zenodo DOI, citation, upstream PR link, release date, license
+> sign-off.
 
 ## Summary
 
@@ -35,7 +36,7 @@ ownership, calendar, daily temperature).
 |---|---|
 | `ne_synthetic_1000homes.parquet` | `home_id`, `timestamp`, `kwh` (long format) |
 | `ne_synthetic_1000homes.csv.gz` | Same data, CSV for non-parquet consumers |
-| `ne_synthetic_metadata.csv` | One row per home: `home_id`, `state`, `archetype`, `heating_fuel`, `has_pv`, `has_ev` |
+| `ne_synthetic_metadata.csv` | One row per home: `home_id`, `state_postal`, `state`, `archetype`, `heating_fuel`, `has_pv`, `has_ev`, `magnitude_scale` |
 | `DATASET_CARD.md` | This card |
 
 ### Timestamps
@@ -74,9 +75,9 @@ the NREL EULP convention. `2018-01-15 17:00` covers 17:00–17:15 EST.
    airport station (5 °C bins, −15 °C to +25 °C).
 4. **Model** — Faraday VAE (input 96, latent 16, class_dim 8) trained
    150 epochs on all training profiles; GMM with
-   `{TBD:gmm-k}` components fitted over the 24-dim joint
+   200 (sweep winner: k=100 gave +16.0 % annual MPE, k=400 gave −16.4 %) components fitted over the 24-dim joint
    (latent, label) space. Final VAE training loss
-   `{TBD:vae-final-loss}`.
+   0.840.
 5. **Sampling** — per home: labels drawn from the RECS 2020
    within-state joint distribution (states weighted by RECS household
    weights, DER flags by state adoption shares); then one day sampled
@@ -84,6 +85,17 @@ the NREL EULP convention. `2018-01-15 17:00` covers 17:00–17:15 EST.
    dayofweek, that state's **real 2018 temp-bin trajectory**) in
    closed form and decoding. Cold snaps and heat waves therefore land
    on the correct dates, coherently across homes in the same state.
+6. **Magnitude calibration** — day-independent sampling collapses
+   per-home annual variance (365 draws per home average toward the
+   segment mean, losing persistent home-level identity: synthetic
+   annual std ~1,100 kWh vs 6,354 in the real corpus). Each home
+   therefore receives one persistent scale factor, drawn from the
+   empirical distribution of relative annuals (home ÷ segment mean)
+   among real training-split homes of its archetype × heating-fuel
+   segment (pooled fallback below 20 homes; clamped to [0.25, 4.0]).
+   The factor is recorded per home as `magnitude_scale` in the
+   metadata file. Shapes, peak timing and DER signatures are
+   unaffected; annual-kWh realism is restored (see Evaluation).
 
 ### PV shapes
 
@@ -111,12 +123,12 @@ data (Chai et al. 2024, *Defining 'Good'*, arXiv:2407.11785):
 
 | Criterion | Threshold | Result |
 |---|---|---|
-| Mean annual kWh per home vs RECS 2020 weighted NE mean | ±5 % | `{TBD:mpe-recs}` |
-| Winter aggregate peak timing vs ISO-NE hourly demand | ≤ 60 min | `{TBD:peak-winter}` |
-| Summer aggregate peak timing vs ISO-NE hourly demand | ≤ 60 min | `{TBD:peak-summer}` |
-| Seasonal mean profile shape vs EULP holdout | Pearson r > 0.85 | `{TBD:shape-r}` |
-| EV evening signature (16–23 h energy-share uplift, EV vs non-EV) | uplift present | `{TBD:ev-signature}` |
-| PV midday signature (net-load depression, PV vs non-PV twin) | depression present | `{TBD:pv-signature}` |
+| Mean annual kWh per home vs RECS 2020 weighted NE mean | ±5 % | **+4.1 %**, KS 0.076, std 4,660 vs RECS 4,706 (released dataset, after magnitude calibration) — pass. Model-level before calibration: −5.9 %, KS 0.302 |
+| Winter aggregate peak timing vs ISO-NE hourly demand | ≤ 60 min | **0 min** (synthetic 19:00 = ISO-NE 19:00) — pass |
+| Summer aggregate peak timing vs ISO-NE hourly demand | ≤ 60 min | 60 min (synthetic 18:00 vs ISO-NE 17:00) — pass at tolerance |
+| Seasonal mean profile shape vs EULP holdout | Pearson r > 0.85 | r = 0.95–0.99 across seasons — pass |
+| EV evening signature (16–23 h energy-share uplift, EV vs non-EV) | uplift present | 0.466 vs 0.354 evening energy share — pass |
+| PV midday signature (net-load depression, PV vs non-PV twin) | depression present | −0.30 kWh/15 min midday depression — pass |
 
 Caveats: the ISO-NE reference is 2019 (EIA's hourly archive starts
 there) against a 2018 weather year — seasonal peak timing is stable
@@ -130,8 +142,8 @@ series (real holdout label trajectories):
 
 | Metric | Result |
 |---|---|
-| Seasonal peak-count distributions, pairwise KS | `{TBD:peaks-ks}` |
-| Autocorrelation-coefficient distributions (hour/half-day/day/week lags), pairwise KS | `{TBD:acf-ks}` |
+| Seasonal peak-count distributions, pairwise KS | KS 0.27 (fall) – 0.77 (spring); see limitations |
+| Autocorrelation-coefficient distributions (hour/half-day/day/week lags), pairwise KS | KS 0.65–0.76 (hour–week lags), 0.27 (half-year); see limitations |
 
 Note: Faraday generates days independently; multi-day coherence enters
 only through the shared real temperature trajectory, so long-lag ACF
@@ -145,9 +157,9 @@ logistic regression, tested on real holdout days:
 
 | Trained on | Accuracy |
 |---|---|
-| Synthetic data | `{TBD:tstr-acc}` |
-| Real training data | `{TBD:trtr-acc}` |
-| Absolute delta (utility measure) | `{TBD:tstr-delta}` |
+| Synthetic data | 0.572 |
+| Real training data | 0.575 |
+| Absolute delta (utility measure) | **0.002** |
 
 ### Privacy
 
@@ -169,8 +181,14 @@ becomes mandatory if this pipeline is ever retrained on real AMI data.
 - **Single weather year.** All profiles reflect 2018 New England
   weather; the dataset does not span inter-annual variability.
 - **Days are conditionally independent.** Within-home day-to-day
-  persistence beyond what the shared temperature trajectory induces
-  (e.g., vacations, occupancy streaks) is not modelled.
+  persistence beyond what the shared temperature trajectory and the
+  per-home magnitude scale induce (e.g., vacations, occupancy
+  streaks) is not modelled. The distributional ACF/peak-count KS
+  results above quantify this.
+- **Rare extreme readings.** 0.003 % of readings exceed 25 kW and 24
+  of 35 M exceed 50 kW — sampled outlier days amplified by large
+  magnitude scales. Winsorize if your application is sensitive to
+  implausible single-interval peaks.
 - **Simulated ground truth.** Fidelity is measured against ResStock
   simulations and public statistics (RECS, ISO-NE), not against real
   New England meter data, which is not publicly available — that gap
@@ -191,11 +209,11 @@ pipenv run python scripts/fetch_pv_shapes.py             # PV shapes + cross-che
 pipenv run python app/app.py preprocess-ne-data \
     --pv_shapes src/opensynth/datasets/new_england/resources/pv_shapes_ne.csv
 pipenv run python scripts/train_ne_faraday.py            # hours, CPU
-{TBD:generate-command}                                   # 1,000-home dataset
+pipenv run python app/app.py generate-ne-dataset        # 1,000-home dataset
 ```
 
 Building manifest: `data/raw/new_england/building_manifest.csv`
-(committed hash `{TBD:manifest-hash}`). All RNGs seeded; DER
+(committed hash sha256 `967d21338d77f652…`). All RNGs seeded; DER
 assignment, splits and sampling are deterministic given the manifest.
 
 ## Sources and licenses
@@ -209,7 +227,7 @@ assignment, splits and sampling are deterministic given the manifest.
 | Open-Meteo (ERA5) | PV irradiance/temperature | CC BY 4.0 |
 | PVGIS (EU JRC) | PV cross-check only | Free reuse with attribution |
 
-**This dataset**: `{TBD:license}` (proposed CC BY 4.0).
+**This dataset**: CC BY 4.0 (proposed, pending sign-off).
 Code: Apache-2.0 (OpenSynth).
 
 ## Citation

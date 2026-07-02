@@ -102,6 +102,54 @@ def preprocess_ne_data(
 
 
 @app.command()
+def generate_ne_dataset(
+    data_dir: Annotated[
+        str, typer.Option("--loc", help="Location of data directory.")
+    ] = "./data",
+    n_homes: Annotated[
+        int, typer.Option("--n_homes", help="Homes to generate.")
+    ] = 1000,
+    gmm_k: Annotated[
+        int, typer.Option("--gmm_k", help="GMM checkpoint to use.")
+    ] = 200,
+    seed: Annotated[int, typer.Option("--seed", help="RNG seed.")] = 42,
+    out_dir: Annotated[
+        str,
+        typer.Option(
+            "--out",
+            help="Output directory. Defaults to data/synthetic/new_england.",
+        ),
+    ] = "",
+    no_calibrate: Annotated[
+        bool,
+        typer.Option(
+            "--no_calibrate",
+            help="Skip per-home magnitude calibration.",
+        ),
+    ] = False,
+    no_csv: Annotated[
+        bool,
+        typer.Option("--no_csv", help="Skip the csv.gz copy."),
+    ] = False,
+):
+    """
+    Generate the New England synthetic dataset from trained
+    checkpoints (see datasets/new_england/DATASET_CARD.md).
+    """
+    from opensynth.datasets.new_england import generate_dataset
+
+    generate_dataset.generate_ne_dataset(
+        data_dir=data_dir,
+        n_homes=n_homes,
+        gmm_k=gmm_k,
+        seed=seed,
+        out_dir=out_dir or None,
+        calibrate=not no_calibrate,
+        write_csv=not no_csv,
+    )
+
+
+@app.command()
 def preprocess_data(
     split: Annotated[
         bool,
