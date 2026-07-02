@@ -46,6 +46,22 @@ class TestReferencePeakHour:
         df = pl.DataFrame({"timestamp": timestamps, "demand_mwh": demand})
         assert peak_timing.reference_peak_hour(df, [1, 2]) == 17.0
 
+    def test_peak_hour_correct_with_missing_hours(self):
+        # Reference exports may not cover all 24 hours; the peak hour
+        # must be the hour label, not the row position
+        start = datetime(2018, 1, 1)
+        timestamps = [
+            start + timedelta(hours=i)
+            for i in range(24 * 10)
+            if (start + timedelta(hours=i)).hour >= 6
+        ]
+        demand = [
+            1000 + 200 * np.cos((t.hour - 18) / 24 * 2 * np.pi)
+            for t in timestamps
+        ]
+        df = pl.DataFrame({"timestamp": timestamps, "demand_mwh": demand})
+        assert peak_timing.reference_peak_hour(df, [1]) == 18.0
+
 
 class TestDeltaAndTolerance:
 

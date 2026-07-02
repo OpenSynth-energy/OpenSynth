@@ -218,7 +218,9 @@ class GaussianMixtureModel(nn.Module):
         self.means.data = means
         self.precision_cholesky.data = precision_cholesky
         self.covariances.data = covariances
-        self.nll.data = nll
+        # nll arrives as a 0-dim mean; keep the registered [1] shape
+        # so saved state_dicts load into a fresh module
+        self.nll.data = nll.reshape(1)
         return self
 
     def forward(self, X: torch.Tensor):

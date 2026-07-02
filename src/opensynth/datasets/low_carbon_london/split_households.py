@@ -19,6 +19,7 @@ def split_household_ids(
     df: pd.DataFrame,
     id_col: str,
     sample_fraction: float = 0.75,
+    seed: Optional[int] = None,
 ) -> Tuple[List[str], List[str]]:
     """
     Split dataset into training vs holdout households.
@@ -28,13 +29,20 @@ def split_household_ids(
         id_col (str): Name of the household ID column
         sample_fraction (float): Fraction of household ids to include in
         training set
+        seed (int, optional): Seed for the shuffle. Defaults to None,
+        which uses the module-seeded global random stream (the
+        historical behavior); pass a seed to make the split
+        independent of any other consumer of the global stream.
 
     Returns:
         Tuple[List[str], List[str]]: List of training and holdout household ids
     """
     logger.info("Splitting households into train and holdout households")
     unique_ids = df[id_col].unique().tolist()
-    random.shuffle(unique_ids)
+    if seed is not None:
+        random.Random(seed).shuffle(unique_ids)
+    else:
+        random.shuffle(unique_ids)
     sample_size = int(len(unique_ids) * sample_fraction)
 
     train_ids = unique_ids[:sample_size]

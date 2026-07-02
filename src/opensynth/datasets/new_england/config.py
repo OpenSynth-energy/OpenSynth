@@ -89,6 +89,9 @@ RECS_URL = (
     "https://www.eia.gov/consumption/residential/data/2020/csv/"
     "recs2020_public_v7.csv"
 )
+# Destination of the RECS microdata inside the data directory; shared
+# by the downloader and every loader.
+RECS_CSV_RELPATH = "raw/new_england/recs/recs2020_public_v7.csv"
 
 # NCEI data service for GHCN-Daily summaries (anonymous, CSV).
 GHCN_DATA_URL = (

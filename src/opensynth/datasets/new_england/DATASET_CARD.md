@@ -36,7 +36,7 @@ ownership, calendar, daily temperature).
 |---|---|
 | `ne_synthetic_1000homes.parquet` | `home_id`, `timestamp`, `kwh` (long format) |
 | `ne_synthetic_1000homes.csv.gz` | Same data, CSV for non-parquet consumers |
-| `ne_synthetic_metadata.csv` | One row per home: `home_id`, `state_postal`, `state`, `archetype`, `heating_fuel`, `has_pv`, `has_ev`, `magnitude_scale` |
+| `ne_synthetic_1000homes_metadata.csv` | One row per home: `home_id`, `state_postal`, `state`, `archetype`, `heating_fuel`, `has_pv`, `has_ev`, `magnitude_scale` |
 | `DATASET_CARD.md` | This card |
 
 ### Timestamps

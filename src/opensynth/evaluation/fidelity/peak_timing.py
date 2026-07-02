@@ -87,7 +87,9 @@ def _(df_reference: pl.DataFrame, season_months: Sequence[int]) -> float:
         .agg(pl.col("demand_mwh").mean())
         .sort("hour")
     )
-    return float(hourly["demand_mwh"].arg_max())
+    # Index the hour column: arg_max alone is a row position, which
+    # only equals the hour when all 24 hours are present
+    return float(hourly["hour"][hourly["demand_mwh"].arg_max()])
 
 
 @reference_peak_hour.register

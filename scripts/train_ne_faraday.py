@@ -12,6 +12,7 @@ Run from the repo root:
         > /tmp/ne_train_full.log 2>&1 &
 """
 
+import argparse
 import json
 import logging
 import time
@@ -34,9 +35,7 @@ def report(msg: str) -> None:
     print(f"[train_ne] {msg}", flush=True)
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-TRAIN_DIR = REPO_ROOT / "data" / "processed" / "new_england" / "train"
-MODEL_DIR = REPO_ROOT / "data" / "models" / "new_england"
+DEFAULT_DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 BATCH_SIZE = 1024
 VAE_EPOCHS = 150
@@ -61,20 +60,25 @@ class LossHistory(pl.Callback):
             )
 
 
-def main():
-    pl.seed_everything(0)
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+def main(data_dir: Path):
+    # Same layout the CLI's --loc convention uses, so checkpoints
+    # land where generate-ne-dataset expects them
+    train_dir = data_dir / "processed" / "new_england" / "train"
+    model_dir = data_dir / "models" / "new_england"
 
-    n_available = len(pd.read_csv(TRAIN_DIR / "data.csv", usecols=["ID"]))
+    pl.seed_everything(0)
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    n_available = len(pd.read_csv(train_dir / "data.csv", usecols=["ID"]))
     report(f"Training profiles available: {n_available}")
 
     t0 = time.time()
     dm = NEDataModule(
-        data_path=TRAIN_DIR / "data.csv",
-        stats_path=TRAIN_DIR / "mean_std.csv",
+        data_path=train_dir / "data.csv",
+        stats_path=train_dir / "mean_std.csv",
         batch_size=BATCH_SIZE,
         n_samples=n_available,
-        outlier_path=TRAIN_DIR / "outliers.csv",
+        outlier_path=train_dir / "outliers.csv",
     )
     dm.setup()
     batch = next(iter(dm.train_dataloader()))
@@ -107,9 +111,9 @@ def main():
     report(f"VAE trained in {(time.time() - t0) / 60:.0f} min")
     assert history.epoch_losses[-1] < history.epoch_losses[0]
 
-    vae_ckpt = MODEL_DIR / "ne_vae.ckpt"
+    vae_ckpt = model_dir / "ne_vae.ckpt"
     trainer.save_checkpoint(vae_ckpt)
-    (MODEL_DIR / "ne_vae_meta.json").write_text(
+    (model_dir / "ne_vae_meta.json").write_text(
         json.dumps(
             {
                 "feature_list": feature_list,
@@ -136,7 +140,7 @@ def main():
         model.train_gmm(dm=dm)
         report(f"GMM k={k} trained in {(time.time() - t0) / 60:.0f} min")
 
-        gmm_ckpt = MODEL_DIR / f"ne_gmm_{k}.pt"
+        gmm_ckpt = model_dir / f"ne_gmm_{k}.pt"
         torch.save(
             {
                 "n_components": k,
@@ -191,4 +195,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--data_dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help="Data directory (the CLI's --loc)",
+    )
+    main(parser.parse_args().data_dir)

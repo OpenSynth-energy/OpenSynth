@@ -36,3 +36,23 @@ class TestToTempBin:
         bins = weather.to_temp_bin(df["tmean_c"].to_numpy())
         # -18.8 -> 0, 0.0 -> 4, 26.0 -> 9, 10.0 -> 6
         assert bins.tolist() == [0, 4, 9, 6]
+
+
+class TestMissingObservations:
+
+    def test_to_temp_bin_rejects_nan(self):
+        with pytest.raises(ValueError):
+            weather.to_temp_bin(np.array([1.0, np.nan]))
+
+    def test_blank_tmax_row_dropped(self, tmp_path):
+        # np.digitize(nan) would return the hottest bin; the loader
+        # must drop present-but-blank observations instead
+        csv = tmp_path / "ghcn.csv"
+        csv.write_text(
+            "STATION,DATE,TMAX,TMIN\n"
+            "X,2018-01-01,-138,-238\n"
+            "X,2018-01-02,,-200\n"
+        )
+        df = weather.load_ghcn_daily(csv)
+        assert df.height == 1
+        assert str(df["date"].to_list()[0]) == "2018-01-01"

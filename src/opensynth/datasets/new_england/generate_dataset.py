@@ -72,7 +72,10 @@ def load_model(
         reg_covar=ckpt["covariance_reg"],
     )
     state = dict(ckpt["gmm_state_dict"])
-    state["nll"] = state["nll"].reshape(1)  # EM saves a 0-dim buffer
+    # Backward compatibility: checkpoints written before
+    # GaussianMixtureModel.update_params normalised the nll shape
+    # carry a 0-dim buffer
+    state["nll"] = state["nll"].reshape(1)
     gmm.load_state_dict(state)
 
     model = NewEnglandFaradayModel(
@@ -293,6 +296,9 @@ def write_dataset(
         write_csv (bool): Also write the csv.gz copy.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
+    # Name files by their actual home count so smaller test runs
+    # neither masquerade as nor clobber the release artifact
+    stem = f"ne_synthetic_{homes.height}homes"
 
     offsets = (np.arange(96) * np.timedelta64(15, "m")).astype(
         "timedelta64[ns]"
@@ -308,17 +314,17 @@ def write_dataset(
         }
     ).with_columns(pl.col("home_id").cast(pl.Categorical))
 
-    parquet_path = out_dir / "ne_synthetic_1000homes.parquet"
+    parquet_path = out_dir / f"{stem}.parquet"
     df_long.write_parquet(parquet_path)
     logger.info(f"💾 Wrote {df_long.height:,} rows to {parquet_path}")
 
     if write_csv:
-        csv_path = out_dir / "ne_synthetic_1000homes.csv.gz"
+        csv_path = out_dir / f"{stem}.csv.gz"
         with gzip.open(csv_path, "wb", compresslevel=6) as f:
             df_long.write_csv(f)
         logger.info(f"💾 Wrote {csv_path}")
 
-    homes.write_csv(out_dir / "ne_synthetic_metadata.csv")
+    homes.write_csv(out_dir / f"{stem}_metadata.csv")
     (out_dir / "generation_summary.json").write_text(
         json.dumps(summary, indent=2)
     )
@@ -359,9 +365,7 @@ def generate_ne_dataset(
     stats = pl.read_csv(data_path / "processed/new_england/train/mean_std.csv")
     kwh_mean, kwh_std = stats["mean"][0], stats["stdev"][0]
 
-    df_recs = recs.load_recs(
-        data_path / "raw/new_england/recs/recs2020_public_v7.csv"
-    )
+    df_recs = recs.load_recs(data_path / config.RECS_CSV_RELPATH)
     homes = draw_homes(df_recs, n_homes, rng)
     logger.info(
         f"🏠 Drew {n_homes} homes: "

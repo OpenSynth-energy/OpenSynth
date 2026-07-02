@@ -51,10 +51,18 @@ def download_data(url: str, filename: Path, unzip: bool = False):
             url, headers={"User-Agent": "Mozilla/5.0"}
         )
         filename.parent.mkdir(parents=True, exist_ok=True)
-        with urllib.request.urlopen(request) as response:
-            with open(filename, "wb") as f:
-                while chunk := response.read(1 << 20):
-                    f.write(chunk)
+        # Stream to a temp path and rename, so the target path only
+        # ever holds a complete download — interrupted transfers must
+        # not leave truncated files that skip-if-exists logic trusts
+        part_path = filename.with_suffix(filename.suffix + ".part")
+        try:
+            with urllib.request.urlopen(request) as response:
+                with open(part_path, "wb") as f:
+                    while chunk := response.read(1 << 20):
+                        f.write(chunk)
+            os.replace(part_path, filename)
+        finally:
+            part_path.unlink(missing_ok=True)
     else:
         logging.info("Skipping download")
 

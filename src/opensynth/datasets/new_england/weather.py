@@ -38,10 +38,22 @@ def load_ghcn_daily(csv_path: Path) -> pl.DataFrame:
     def _tenths(col: str) -> pl.Expr:
         return pl.col(col).str.strip_chars().cast(pl.Float64) / 10.0
 
-    return df.select(
+    df = df.select(
         pl.col("DATE").str.to_date().alias("date"),
         ((_tenths("TMAX") + _tenths("TMIN")) / 2.0).alias("tmean_c"),
     )
+    # A row with a blank TMAX or TMIN yields a null tmean_c; dropping
+    # it here folds present-but-empty observations into the missing-
+    # days warning instead of letting NaN reach np.digitize (which
+    # would silently assign the hottest bin).
+    n_null = df["tmean_c"].null_count()
+    if n_null:
+        logger.warning(
+            f"⚠️ {csv_path.name}: dropping {n_null} rows with missing "
+            "TMAX/TMIN"
+        )
+        df = df.drop_nulls("tmean_c")
+    return df
 
 
 def to_temp_bin(tmean_c: np.ndarray) -> np.ndarray:
@@ -56,6 +68,11 @@ def to_temp_bin(tmean_c: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: Integer bins 0-9.
     """
+    tmean_c = np.asarray(tmean_c, dtype=float)
+    if np.isnan(tmean_c).any():
+        # np.digitize(nan) returns the last bin, silently labelling a
+        # missing observation as the hottest day of the year
+        raise ValueError("tmean_c contains NaN values")
     return np.digitize(tmean_c, config.TEMP_BIN_EDGES_C)
 
 

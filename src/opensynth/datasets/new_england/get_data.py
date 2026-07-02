@@ -14,6 +14,7 @@ account, or use the EIA v2 API) and load it with
 ``load_isone_hourly``.
 """
 
+import http.client
 import logging
 import os
 import time
@@ -82,8 +83,10 @@ def _download_if_missing(url: str, out_path: Path) -> bool:
         try:
             datasets_utils.download_data(url, out_path)
             return True
-        except (urllib.error.URLError, OSError):
-            # Drop any partial file so skip-if-exists stays sound
+        except (urllib.error.URLError, http.client.HTTPException, OSError):
+            # Drop any partial file so skip-if-exists stays sound.
+            # IncompleteRead (mid-body connection close) is an
+            # HTTPException, not a URLError or OSError.
             out_path.unlink(missing_ok=True)
             if attempt == DOWNLOAD_RETRIES:
                 raise
@@ -193,7 +196,7 @@ def download_recs(data_dir: str = "./data") -> None:
     Args:
         data_dir (str): Data directory. Defaults to "./data".
     """
-    out = Path(data_dir) / "raw/new_england/recs/recs2020_public_v7.csv"
+    out = Path(data_dir) / config.RECS_CSV_RELPATH
     if _download_if_missing(config.RECS_URL, out):
         logger.info("⬇️ Downloaded RECS 2020 microdata")
     else:
@@ -219,15 +222,23 @@ def download_ghcn(data_dir: str = "./data") -> None:
             logger.info(f"⏭️ GHCN daily data for {state} already present")
 
 
-def load_isone_hourly(csv_path: Path) -> pl.DataFrame:
+def load_isone_hourly(
+    csv_path: Path, utc_offset_hours: int = 0
+) -> pl.DataFrame:
     """
     Load a manually-downloaded ISO-NE hourly demand CSV.
 
-    Accepts either ISO-NE SMD exports or EIA v2 API exports; the
-    file must contain a timestamp column and a demand column.
+    Accepts either ISO-NE SMD exports (a date column plus a separate
+    hour-ending column such as ``Hr_End``) or EIA v2 API exports (a
+    combined ``period`` timestamp). EIA v2 timestamps are UTC — pass
+    ``utc_offset_hours=-5`` to convert them to the fixed-EST clock
+    the synthetic profiles use.
 
     Args:
         csv_path (Path): Path to the hourly demand CSV.
+        utc_offset_hours (int): Hours to add to the parsed
+            timestamps (e.g. -5 for UTC -> fixed EST). Defaults to 0
+            (timestamps already on the target clock).
 
     Returns:
         pl.DataFrame: Columns timestamp (datetime), demand_mwh.
@@ -236,11 +247,34 @@ def load_isone_hourly(csv_path: Path) -> pl.DataFrame:
     ts_col = next(
         c for c in df.columns if c.lower() in ("period", "timestamp", "date")
     )
+    hour_col = next(
+        (
+            c
+            for c in df.columns
+            if c.lower().replace(" ", "_") in ("hr_end", "hour_ending", "he")
+        ),
+        None,
+    )
     demand_col = next(
         c for c in df.columns if "demand" in c.lower() or "mw" in c.lower()
     )
+    # EIA v2 hourly periods are hour-resolution ("2019-01-15T23");
+    # pad them to full timestamps before parsing
+    ts_str = pl.col(ts_col)
+    ts_str = (
+        pl.when(ts_str.str.len_chars() == 13)
+        .then(ts_str + ":00:00")
+        .otherwise(ts_str)
+    )
+    timestamp = ts_str.str.to_datetime()
+    if hour_col is not None:
+        # SMD exports carry the hour separately, as hour-ending 1-24:
+        # hour-ending 1 covers 00:00-01:00, i.e. period-beginning 0
+        timestamp = timestamp + pl.duration(
+            hours=pl.col(hour_col).cast(pl.Int64) - 1
+        )
     return df.select(
-        pl.col(ts_col).str.to_datetime().alias("timestamp"),
+        (timestamp + pl.duration(hours=utc_offset_hours)).alias("timestamp"),
         pl.col(demand_col).cast(pl.Float64).alias("demand_mwh"),
     ).sort("timestamp")
 

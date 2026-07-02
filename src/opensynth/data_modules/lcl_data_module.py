@@ -45,6 +45,7 @@ class LCLData(Dataset):
         stats_path: Path,
         n_samples: int,
         outlier_path: Optional[Path] = None,
+        feature_cols: Optional[list[str]] = None,
     ):
         """
         Args:
@@ -55,7 +56,13 @@ class LCLData(Dataset):
             n_samples (int): Number of samples to load
             outlier_path (Path, optional): Path to outlier data.
             Defaults to None.
+            feature_cols (list[str], optional): Conditioning feature
+            columns, in the order the model should see them.
+            Defaults to ["month", "dayofweek"].
         """
+        self.feature_cols = (
+            list(feature_cols) if feature_cols else ["month", "dayofweek"]
+        )
         self.df = pd.read_csv(data_path)
         self.df_stats = pd.read_csv(stats_path)
         self.outlier = True if outlier_path else False
@@ -81,8 +88,7 @@ class LCLData(Dataset):
         # Parse columns
         self.kwh = self.df["kwh"].apply(ast.literal_eval)
         self.kwh = torch.from_numpy(np.array(self.kwh.tolist())).float()
-        self.month = self.df["month"]
-        self.dayofweek = self.df["dayofweek"]
+        self.features = {col: self.df[col] for col in self.feature_cols}
 
     def standardise(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -114,8 +120,7 @@ class LCLData(Dataset):
     def __getitem__(self, idx):
         standardised_kwh = self.standardise(self.kwh[idx])
         features: dict[str, torch.Tensor] = {
-            "month": self.month[idx],
-            "dayofweek": self.dayofweek[idx],
+            col: self.features[col][idx] for col in self.feature_cols
         }
         return TrainingData(kwh=standardised_kwh, features=features)
 
@@ -125,6 +130,10 @@ class LCLDataModule(pl.LightningDataModule):
     Low Carbon London data module
     """
 
+    # Dataset class hook so regional subclasses reuse the module
+    # wiring with their own Dataset
+    dataset_cls: type[LCLData] = LCLData
+
     def __init__(
         self,
         data_path: Path,
@@ -132,6 +141,7 @@ class LCLDataModule(pl.LightningDataModule):
         batch_size: int,
         n_samples: int,
         outlier_path: Optional[Path] = None,
+        feature_cols: Optional[list[str]] = None,
     ):
         super().__init__()
         self.data_path = data_path
@@ -140,24 +150,27 @@ class LCLDataModule(pl.LightningDataModule):
         self.n_samples = n_samples
         self.outlier_path = outlier_path
         self.outlier = True if outlier_path else False
+        self.feature_cols = feature_cols
 
     def prepare_data(self):
         pass
 
     def setup(self, stage=""):
 
-        self.dataset = LCLData(
+        self.dataset = self.dataset_cls(
             data_path=self.data_path,
             stats_path=self.stats_path,
             n_samples=self.n_samples,
             outlier_path=self.outlier_path,
+            feature_cols=self.feature_cols,
         )
 
         if self.outlier:
-            self.outlier_dataset = LCLData(
+            self.outlier_dataset = self.dataset_cls(
                 data_path=self.outlier_path,
                 stats_path=self.stats_path,
                 n_samples=100,  # Outlier size = 100
+                feature_cols=self.feature_cols,
             )
 
     def train_dataloader(self):

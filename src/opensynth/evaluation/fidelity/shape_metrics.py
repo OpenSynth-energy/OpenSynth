@@ -28,8 +28,12 @@ def normalise_profile(profile: np.ndarray) -> np.ndarray:
     """
     profile = np.asarray(profile, dtype=float)
     total = profile.sum()
-    if total == 0:
-        raise ValueError("Cannot normalise an all-zero profile")
+    if total <= 0:
+        # Negative totals occur for net-load profiles dominated by PV
+        # export; normalising by them silently inverts the shape
+        raise ValueError(
+            "Cannot normalise a profile with non-positive total energy"
+        )
     return profile / total
 
 
@@ -85,6 +89,8 @@ def energy_window_share(
     start, end = window
     lo, hi = start * periods_per_hour, end * periods_per_hour
     total = kwh.sum()
-    if total == 0:
-        raise ValueError("Profiles contain no energy")
+    if total <= 0:
+        # A non-positive total (net-load export) would make the
+        # share unbounded / outside [0, 1]
+        raise ValueError("Profiles contain no positive net energy")
     return float(kwh[:, lo:hi].sum() / total)

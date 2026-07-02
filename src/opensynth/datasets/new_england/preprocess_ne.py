@@ -24,6 +24,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 import polars as pl
 
@@ -42,14 +43,17 @@ logger = logging.getLogger(__name__)
 
 EULP_KWH_COL = "out.electricity.total.energy_consumption"
 
+# Labels joined onto the long rows before packing. month and
+# dayofweek come from the packing step itself, so they are excluded
+# here; deriving from config keeps the conditioning schema single-
+# sourced.
 NE_FEATURE_COLS = [
-    "state",
-    "archetype",
-    "heating_fuel",
-    "has_ev",
-    "has_pv",
-    "temp_bin",
+    c for c in config.FEATURE_COLS if c not in ("month", "dayofweek")
 ]
+
+# Default PV shape table committed with the package (built by
+# scripts/fetch_pv_shapes.py).
+DEFAULT_PV_SHAPE_PATH = Path(__file__).parent / "resources/pv_shapes_ne.csv"
 
 
 def melt_building(parquet_path: Path, building_id: str) -> pl.DataFrame:
@@ -153,10 +157,13 @@ def preprocess_ne_data(
     Args:
         data_dir (str): Data directory.
         pv_shape_path (Path, optional): PVWatts shape CSV (site,
-            month, hour, kw_per_kw). If None, PV augmentation is
-            skipped with a warning.
+            month, hour, kw_per_kw). Defaults to the packaged
+            resources/pv_shapes_ne.csv; if that is missing too, PV
+            augmentation is skipped and has_pv is forced to 0 so the
+            label stays honest.
         sample_fraction (float): Train household fraction.
-        seed (int): RNG seed for DER assignment and augmentation.
+        seed (int): RNG seed for DER assignment, augmentation and
+            the household split.
         drop_nulls (bool): Drop rows with null kwh readings.
     """
     manifest = pl.read_csv(
@@ -166,9 +173,7 @@ def preprocess_ne_data(
         (pl.col("state") + "_" + pl.col("bldg_id").cast(pl.Utf8)).alias("ID")
     )
 
-    df_recs = recs.load_recs(
-        Path(data_dir) / "raw/new_england/recs/recs2020_public_v7.csv"
-    )
+    df_recs = recs.load_recs(Path(data_dir) / config.RECS_CSV_RELPATH)
     df_flags = der_augmentation.assign_der_flags(
         manifest.select("ID", "state", "archetype", "heating_fuel"),
         recs.der_shares(df_recs),
@@ -176,17 +181,26 @@ def preprocess_ne_data(
     )
     df_temp = weather.build_temp_bin_table(data_dir).drop("tmean_c")
 
+    if pv_shape_path is None and DEFAULT_PV_SHAPE_PATH.exists():
+        pv_shape_path = DEFAULT_PV_SHAPE_PATH
     df_shape = None
     if pv_shape_path is not None:
         df_shape = pl.read_csv(pv_shape_path)
+        logger.info(f"☀️ PV shapes: {pv_shape_path}")
     else:
+        # Without shapes a has_pv=1 label would condition the model
+        # on nothing; zero the flags so the packed labels stay honest
         logger.warning(
-            "⚠️ No PV shape table provided: skipping PV augmentation"
+            "⚠️ No PV shape table available: skipping PV augmentation "
+            "and forcing has_pv=0 for all homes"
+        )
+        df_flags = df_flags.with_columns(
+            pl.lit(0).cast(pl.Int8).alias("has_pv")
         )
 
     # Household-level train/holdout split
     train_ids, holdout_ids = split_households.split_household_ids(
-        manifest.to_pandas(), "ID", sample_fraction=sample_fraction
+        manifest.to_pandas(), "ID", sample_fraction=sample_fraction, seed=seed
     )
     splits = {"train": set(train_ids), "holdout": set(holdout_ids)}
     logger.info(
@@ -240,11 +254,18 @@ def preprocess_ne_data(
             df_split = df_long.filter(pl.col("ID").is_in(list(ids)))
             if df_split.is_empty():
                 continue
+            chunk = _pack_chunk(df_split, drop_nulls)
+            # Accumulate standardisation stats from the packed
+            # output, so mean_std.csv describes exactly the rows
+            # written to data.csv (raw long rows would count nulls
+            # in n but not in the sum, and include readings from
+            # incomplete days the packing step drops)
+            arr = np.asarray(chunk["kwh"].to_list(), dtype=float)
             s = stats[split_name]
-            s[0] += df_split["kwh"].sum()
-            s[1] += (df_split["kwh"] ** 2).sum()
-            s[2] += len(df_split)
-            packed[split_name].append(_pack_chunk(df_split, drop_nulls))
+            s[0] += float(arr.sum())
+            s[1] += float((arr**2).sum())
+            s[2] += arr.size
+            packed[split_name].append(chunk)
 
     out_root = Path(data_dir) / "processed/new_england"
     for split_name, frames in packed.items():

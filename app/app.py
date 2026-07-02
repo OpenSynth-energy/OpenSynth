@@ -5,6 +5,7 @@ from rich.logging import RichHandler
 from typing_extensions import Annotated
 
 from opensynth.datasets.low_carbon_london import get_data
+from opensynth.datasets.new_england import config as ne_config
 from opensynth.datasets.new_england import get_data as ne_get_data
 from opensynth.datasets.new_england import preprocess_ne, recs, sampling
 
@@ -57,9 +58,7 @@ def get_ne_data(
     ne_get_data.get_ne_data(data_dir)
     if download_timeseries:
         metadata = ne_get_data.load_eulp_metadata(data_dir)
-        df_recs = recs.load_recs(
-            Path(data_dir) / "raw/new_england/recs/recs2020_public_v7.csv"
-        )
+        df_recs = recs.load_recs(Path(data_dir) / ne_config.RECS_CSV_RELPATH)
         manifest = sampling.select_buildings(
             metadata, recs.joint_distribution(df_recs)
         )
@@ -76,8 +75,9 @@ def preprocess_ne_data(
         str,
         typer.Option(
             "--pv_shapes",
-            help="Path to the PVWatts shape CSV. If omitted, PV "
-            "augmentation is skipped.",
+            help="Path to the PVWatts shape CSV. Defaults to the "
+            "packaged resources/pv_shapes_ne.csv; if that is missing "
+            "PV augmentation is skipped and has_pv is forced to 0.",
         ),
     ] = "",
     sample_fraction: Annotated[

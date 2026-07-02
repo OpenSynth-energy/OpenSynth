@@ -42,6 +42,12 @@ class TestShapeRmse:
         with pytest.raises(ValueError):
             shape_metrics.shape_rmse(np.zeros(24), np.ones(24))
 
+    def test_negative_net_load_profile_rejected(self):
+        # Normalising by a negative total silently inverts the shape
+        exporting_home = np.full(24, -0.5)
+        with pytest.raises(ValueError):
+            shape_metrics.normalise_profile(exporting_home)
+
 
 class TestEnergyWindowShare:
 
@@ -61,3 +67,7 @@ class TestEnergyWindowShare:
         assert shape_metrics.energy_window_share(
             ev
         ) > shape_metrics.energy_window_share(base)
+
+    def test_negative_net_energy_rejected(self):
+        with pytest.raises(ValueError):
+            shape_metrics.energy_window_share(np.full((2, 96), -0.1))
