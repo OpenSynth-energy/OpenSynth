@@ -38,3 +38,8 @@ MANIFES
 *.pt
 *.tmp
 .venv
+
+# Raw datasets are never committed (dataset delivery is via Zenodo)
+/data/raw/new_england/
+*.parquet
+!tests/data/**/*.parquet
