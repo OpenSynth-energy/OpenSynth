@@ -149,7 +149,10 @@ def main():
         )
         report(f"GMM checkpoint saved: {gmm_ckpt}")
 
-        # Directional sanity: winter oil-heat cold day vs summer mild day
+        # Directional sanity: winter oil-heat cold day vs summer warm
+        # day. Use common in-distribution combos: 2018 CT Januarys
+        # are mostly temp bins 3-4 and Julys bins 8-9; rarer bins
+        # force extrapolation and make this check meaningless.
         winter = model.sample_gmm_conditional(
             {
                 "state": 0,
@@ -159,7 +162,7 @@ def main():
                 "has_pv": 0,
                 "month": 1,
                 "dayofweek": 2,
-                "temp_bin": 2,
+                "temp_bin": 3,
             },
             256,
         )
@@ -172,12 +175,13 @@ def main():
                 "has_pv": 0,
                 "month": 7,
                 "dayofweek": 2,
-                "temp_bin": 7,
+                "temp_bin": 8,
             },
             256,
         )
-        w = dm.reconstruct_kwh(winter["kwh"]).clip(min=0).mean()
-        s = dm.reconstruct_kwh(summer["kwh"]).clip(min=0).mean()
+        with torch.no_grad():
+            w = dm.reconstruct_kwh(winter["kwh"]).clip(min=0).mean()
+            s = dm.reconstruct_kwh(summer["kwh"]).clip(min=0).mean()
         report(
             f"Sanity k={k}: winter-cold mean {float(w):.4f} "
             f"vs summer-mild {float(s):.4f} kWh/15min"
