@@ -5,6 +5,8 @@ from rich.logging import RichHandler
 from typing_extensions import Annotated
 
 from opensynth.datasets.low_carbon_london import get_data
+from opensynth.datasets.new_england import get_data as ne_get_data
+from opensynth.datasets.new_england import preprocess_ne, recs, sampling
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,6 +30,75 @@ def download_lcl_data(
     Download the Low Carbon London dataset.
     """
     get_data.download_lcl_data(data_dir)
+
+
+@app.command()
+def get_ne_data(
+    data_dir: Annotated[
+        str, typer.Option("--loc", help="Location of data directory.")
+    ] = "./data",
+    download_timeseries: Annotated[
+        bool,
+        typer.Option(
+            "--timeseries",
+            help="Also build the building manifest and download "
+            "per-building EULP timeseries (~10 GB).",
+        ),
+    ] = False,
+):
+    """
+    Download New England source data: EULP metadata, RECS 2020
+    microdata and GHCN-Daily temperatures. With --timeseries, also
+    select the stratified training buildings and download their
+    15-minute profiles.
+    """
+    from pathlib import Path
+
+    ne_get_data.get_ne_data(data_dir)
+    if download_timeseries:
+        metadata = ne_get_data.load_eulp_metadata(data_dir)
+        df_recs = recs.load_recs(
+            Path(data_dir) / "raw/new_england/recs/recs2020_public_v7.csv"
+        )
+        manifest = sampling.select_buildings(
+            metadata, recs.joint_distribution(df_recs)
+        )
+        sampling.write_manifest(manifest, data_dir)
+        ne_get_data.download_eulp_timeseries(manifest, data_dir)
+
+
+@app.command()
+def preprocess_ne_data(
+    data_dir: Annotated[
+        str, typer.Option("--loc", help="Location of data directory.")
+    ] = "./data",
+    pv_shape_path: Annotated[
+        str,
+        typer.Option(
+            "--pv_shapes",
+            help="Path to the PVWatts shape CSV. If omitted, PV "
+            "augmentation is skipped.",
+        ),
+    ] = "",
+    sample_fraction: Annotated[
+        float,
+        typer.Option(
+            "--sample_fraction",
+            help="Fraction of households in the training set.",
+        ),
+    ] = 0.75,
+):
+    """
+    Preprocess downloaded EULP buildings into packed daily profiles
+    with New England conditioning labels and DER augmentation.
+    """
+    from pathlib import Path
+
+    preprocess_ne.preprocess_ne_data(
+        data_dir,
+        pv_shape_path=Path(pv_shape_path) if pv_shape_path else None,
+        sample_fraction=sample_fraction,
+    )
 
 
 @app.command()
