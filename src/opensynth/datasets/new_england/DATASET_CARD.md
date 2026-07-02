@@ -2,8 +2,7 @@
 
 > **Status: RELEASE CANDIDATE.** All evaluation and generation fields
 > are final. Remaining `{TBD:...}` markers are release logistics only:
-> Zenodo DOI, citation, upstream PR link, release date, license
-> sign-off.
+> Zenodo DOI, citation, release date.
 
 ## Summary
 
@@ -201,7 +200,7 @@ becomes mandatory if this pipeline is ever retrained on real AMI data.
 ## Reproducibility
 
 Everything is pinned in the OpenSynth repo (branch
-`feature/new-england`, upstream PR `{TBD:pr-link}`):
+`feature/new-england`, upstream PR [OpenSynth-energy/OpenSynth#89](https://github.com/OpenSynth-energy/OpenSynth/pull/89)):
 
 ```
 pipenv run python app/app.py get-ne-data --timeseries    # ~13 GB, manifest-pinned
