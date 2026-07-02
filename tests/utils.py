@@ -39,6 +39,31 @@ def df_test_half_hourly() -> pd.DataFrame:
     return df
 
 
+def df_test_quarter_hourly() -> pd.DataFrame:
+    """
+    Test Dataframe
+
+    Returns:
+        pd.DataFrame: Test Dataframe
+    """
+    lcl_id = ["MAC000002"] * 192
+
+    # start time
+    start = datetime(2013, 1, 3, 0, 0, 0)
+    # generate 192 timestamps, 15 minutes apart (2 full days)
+    dt = [
+        (start + timedelta(minutes=15 * i)).strftime("%Y-%m-%d %H:%M:%S")
+        for i in range(192)
+    ]
+
+    kwh = np.random.rand(192).round(2).tolist()
+    tariff = ["A"] * 192
+    df = pd.DataFrame(
+        {"LCLid": lcl_id, "DateTime": dt, "kwh": kwh, "stdorToU": tariff}
+    )
+    return df
+
+
 def df_test_hourly() -> pd.DataFrame:
     """
     Test Dataframe

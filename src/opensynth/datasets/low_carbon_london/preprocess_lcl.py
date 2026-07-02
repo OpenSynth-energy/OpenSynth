@@ -14,6 +14,12 @@ from opensynth.datasets.datasets_utils import NoiseFactory, NoiseType
 
 logger = logging.getLogger(__name__)
 
+READINGS_PER_DAY = {
+    "quarter_hourly": 96,
+    "half_hourly": 48,
+    "hourly": 24,
+}
+
 
 def get_current_month_end(df: pd.DataFrame, date_col="dt"):
     """
@@ -125,32 +131,29 @@ def extract_date_features(
 
 def parse_settlement_period(
     df: pd.DataFrame,
+    periods_per_hour: int = 2,
 ) -> pd.DataFrame:
     """
     Parse settlement periods from hour and minute columns
 
     Args:
         df (pd.DataFrame): Input dataframe
+        periods_per_hour (int): Number of settlement periods per hour.
+            Defaults to 2 (half-hourly data). Use 4 for quarter-hourly
+            data and 1 for hourly data.
 
     Returns:
         pd.DataFrame: Output dataframe with settlement period column
     """
     logger.info("🕰 Parsing Settlement Period")
 
-    def _get_settlement_offset(minute_value):
-        if minute_value >= 30:
-            return 1
-        return 0
-
+    minutes_per_period = 60 // periods_per_hour
     df_out = df.copy()
-    df_out["settlement_offset"] = df_out["minute"].apply(
-        _get_settlement_offset
-    )
     df_out["settlement_period"] = (
-        df_out["hour"] * 2 + df_out["settlement_offset"] + 1
+        df_out["hour"] * periods_per_hour
+        + df_out["minute"] // minutes_per_period
+        + 1
     )
-    df_out = df_out.drop(columns=["settlement_offset"])
-
     return df_out
 
 
@@ -203,15 +206,12 @@ def filter_missing_kwh(
     merge_cols = ["ID", "date"]
     df_group = df.groupby(merge_cols)[["kwh"]].count().reset_index()
 
-    if time_resolution == "half_hourly":
-        required_len = 48  # 48 hh readings
-    elif time_resolution == "hourly":
-        required_len = 24  # 24 h readings
-    else:
+    if time_resolution not in READINGS_PER_DAY:
         raise ValueError(
-            f"time_resolution must be 'half_hourly' or 'hourly', \
-        got {time_resolution}"
+            "time_resolution must be one of "
+            f"{sorted(READINGS_PER_DAY)}, got {time_resolution}"
         )
+    required_len = READINGS_PER_DAY[time_resolution]
     df_group["required_len"] = required_len
 
     df_full_data = df_group.query("required_len==kwh")  # Has all required data
@@ -289,12 +289,12 @@ def create_outliers(
         pd.DataFrame: Dataframe consisting of noisy outliers
     """
 
-    if time_resolution == "half_hourly":
-        n = 48
-    elif time_resolution == "hourly":
-        n = 24
-    else:
-        raise ValueError("time_resolution must be 'half_hourly' or 'hourly'")
+    if time_resolution not in READINGS_PER_DAY:
+        raise ValueError(
+            "time_resolution must be one of "
+            f"{sorted(READINGS_PER_DAY)}, got {time_resolution}"
+        )
+    n = READINGS_PER_DAY[time_resolution]
 
     gaussian_generator = NoiseFactory(
         noise_type=NoiseType.GAUSSIAN,

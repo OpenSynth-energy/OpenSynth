@@ -4,7 +4,11 @@ import pandas as pd
 import pytest
 
 from opensynth.datasets.low_carbon_london import preprocess_lcl
-from tests.utils import df_test_half_hourly, df_test_hourly
+from tests.utils import (
+    df_test_half_hourly,
+    df_test_hourly,
+    df_test_quarter_hourly,
+)
 
 
 class TestPreprocessLCL:
@@ -184,3 +188,72 @@ class TestPreprocessHourlykWh:
             )
             == 24
         )
+
+
+class TestPreprocessQuarterHourlykWh:
+
+    df = preprocess_lcl.format_data(
+        df_test_quarter_hourly(),
+        datetime_col="DateTime",
+        kwh_col="kwh",
+        id_col="LCLid",
+    )
+    df_date = preprocess_lcl.extract_date_features(df)
+    df_settlement_period = preprocess_lcl.parse_settlement_period(
+        df_date, periods_per_hour=4
+    )
+    df_drop_dupes = preprocess_lcl.drop_dupes_and_nulls(df_settlement_period)
+
+    def test_parse_settlement_period(self):
+        expected_settlement_period = list(range(1, 97)) * 2
+        assert (
+            self.df_settlement_period["settlement_period"]
+            == expected_settlement_period
+        ).all()
+
+    def test_filter_missing_kwh(self):
+        # No missing data expected
+        df = preprocess_lcl.filter_missing_kwh(
+            self.df_drop_dupes, time_resolution="quarter_hourly"
+        )
+        assert len(df) == 192
+
+    def test_filter_missing_kwh_drops_partial_days(self):
+        # Dropping one reading from the first day drops that whole day
+        df = preprocess_lcl.filter_missing_kwh(
+            self.df_drop_dupes.iloc[1:], time_resolution="quarter_hourly"
+        )
+        assert len(df) == 96
+
+    def test_invalid_time_resolution_raises(self):
+        with pytest.raises(ValueError):
+            preprocess_lcl.filter_missing_kwh(
+                self.df_drop_dupes, time_resolution="minutely"
+            )
+
+    def test_pack_smart_meter_data_into_arrays(self):
+        df_packed = preprocess_lcl.pack_smart_meter_data_into_arrays(
+            self.df_drop_dupes,
+            feature_cols=["stdorToU"],
+        )
+        assert len(df_packed) == 2
+        assert (
+            len(
+                df_packed.query("ID=='MAC000002' and month==1 and day==3")[
+                    "kwh"
+                ].values.tolist()[0]
+            )
+            == 96
+        )
+
+    def test_create_outliers(self):
+        df_packed = preprocess_lcl.pack_smart_meter_data_into_arrays(
+            self.df_drop_dupes,
+            feature_cols=["stdorToU"],
+        )
+        # inject_noise samples 50 rows, so repeat the packed rows
+        df_many = pd.concat([df_packed] * 30, ignore_index=True)
+        df_noise = preprocess_lcl.create_outliers(
+            df_many, "quarter_hourly", mean=0.5
+        )
+        assert (df_noise["kwh"].apply(len) == 96).all()
