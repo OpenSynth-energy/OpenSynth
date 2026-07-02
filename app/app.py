@@ -27,7 +27,7 @@ def download_lcl_data(
     """
     Download the Low Carbon London dataset.
     """
-    get_data.get_lcl_data(data_dir)
+    get_data.download_lcl_data(data_dir)
 
 
 @app.command()
