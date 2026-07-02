@@ -17,6 +17,7 @@ account, or use the EIA v2 API) and load it with
 import logging
 import time
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import polars as pl
@@ -123,32 +124,40 @@ def load_eulp_metadata(data_dir: str = "./data") -> pl.DataFrame:
 
 
 def download_eulp_timeseries(
-    manifest: pl.DataFrame, data_dir: str = "./data"
+    manifest: pl.DataFrame,
+    data_dir: str = "./data",
+    max_workers: int = 8,
 ) -> None:
     """
     Download per-building 15-minute timeseries for a manifest.
 
-    The loop skips files that already exist, so an interrupted
-    download resumes where it left off.
+    Files that already exist are skipped, so an interrupted download
+    resumes where it left off. Downloads run in a thread pool: the
+    per-object latency of the OEDI S3 endpoint dominates sequential
+    transfer time.
 
     Args:
         manifest (pl.DataFrame): Building manifest with columns
             state, bldg_id (from sampling.select_buildings).
         data_dir (str): Data directory. Defaults to "./data".
+        max_workers (int): Concurrent downloads. Defaults to 8.
     """
     out_dir = Path(data_dir) / "raw/new_england/eulp"
-    n_downloaded = 0
-    n_skipped = 0
-    for row in manifest.iter_rows(named=True):
-        state, bldg_id = row["state"], row["bldg_id"]
-        url = config.EULP_TIMESERIES_URL.format(state=state, bldg_id=bldg_id)
-        if _download_if_missing(url, out_dir / f"{state}_{bldg_id}-0.parquet"):
-            n_downloaded += 1
-        else:
-            n_skipped += 1
+    jobs = [
+        (
+            config.EULP_TIMESERIES_URL.format(
+                state=row["state"], bldg_id=row["bldg_id"]
+            ),
+            out_dir / f"{row['state']}_{row['bldg_id']}-0.parquet",
+        )
+        for row in manifest.iter_rows(named=True)
+    ]
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        results = list(pool.map(lambda job: _download_if_missing(*job), jobs))
+    n_downloaded = sum(results)
     logger.info(
         f"⬇️ EULP timeseries: {n_downloaded} downloaded, "
-        f"{n_skipped} already present"
+        f"{len(results) - n_downloaded} already present"
     )
 
 
