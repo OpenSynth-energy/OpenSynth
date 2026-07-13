@@ -30,19 +30,15 @@ def split_periods(
         training set
 
     Returns:
-        Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]: List of training and holdout days as (year, day) tuples
+        Tuple[List[datetime.date], List[datetime.date]]: List of training and holdout days as calendar date objects
     """
     logger.info("Splitting dataset into train and holdout windows")
-    year_day_tuples = list(zip(
-        df[datetime_col].dt.isocalendar().year,
-        df[datetime_col].dt.isocalendar().day
-    ))
-    year_day_tuples = list(set(year_day_tuples))
-    random.shuffle(year_day_tuples)
-    sample_size = int(len(year_day_tuples) * sample_fraction)
+    unique_days = sorted(set(df[datetime_col].dt.date))
+    random.shuffle(unique_days)
+    sample_size = int(len(unique_days) * sample_fraction)
 
-    train_year_day = year_day_tuples[:sample_size]
-    holdout_year_day = year_day_tuples[sample_size:]
+    train_year_day = unique_days[:sample_size]
+    holdout_year_day = unique_days[sample_size:]
 
     return train_year_day, holdout_year_day
 
@@ -178,11 +174,9 @@ def split_data(
     logger.info(f"History len: {len(df_history)}")
     logger.info(f"Future len: {len(df_future)}")
 
-    year_day_series = pd.Series(list(zip(df_history[datetime_col].dt.isocalendar().year, 
-                                          df_history[datetime_col].dt.isocalendar().day
-                                          )))
-    df_historical_train = df_history[year_day_series.isin(train_days)]
-    df_historical_holdout = df_history[year_day_series.isin(holdout_days)]
+    date_series = df_history[datetime_col].dt.date
+    df_historical_train = df_history[date_series.isin(train_days)]
+    df_historical_holdout = df_history[date_series.isin(holdout_days)]
 
     logger.info("📦 Saving train and holdout data")
     historical_path = Path(f"{data_dir}/raw/historical")

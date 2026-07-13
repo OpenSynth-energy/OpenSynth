@@ -188,7 +188,8 @@ class DecoderBlock(nn.Module):
     def forward(
         self,
         x: Tensor,
-        c: None | Tensor = None,
+        c: None | Tensor = None, #static covariable
+        c_dyn: None | Tensor = None,  # (batch, seq, dim_base) dynamic covariable
     ) -> Tensor:
         if c is not None and self.conditioning:
             cond_scale_shift_gate = self.adaLN_modulation(
@@ -212,12 +213,13 @@ class DecoderBlock(nn.Module):
                 gate_mlp,
             ) = [0.0, 0.0, 1.0, 0.0, 0.0, 1.0]
 
-        # attention
+        # attention — inject c_dyn into x only here, not persistently
+        x_attn = x + c_dyn if c_dyn is not None else x
         x = x + gate_attn * self.attn(
-            self.ln_1(x) * (1.0 + scale_attn) + shift_attn
+            self.ln_1(x_attn) * (1.0 + scale_attn) + shift_attn
         )
 
-        # mlp
+        # mlp — x is unaffected by c_dyn
         x = x + gate_mlp * self.mlp(
             self.ln_2(x) * (1.0 + scale_mlp) + shift_mlp
         )
@@ -267,9 +269,10 @@ class DecoderTransformer(nn.Module):
         self,
         x: Tensor,
         c: None | Tensor = None,
+        c_dyn: None | Tensor = None,
     ) -> Tensor:
         for decoder in self.decoders:
-            x = decoder(x, c)
+            x = decoder(x, c, c_dyn)
         return x  # shape: (batch, sequence, dim)
 
 
@@ -327,9 +330,15 @@ class DenoisingTransformer(nn.Module):
             nn.GELU(),
             nn.Linear(self.dim_base, self.dim_base * 3),
         )  # scale, shift, input_to_decoder_blocks
-        # covariable: gerenrical treatment
-        self.cov_mlp = nn.Sequential(
+        # covariable: generical treatment for both static or dynamic temperature
+        self.temperature_mlp = nn.Sequential(
             nn.Linear(1, dim_base),
+            nn.GELU(),
+            nn.Linear(dim_base, dim_base), 
+        )
+        # covariable: for a classification covariable of 7 possibilities (ie day of the week)
+        self.day_mlp = nn.Sequential(
+            nn.Linear(7, dim_base),
             nn.GELU(),
             nn.Linear(dim_base, dim_base), 
         )
@@ -414,15 +423,22 @@ class DenoisingTransformer(nn.Module):
         scale, shift, encoded_t = _encoded_t.chunk(
             3, dim=2
         )  # shape: 3 * (batch, 1, dim_base)
-        if model_kwargs != None and 'temperature' in model_kwargs.keys(): #conditioning
-            covariable = torch.tensor(model_kwargs['temperature']).to(x.device).float().reshape(-1, 1)
-            encoded_cov = self.cov_mlp(covariable)  # (batch, 1, dim_base)
+        if 'temperature' in model_kwargs.keys(): # dynamic temperature: (batch, seq) -> (batch, seq, 1) -> (batch, seq, dim_base)
+            covariable = torch.tensor(model_kwargs['temperature']).to(x.device).float().unsqueeze(-1)
+            encoded_dyn_cov = self.temperature_mlp(covariable)  # (batch, seq, dim_base)
+        else:
+            encoded_dyn_cov = None
+
+        if 'dayofweek' in model_kwargs.keys():
+            covariable = torch.tensor(model_kwargs['dayofweek']).to(x.device).float()
+            encoded_cov = self.day_mlp(covariable)  # (batch, 1, dim_base)
             encoded_cov = rearrange(encoded_cov, "batch dim -> batch 1 dim")  # (batch, 1, dim_base)
         else: #non conditionning but we put a null tensor in cov so all parameters are defined
             batch_size = x.shape[0]
-            covariable = torch.zeros(batch_size, self.cov_mlp[0].in_features, dtype=encoded_t.dtype, device=encoded_t.device)
-            encoded_cov = self.cov_mlp(covariable) * 0.0  # zeroed-out, but stays in graph
+            covariable = torch.zeros(batch_size, self.day_mlp[0].in_features, dtype=encoded_t.dtype, device=encoded_t.device)
+            encoded_cov = self.day_mlp(covariable) * 0.0  # zeroed-out, but stays in graph
             encoded_cov = rearrange(encoded_cov, "batch dim -> batch 1 dim")
+
         c = encoded_t + encoded_cov  # (batch, 1, dim_base)
 
         # init projection
@@ -446,7 +462,7 @@ class DenoisingTransformer(nn.Module):
         x = x + pos_emb_seq
 
         x = self.transformer(
-            x, c
+            x, c, encoded_dyn_cov
         )  # shape: (batch, sequence, dim_base)
 
         # final adaln modulation

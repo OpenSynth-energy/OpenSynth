@@ -46,7 +46,7 @@ class GridFMData(Dataset):
         stats_path: Path,
         n_samples: int,
         outlier_path: Optional[Path] = None,
-        time_window: Optional[str] = None,
+        time_window: Optional[list[str]] = None,
     ):
         """
         Args:
@@ -54,9 +54,10 @@ class GridFMData(Dataset):
             stats_path (Path): Stats path
             n_samples (int): Number of samples to load
             outlier_path (Path, optional): Path to outlier data, default to None
-            time_window (str, optional): Date of the start and end of the time window 
+            time_window (list[str], optional): Dates of the start and end of each time windows 
                 if we want to constrain the season/year (mostly for evaluating the conditioning on temperature)
-                format : start_date/end_date DD-MM-YYYY/DD-MM-YYYY
+                all time windows will be concatenated
+                format of each element of the list : start_date/end_date DD-MM-YYYY/DD-MM-YYYY
                 default to None
         """
         self.df = pd.read_csv(data_path)
@@ -74,10 +75,14 @@ class GridFMData(Dataset):
         self.n_samples = n_samples
         self.time_window = time_window
         if self.time_window is not None:
-            self.start_time_window = pd.Timestamp(self.time_window[:10]).replace(hour=00, minute=00, second=00)
-            self.end_time_window = pd.Timestamp(self.time_window[-10:]).replace(hour=23, minute=59, second=59)
-            self.df = self.df.loc[(pd.to_datetime(self.df['date']) >= self.start_time_window) 
-                                  & (pd.to_datetime(self.df['date']) <= self.end_time_window)]
+            df_ = pd.DataFrame()
+            for window in self.time_window:
+                start_window = pd.Timestamp(window[:10]).replace(hour=00, minute=00, second=00)
+                end_window = pd.Timestamp(window[-10:]).replace(hour=23, minute=59, second=59)
+                df_ = pd.concat([df_, 
+                                 self.df.loc[(pd.to_datetime(self.df['date']) >= start_window) 
+                                    & (pd.to_datetime(self.df['date']) <= end_window)]])
+            self.df = df_
         self.df = self.df.sample(
             self.n_samples, random_state=RANDOM_STATE
         ).reset_index(drop=True)
@@ -93,9 +98,13 @@ class GridFMData(Dataset):
         # Parse columns
         self.kwh = self.df["kwh"].apply(ast.literal_eval)
         self.kwh = torch.from_numpy(np.array(self.kwh.tolist())).float()
-        self.temperature = self.df["temperature"]
-        self.month = self.df["month"]
-        self.dayofweek = self.df["dayofweek"]
+        raw_temperature = self.df["temperature"].apply(ast.literal_eval)
+        raw_temperature = torch.from_numpy(np.array(raw_temperature.tolist())).float()
+        self.temperature = self.standardise_temperature(raw_temperature)
+        self.month = self.df["month"].values
+        day = self.df["dayofweek"].values.astype(int)  # 0-6
+        one_hot = np.eye(7)[day]  # shape: (n_samples, 7)
+        self.dayofweek = torch.from_numpy(one_hot).float()
 
     def standardise(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -150,9 +159,9 @@ class GridFMData(Dataset):
 
     def __getitem__(self, idx):
         standardised_kwh = self.standardise(self.kwh[idx])
-        standardised_temperature = self.standardise_temperature(torch.tensor(self.temperature[idx], dtype=torch.float32))
         features: dict[str, torch.Tensor] = {
-            "temperature": standardised_temperature,
+            "temperature": self.temperature[idx],
+            "dayofweek": self.dayofweek[idx]
         }
         return TrainingData(kwh=standardised_kwh, features=features)
 

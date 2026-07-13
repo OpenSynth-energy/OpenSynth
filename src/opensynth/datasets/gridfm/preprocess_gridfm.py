@@ -127,6 +127,7 @@ def extract_date_features(
 
 def parse_settlement_period(
     df: pd.DataFrame,
+    time_resolution: str,
 ) -> pd.DataFrame:
     """
     Parse settlement periods from hour and minute columns
@@ -145,13 +146,22 @@ def parse_settlement_period(
         return 0
 
     df_out = df.copy()
-    df_out["settlement_offset"] = df_out["minute"].apply(
-        _get_settlement_offset
-    )
-    df_out["settlement_period"] = (
-        df_out["hour"] * 2 + df_out["settlement_offset"] + 1
-    )
-    df_out = df_out.drop(columns=["settlement_offset"])
+    if time_resolution == "half_hourly":
+        df_out["settlement_offset"] = df_out["minute"].apply(
+            _get_settlement_offset
+            )
+        df_out["settlement_period"] = (
+            df_out["hour"] * 2 + df_out["settlement_offset"] + 1
+            )
+        df_out = df_out.drop(columns=["settlement_offset"])
+    elif time_resolution == "hourly":
+        df_out["settlement_period"] = df_out["hour"] + 1
+    else:
+        raise ValueError(
+            f"time_resolution must be 'half_hourly' or 'hourly', \
+        got {time_resolution}"
+        )
+    
 
     return df_out
 
@@ -164,8 +174,8 @@ def drop_dupes_and_nulls(
 
     Args:
         df (pd.DataFrame): Input dataframe
-        drop_nulls (bool): Whether to drop rows with NaN MW values. If False,
-            will replace NaN MW values with 0.0
+        drop_nulls (bool): Whether to drop rows with NaN MW or temperature values. If False,
+            will replace NaN MW or temperature values with 0.0
     Returns:
         pd.DataFrame: Output dataframe
     """
@@ -180,30 +190,38 @@ def drop_dupes_and_nulls(
     if drop_nulls:
         logger.info("🗑 Dropping nulls")
         df_out = df_out.dropna(subset="kwh")
+        df_out = df_out.dropna(subset="temperature")
     else:
         logger.info("🗑 Filling nulls with 0.0")
         df_out["kwh"] = df_out["kwh"].fillna(0.0)
+        df_out["temperature"] = df_out["temperature"].fillna(0.0)
     return df_out
 
 
-def filter_missing_kwh(
-    df: pd.DataFrame, time_resolution: str = "half_hourly"
+def filter_missing_data(
+    df: pd.DataFrame,
+    time_resolution: str = "half_hourly",
+    interpolate_missing: str | None = 'linear',
 ) -> pd.DataFrame:
     """
     Drop dates where we don't have full 48 readings if half-hourly data,
     or 24 readings if hourly data, for a given ID and date.
+    Optionally, linearly interpolate missing readings instead of dropping them.
 
     Args:
         df (pd.DataFrame): dataset
         time_resolution (str): Time resolution of the data. Allowed values:
             "half_hourly", "hourly".
+        interpolate_missing (bool): If True, linearly interpolate missing MW
+            readings within each (ID, date) group instead of dropping the day.
+            Days with no readings at all are still dropped. Defaults to False.
 
     Returns:
         pd.DataFrame: filtered dataset
     """
     logger.info("🔍 Filtering missing MW readings")
     merge_cols = ["ID", "date"]
-    df_group = df.groupby(merge_cols)[["kwh"]].count().reset_index()
+    df_group = df.groupby(merge_cols)[["kwh", "temperature"]].count().reset_index()
 
     if time_resolution == "half_hourly":
         required_len = 48  # 48 hh readings
@@ -214,10 +232,37 @@ def filter_missing_kwh(
             f"time_resolution must be 'half_hourly' or 'hourly', \
         got {time_resolution}"
         )
-    df_group["required_len"] = required_len
 
-    df_full_data = df_group.query("required_len==kwh")  # Has all required data
-    df_out = df_full_data[merge_cols].merge(df, on=merge_cols, how="inner")
+    if interpolate_missing is not None:
+        logger.info(f"📈 Interpolating missing MW readings with method : {interpolate_missing}")
+        # Keep only (ID, date) pairs that have 90% of the required readings 
+        # so the interpolation is meaningful
+        partial_data = df_group.query(
+            "((kwh > 0.9*@required_len) & (kwh <= @required_len)) & ((temperature > 0.5*@required_len) & (temperature <= @required_len))")[merge_cols]
+
+        all_periods = pd.DataFrame(
+            {"settlement_period": range(1, required_len + 1)}
+        )
+        full_skeleton = partial_data.merge(all_periods, how="cross")
+        df_full = full_skeleton.merge(df, on=merge_cols + ["settlement_period"], how="left")
+        # Fill metadata columns (constant within each (ID, date) group) (needed for the function pack_smart_meter_data_into_arrays)
+        metadata_cols = ["month_end", "month", "dayofweek", "day", "date"]
+        df_full[metadata_cols] = df_full.groupby(merge_cols)[metadata_cols].transform(
+            lambda x: x.ffill().bfill()
+        )
+        if interpolate_missing == "linear":
+            # Forward/backward linear interpolation within each (ID, date) group
+            df_full["kwh"] = df_full.groupby(merge_cols)["kwh"].transform(
+                lambda x: x.interpolate(method="linear", limit_direction="both")
+            )
+            df_full["temperature"] = df_full.groupby(merge_cols)["temperature"].transform(
+                            lambda x: x.interpolate(method="linear", limit_direction="both")
+                        )
+        df_out = df_full
+    else:
+        df_group["required_len"] = required_len
+        df_full_data = df_group.query("(required_len==kwh) & (required_len==temperature)")  # Has all required data
+        df_out = df_full_data[merge_cols].merge(df, on=merge_cols, how="inner")
 
     if len(df_out) == 0:
         raise ValueError(
@@ -247,11 +292,14 @@ def pack_smart_meter_data_into_arrays(
         by=["ID", "date", "settlement_period"], ascending=True
     )
     groupby_cols = ["ID", "month_end", "month"]
-    groupby_cols = groupby_cols + ["dayofweek", "day", "date", "temperature"]
+    groupby_cols = groupby_cols + ["dayofweek", "day", "date"]
 
-    df_out = pd.DataFrame(
-        df_out.groupby(groupby_cols)["kwh"]
-        .agg(lambda x: x.tolist())
+    df_out = (
+        df_out.groupby(groupby_cols)
+        .agg(
+            kwh=("kwh", lambda x: x.tolist()),
+            temperature=("temperature", lambda x: x.tolist()),
+        )
         .reset_index()
     )
     return df_out
@@ -365,9 +413,9 @@ def preprocess_pipeline(
     df = load_data(file_path)
     df = format_data(df, datetime_col, kwh_col, id_col, feature_cols, utc, datetime_format)
     df = extract_date_features(df)
-    df = parse_settlement_period(df)
+    df = parse_settlement_period(df, time_resolution)
     df = drop_dupes_and_nulls(df, drop_nulls)
-    df = filter_missing_kwh(df, time_resolution)
+    df = filter_missing_data(df, time_resolution)
 
     mean, stdev, temperature_mean, temperature_std = get_mean_and_std(df)
     df = pack_smart_meter_data_into_arrays(df, feature_cols)
