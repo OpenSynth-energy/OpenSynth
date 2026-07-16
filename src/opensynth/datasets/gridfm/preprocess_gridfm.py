@@ -166,16 +166,14 @@ def parse_settlement_period(
     return df_out
 
 
-def drop_dupes_and_nulls(
-    df: pd.DataFrame, drop_nulls: bool = True
+def drop_dupes(
+    df: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    Function to drop duplicated readings and replace missing readings with 0.0
+    Function to drop duplicated readings
 
     Args:
         df (pd.DataFrame): Input dataframe
-        drop_nulls (bool): Whether to drop rows with NaN MW or temperature values. If False,
-            will replace NaN MW or temperature values with 0.0
     Returns:
         pd.DataFrame: Output dataframe
     """
@@ -187,14 +185,6 @@ def drop_dupes_and_nulls(
     df_out = df_out.drop_duplicates(
         subset=["ID", "date", "settlement_period"], keep="last"
     )
-    if drop_nulls:
-        logger.info("🗑 Dropping nulls")
-        df_out = df_out.dropna(subset="kwh")
-        df_out = df_out.dropna(subset="temperature")
-    else:
-        logger.info("🗑 Filling nulls with 0.0")
-        df_out["kwh"] = df_out["kwh"].fillna(0.0)
-        df_out["temperature"] = df_out["temperature"].fillna(0.0)
     return df_out
 
 
@@ -238,7 +228,7 @@ def filter_missing_data(
         # Keep only (ID, date) pairs that have 90% of the required readings 
         # so the interpolation is meaningful
         partial_data = df_group.query(
-            "((kwh > 0.9*@required_len) & (kwh <= @required_len)) & ((temperature > 0.5*@required_len) & (temperature <= @required_len))")[merge_cols]
+            "((kwh > 0.9*@required_len) & (kwh <= @required_len)) & ((temperature >= 0.5*@required_len) & (temperature <= @required_len))")[merge_cols]
 
         all_periods = pd.DataFrame(
             {"settlement_period": range(1, required_len + 1)}
@@ -382,7 +372,6 @@ def preprocess_pipeline(
     datetime_format: Optional[str] = None,
     time_resolution: str = "half_hourly",
     feature_cols: List[str] = ["temperature"],
-    drop_nulls: bool = True,
 ):
     """Preprocess the raw data for Faraday training and evaluation.
     Pipeline includes:
@@ -414,7 +403,7 @@ def preprocess_pipeline(
     df = format_data(df, datetime_col, kwh_col, id_col, feature_cols, utc, datetime_format)
     df = extract_date_features(df)
     df = parse_settlement_period(df, time_resolution)
-    df = drop_dupes_and_nulls(df, drop_nulls)
+    df = drop_dupes(df)
     df = filter_missing_data(df, time_resolution)
 
     mean, stdev, temperature_mean, temperature_std = get_mean_and_std(df)
@@ -441,8 +430,7 @@ def preprocess_data(
     utc: bool = True,
     datetime_format: Optional[str] = None,
     time_resolution: str = "half_hourly",
-    feature_cols: List[str] = ["temperature"],
-    drop_nulls: bool = True,
+    feature_cols: List[str] = ["temperature"]
 ):
 
     SOURCE_DIR = f"{data_dir}/raw"
@@ -456,8 +444,7 @@ def preprocess_data(
         utc=utc,
         datetime_format=datetime_format,
         time_resolution=time_resolution,
-        feature_cols=feature_cols,
-        drop_nulls=drop_nulls,
+        feature_cols=feature_cols
     )
     preprocess_pipeline(
         file_path=Path(f"{SOURCE_DIR}/historical/holdout.csv"),
@@ -468,8 +455,7 @@ def preprocess_data(
         utc=utc,
         datetime_format=datetime_format,
         time_resolution=time_resolution,
-        feature_cols=feature_cols,
-        drop_nulls=drop_nulls,
+        feature_cols=feature_cols
     )
     # No pipeline for future data => avoid error of empty csv and we keep all data for the training
     #preprocess_pipeline(
@@ -481,8 +467,7 @@ def preprocess_data(
     #    utc=utc,
     #    datetime_format=datetime_format,
     #    time_resolution=time_resolution,
-    #    feature_cols=feature_cols,
-    #    drop_nulls=drop_nulls,
+    #    feature_cols=feature_cols
     #)
     #preprocess_pipeline(
     #    file_path=Path(f"{SOURCE_DIR}/future/holdout.csv"),
@@ -493,6 +478,5 @@ def preprocess_data(
     #    utc=utc,
     #    datetime_format=datetime_format,
     #    time_resolution=time_resolution,
-    #    feature_cols=feature_cols,
-    #    drop_nulls=drop_nulls,
+    #    feature_cols=feature_cols
     #)

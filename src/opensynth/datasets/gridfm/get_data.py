@@ -50,7 +50,6 @@ def split_preprocess_data(
     historical_end: str,
     future_start: str,
     future_end: str,
-    drop_nulls: bool,
 ):
     """
     Read in, split and preprocess the dataset.
@@ -86,8 +85,6 @@ def split_preprocess_data(
         historical_end (str): End date for historical data.
         future_start (str): Start date for future data.
         future_end (str): End date for future data.
-        drop_nulls (bool): Whether to drop rows with NaN kwh values. If False,
-            will replace NaN kwh values with 0.0
     """
 
     CSV_FILE_NAME = Path(f"{data_dir}/{csv_data_path}")
@@ -122,7 +119,6 @@ def split_preprocess_data(
             datetime_format=datetime_format,
             time_resolution=time_resolution,
             feature_cols=feature_cols,
-            drop_nulls=drop_nulls,
         )
 
 
@@ -154,7 +150,6 @@ if __name__ == "__main__":
     historical_end = "2024-12-31"
     future_start = "2014-01-01"
     future_end = "2014-12-31"
-    drop_nulls = True
 
     split_preprocess_data(
         split,
@@ -173,5 +168,4 @@ if __name__ == "__main__":
         historical_end,
         future_start,
         future_end,
-        drop_nulls,
     )
