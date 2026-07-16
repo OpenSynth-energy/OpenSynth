@@ -1257,6 +1257,9 @@ class DPMSolverSampler:
         batch_size: int,  # N
         shape: Tuple[int, int],  # (C, L)
         x_T: Tensor | None = None,
+        conditioning: Tensor | None = None,
+        unconditional_conditioning: Tensor | None = None,
+        cfg_scale: float = 1.0,
     ) -> Tuple[Tensor, None]:
         """generate samples from the diffusion model using DPM-Solver.
 
@@ -1288,8 +1291,8 @@ class DPMSolverSampler:
         )
 
         # original model function
-        def apply_model(x, t, c=None):
-            out = self.model.model.forward(x, t)
+        def apply_model(x, t, c: dict[Tensor] = {}):
+            out = self.model.model.forward(x, t, c)
             if (
                 self.model.model_variance_type
                 == ModelVarianceType.LEARNED_RANGE
@@ -1315,9 +1318,9 @@ class DPMSolverSampler:
             ns,
             model_type=model_type,
             guidance_type="classifier-free",
-            condition=None,
-            unconditional_condition=None,
-            cfg_scale=1.0,
+            condition=conditioning,
+            unconditional_condition=unconditional_conditioning,
+            cfg_scale=cfg_scale,
         )
 
         dpm_solver = DPM_Solver(
