@@ -105,7 +105,7 @@ class GaussianMixtureModel(nn.Module):
             X (torch.Tensor): Input data
 
         Returns:
-            torch.Tensor: Log probabability
+            torch.Tensor: Log probability
         """
         if self.initialised is False:
             raise AttributeError("Model is not initialised.")
@@ -128,7 +128,7 @@ class GaussianMixtureModel(nn.Module):
         pi = torch.tensor(torch.pi, device=log_prob.device)
         return -0.5 * (n_features * torch.log(2 * pi) + log_prob) + log_det
 
-    def _estimate_log_weights(self: torch.Tensor) -> torch.Tensor:
+    def _estimate_log_weights(self) -> torch.Tensor:
         """
         Estimate log of weights.
         Pytorch implementation of sklearns's
@@ -193,18 +193,65 @@ class GaussianMixtureModel(nn.Module):
         )
         return torch.mean(log_prob_norm), log_resp
 
-    def m_step(self, X: torch.Tensor, log_reponsibilities: torch.Tensor):
+    def m_step(
+        self, X: torch.Tensor, log_responsibilities: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Compute this batch's contribution to the M-step sufficient
+        statistics. These are additive across batches: the caller is
+        expected to accumulate them across every batch in an epoch and
+        pass the totals to `update_params_from_statistics` once, rather
+        than updating the model parameters after each batch.
+
+        Args:
+            X (torch.Tensor): Input data
+            log_responsibilities (torch.Tensor): Log responsibilities
+                from the e-step
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: this batch's
+            nk, sk and sk2 sufficient statistics. See
+            `gmm_utils.torch_compute_sufficient_statistics`.
+        """
+        return gmm_utils.torch_compute_sufficient_statistics(
+            X, responsibilities=torch.exp(log_responsibilities)
+        )
+
+    def update_params_from_statistics(
+        self,
+        nk: torch.Tensor,
+        sk: torch.Tensor,
+        sk2: torch.Tensor,
+        nll: torch.Tensor,
+    ):
+        """
+        Perform the M-step update from sufficient statistics accumulated
+        across all batches in an epoch, and update the model parameters.
+
+        Args:
+            nk (torch.Tensor): Accumulated sum of responsibilities per
+                component
+            sk (torch.Tensor): Accumulated responsibility-weighted sum of
+                X per component
+            sk2 (torch.Tensor): Accumulated responsibility-weighted sum of
+                outer products of X per component
+            nll (torch.Tensor): Negative log likelihood to record
+        """
         weights_, means_, covariances_ = (
-            gmm_utils.torch_estimate_gaussian_parameters(
-                X,
-                responsibilities=torch.exp(log_reponsibilities),
-                reg_covar=self.reg_covar,
+            gmm_utils.torch_estimate_gaussian_parameters_from_statistics(
+                nk, sk, sk2, reg_covar=self.reg_covar
             )
         )
         precision_cholesky_ = gmm_utils.torch_compute_precision_cholesky(
             covariances=covariances_, reg=self.reg_covar
         )
-        return precision_cholesky_, weights_, means_, covariances_
+        return self.update_params(
+            weights=weights_,
+            means=means_,
+            precision_cholesky=precision_cholesky_,
+            covariances=covariances_,
+            nll=nll,
+        )
 
     def update_params(
         self,
@@ -244,13 +291,12 @@ class GaussianMixtureModel(nn.Module):
             self.weights, n_samples, replacement=True, generator=generator
         ).bincount(minlength=len(self.weights))
 
-        # Initialize lists to collect samples and labels
+        # Initialize list to collect samples
         X = []
-        y = []
 
         # Sample from each component based on the number of samples
-        for j, (mean, covariance, sample_count) in enumerate(
-            zip(self.means, self.covariances, n_samples_comp)
+        for mean, covariance, sample_count in zip(
+            self.means, self.covariances, n_samples_comp
         ):
             if (
                 sample_count > 0
@@ -258,13 +304,8 @@ class GaussianMixtureModel(nn.Module):
                 dist = torch.distributions.MultivariateNormal(mean, covariance)
                 samples = dist.sample((sample_count,))
                 X.append(samples)
-                y.append(torch.full((sample_count,), j, dtype=torch.int64))
 
-        # Concatenate all samples and labels into single tensors
-        X = torch.vstack(X)
-        y = torch.cat(y)
-
-        return X
+        return torch.vstack(X)
 
 
 class GaussianMixtureLightningModule(pl.LightningModule):
@@ -277,7 +318,6 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         num_features: int,
         reg_covar: float = 1e-6,
         convergence_tolerance: float = 1e-2,
-        sync_on_batch: bool = False,
         sample_weights_column: Optional[str] = None,
     ):
         super().__init__()
@@ -290,20 +330,23 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         self.automatic_optimization = False
         self.convergence_tolerance = convergence_tolerance
 
-        # GMM params to sync across processes
-        self.weight_metric = gmm_metrics.WeightsMetric(self.num_components)
-        self.mean_metric = gmm_metrics.MeansMetric(
-            self.num_components, self.num_features
+        # M-step sufficient statistics, accumulated across every batch in
+        # an epoch (and across devices, in distributed training). The
+        # mixture parameters are updated once per epoch from these totals,
+        # rather than being overwritten by each batch's M-step in
+        # isolation.
+        self.nk_metric = gmm_metrics.SufficientStatisticMetric(
+            torch.Size([self.num_components])
         )
-        self.precision_cholesky_metric = gmm_metrics.PrecisionCholeskyMetric(
-            self.num_components, self.num_features
+        self.sk_metric = gmm_metrics.SufficientStatisticMetric(
+            torch.Size([self.num_components, self.num_features])
         )
-        self.covariance_metric = gmm_metrics.CovarianceMetric(
-            self.num_components, self.num_features
+        self.sk2_metric = gmm_metrics.SufficientStatisticMetric(
+            torch.Size(
+                [self.num_components, self.num_features, self.num_features]
+            )
         )
         self.nll = gmm_metrics.NegativeLogLikelihoodMetric()
-
-        self.sync_on_batch = sync_on_batch
 
         self.sample_weights_column = sample_weights_column
 
@@ -311,11 +354,10 @@ class GaussianMixtureLightningModule(pl.LightningModule):
         return None
 
     def on_train_epoch_start(self) -> None:
-        # At the start of epoch, reset metrics
-        self.mean_metric.reset()
-        self.weight_metric.reset()
-        self.precision_cholesky_metric.reset()
-        self.covariance_metric.reset()
+        # At the start of epoch, reset the accumulated statistics
+        self.nk_metric.reset()
+        self.sk_metric.reset()
+        self.sk2_metric.reset()
         self.nll.reset()
 
     def training_step(self, batch) -> None:
@@ -324,102 +366,45 @@ class GaussianMixtureLightningModule(pl.LightningModule):
             batch, self.vae_module, self.sample_weights_column
         )
 
-        # Run e-step
+        # Run e-step using the mixture parameters from the previous
+        # epoch's update. Parameters stay fixed for the whole epoch so
+        # that every batch's statistics are computed against the same
+        # model.
         log_prob, log_resp = self.gmm_module.e_step(encoded_batch)
-        # Run m-step
-        precision_cholesky, weights, means, covariances = (
-            self.gmm_module.m_step(encoded_batch, log_resp)
-        )
-        # Update model params. This only updates the params
-        # on the current device
-        self.gmm_module.update_params(
-            weights=weights,
-            means=means,
-            precision_cholesky=precision_cholesky,
-            covariances=covariances,
-            nll=torch.neg(log_prob),
-        )
 
-    def on_train_batch_end(self, *args, **kwargs) -> None:
-        """If `sync_on_batch` is True, sync model parameters across devices at
-        the end of each batch. Otherwise, sync is done at the end of epoch.
-        """
-
-        if self.sync_on_batch:
-            weights = self.gmm_module.weights
-            means = self.gmm_module.means
-            precision_cholesky = self.gmm_module.precision_cholesky
-            covariances = self.gmm_module.covariances
-            nll = self.gmm_module.nll
-
-            # forward performs update, compute and reset metrics
-            weights_reduced = self.weight_metric.forward(weights)
-            means_reduced = self.mean_metric.forward(means)
-            prec_chol_reduced = self.precision_cholesky_metric.forward(
-                precision_cholesky
-            )
-            covar_reduced = self.covariance_metric.forward(covariances)
-            nll_reduced = self.nll.forward(nll)
-
-            self.gmm_module.update_params(
-                weights=weights_reduced,
-                means=means_reduced,
-                precision_cholesky=prec_chol_reduced,
-                covariances=covar_reduced,
-                nll=nll_reduced,
-            )
-            self.log(
-                "nll",
-                nll_reduced,
-                on_step=False,
-                on_epoch=True,
-            )  # uses mean-reduction (default) to accumulate the metrics
+        # Accumulate this batch's contribution to the M-step sufficient
+        # statistics, instead of updating the mixture parameters
+        # directly from a single batch.
+        nk, sk, sk2 = self.gmm_module.m_step(encoded_batch, log_resp)
+        self.nk_metric.update(nk)
+        self.sk_metric.update(sk)
+        self.sk2_metric.update(sk2)
+        self.nll.update(torch.neg(log_prob))
 
     def on_train_epoch_end(self) -> None:
-        # At the end of epoch, update metrics and sync across
-        # multiple devices using torchmetrics.Metric.compute
-        # Then update model params using the synced values
+        # Combine the statistics accumulated across every batch (and, in
+        # distributed training, every device) into a single M-step update.
+        nk = self.nk_metric.compute()
+        sk = self.sk_metric.compute()
+        sk2 = self.sk2_metric.compute()
+        nll = self.nll.compute()
 
-        if not self.sync_on_batch:
-            weights = self.gmm_module.weights
-            means = self.gmm_module.means
-            precision_cholesky = self.gmm_module.precision_cholesky
-            covariances = self.gmm_module.covariances
-            nll = self.gmm_module.nll
+        self.log(
+            "nll",
+            nll,
+            on_step=False,
+            on_epoch=True,
+        )
 
-            self.weight_metric.update(weights)
-            self.mean_metric.update(means)
-            self.precision_cholesky_metric.update(precision_cholesky)
-            self.covariance_metric.update(covariances)
-            self.nll.update(nll)
-
-            weights_reduced = self.weight_metric.compute()
-            means_reduced = self.mean_metric.compute()
-            prec_chol_reduced = self.precision_cholesky_metric.compute()
-            covar_reduced = self.covariance_metric.compute()
-            nll_reduced = self.nll.compute()
-
-            self.log(
-                "nll",
-                nll_reduced,
-                on_step=False,
-                on_epoch=True,
-            )  # uses mean-reduction (default) to accumulate the metrics
-
-            self.gmm_module.update_params(
-                weights=weights_reduced,
-                means=means_reduced,
-                precision_cholesky=prec_chol_reduced,
-                covariances=covar_reduced,
-                nll=nll_reduced,
-            )
+        self.gmm_module.update_params_from_statistics(
+            nk=nk, sk=sk, sk2=sk2, nll=nll
+        )
 
     def configure_callbacks(self) -> list[pl.Callback]:
         early_stopping = EarlyStopping(
             "nll",
             min_delta=self.convergence_tolerance,
             patience=1,
-            # check_on_train_epoch_end=True,
             mode="min",
         )
         return [early_stopping]
