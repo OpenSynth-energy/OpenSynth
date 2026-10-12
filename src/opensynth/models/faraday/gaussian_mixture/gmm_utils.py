@@ -38,7 +38,7 @@ def _expand_weights(data: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
 
     Args:
         data (torch.Tensor): data for training GMM
-        weights (torch.Tensor): number of occurances of each data point in the
+        weights (torch.Tensor): number of occurrences of each data point in the
             dataset
 
     Returns:
@@ -187,12 +187,12 @@ def torch_estimate_gaussian_parameters(
     reg_covar: float,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    Pytorch implmentation of sklearn's
+    Pytorch implementation of sklearn's
     sklearn.mixture._gaussian_mixture._estimate_gaussian_parameters
 
     Args:
         X (torch.Tensor): Input data
-        responsibilities (torch.Tensor): Reponsibilities,
+        responsibilities (torch.Tensor): Responsibilities,
         i.e. 1-hot encoded tensor of each data and it's cluster label.
         means (torch.Tensor): Coordinate of centroids
         reg_covar (float): Covariance regularisor
@@ -203,11 +203,10 @@ def torch_estimate_gaussian_parameters(
         % of samples in each cluster 3) covariances
 
     """
-    # n_components, n_features = X.shape
     weights = (
         responsibilities.sum(dim=0) + torch.finfo(responsibilities.dtype).eps
     )
-    # Compute new means usint updated responsibilities
+    # Compute new means using updated responsibilities
     means = torch.matmul(responsibilities.T, X) / weights.reshape(-1, 1)
 
     covariances = torch_compute_covariance(
@@ -222,11 +221,89 @@ def torch_estimate_gaussian_parameters(
     return weights, means, covariances
 
 
+def torch_compute_sufficient_statistics(
+    X: torch.Tensor,
+    responsibilities: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Compute the per-batch sufficient statistics needed for the GMM M-step.
+
+    These statistics are additive across mini-batches: summing the
+    statistics from every batch in an epoch and combining them once (see
+    `torch_estimate_gaussian_parameters_from_statistics`) is equivalent to
+    running the M-step on the full dataset in one go. This lets mini-batch
+    training accumulate statistics across all batches before updating the
+    mixture parameters, instead of overwriting the parameters after every
+    batch.
+
+    Args:
+        X (torch.Tensor): Input data
+        responsibilities (torch.Tensor): Responsibilities, i.e. the
+            probability of each sample belonging to each component.
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            nk: sum of responsibilities per component, shape
+                (n_components,)
+            sk: responsibility-weighted sum of X per component, shape
+                (n_components, n_features)
+            sk2: responsibility-weighted sum of outer products of X per
+                component, shape (n_components, n_features, n_features)
+    """
+    nk = responsibilities.sum(dim=0)
+    sk = torch.matmul(responsibilities.T, X)
+    sk2 = torch.einsum("nk,ni,nj->kij", responsibilities, X, X)
+    return nk, sk, sk2
+
+
+def torch_estimate_gaussian_parameters_from_statistics(
+    nk: torch.Tensor,
+    sk: torch.Tensor,
+    sk2: torch.Tensor,
+    reg_covar: float,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Combine sufficient statistics accumulated across mini-batches into a
+    single M-step update, following the moment-based combination used by
+    distributed/mini-batch EM algorithms (e.g. "Distributed EM Algorithm
+    for Gaussian Mixtures in Sensor Networks").
+
+    Args:
+        nk (torch.Tensor): Accumulated sum of responsibilities per
+            component
+        sk (torch.Tensor): Accumulated responsibility-weighted sum of X
+            per component
+        sk2 (torch.Tensor): Accumulated responsibility-weighted sum of
+            outer products of X per component
+        reg_covar (float): Covariance regularisor
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: weights, means
+        and covariances estimated from the accumulated statistics.
+    """
+    nk_safe = nk + torch.finfo(nk.dtype).eps
+    means = sk / nk_safe.reshape(-1, 1)
+
+    n_components, n_features = means.shape
+    covariances = torch.empty(
+        (n_components, n_features, n_features), device=sk.device
+    )
+    for k in range(n_components):
+        covariances[k] = (
+            sk2[k] / nk_safe[k]
+            - torch.outer(means[k], means[k])
+            + torch.eye(n_features, device=sk.device) * reg_covar
+        )
+
+    weights = nk_safe / nk_safe.sum()
+    return weights, means, covariances
+
+
 def torch_compute_precision_cholesky(
     covariances: torch.Tensor, reg: float = 1e-6
 ) -> torch.Tensor:
     """
-    Pytorch implmentation of sklearn's
+    Pytorch implementation of sklearn's
     sklearn.mixture._gaussian_mixture._compute_precision_cholesky
     _compute_precision_cholesky
 
@@ -234,7 +311,7 @@ def torch_compute_precision_cholesky(
         covariances (torch.Tensor): Covariance matrix
 
     Raises:
-        ValueError: Raises error if matrix is not positive determinate.
+        ValueError: Raises error if matrix is not positive definite.
 
     Returns:
         torch.Tensor: Precision Cholesky
