@@ -53,3 +53,5 @@ Precommit Tools:
 For tutorials on algorithms in this repository, please refer to notebooks in the `notebooks` folder.
 - `faraday`: Train a synthetic data generative model using the Faraday algorithm
 - `streaming`: Train a synthetic data generative model using the Faraday algorithm by streaming the training data (useful for out of memory datasets)
+
+## Testing that tests run in PR from forked repo
