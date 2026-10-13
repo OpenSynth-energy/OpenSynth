@@ -49,6 +49,11 @@ Precommit Tools:
 ### ☁️ Preparing LCL Dataset for streaming
 - In order to prepare the LCL Dataset for streaming, follow the instrucitons in `notebooks/streaming/streaming_data_preparation.ipynb`
 
+# GridFM 
+- A dataset from Hydro-Québec open data and Environment Canada is available in `notebooks/gridfm/streaming_data.ipynb`
+- This dataset contains the hourly electricity consumption in Québec and the daily mean temperature
+- This allows testings with conditioning on the temperature : the notebook `notebooks/gridfm/energydiff_with_gridfm.ipynb` explains how to use it
+
 # 📕 Tutorials
 For tutorials on algorithms in this repository, please refer to notebooks in the `notebooks` folder.
 - `faraday`: Train a synthetic data generative model using the Faraday algorithm

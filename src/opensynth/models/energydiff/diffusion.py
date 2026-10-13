@@ -23,7 +23,7 @@ from ema_pytorch import EMA
 from torch import Tensor, nn
 from tqdm import tqdm
 
-from opensynth.data_modules.lcl_data_module import TrainingData
+from opensynth.data_modules.gridfm_data_module import TrainingData
 from opensynth.models.energydiff._diffusion_base import (
     BetaScheduleType,
     DiffusionBase,
@@ -260,9 +260,10 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         x_t: Tensor,
         t: Tensor,
         clip_x_start: bool = False,
+        model_kwargs: None | dict = {},  # kwargs for model_prediction
     ) -> ModelPrediction:
         "get ModelPrediction(noise, x_start, var_factor)"
-        model_output = self.model(x_t, t)
+        model_output = self.model(x_t, t, model_kwargs=model_kwargs)
         _clip_fn: Callable = partial(torch.clamp, min=-1.0, max=1.0)
         _identity_fn: Callable = lambda x: x
         maybe_clip = _clip_fn if clip_x_start else _identity_fn
@@ -312,7 +313,7 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         x_t: Tensor,
         t: Tensor,
         clip_denoised: bool = False,
-        model_kwargs=None,
+        model_kwargs: None | dict = {},  # kwargs for model_prediction,
     ) -> dict:
         """Get approximate mean and var of posterior p_model(x_{t-1} | x_t).
             Also returns x_start
@@ -331,7 +332,7 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         }
         """
         model_kwargs = model_kwargs if model_kwargs is not None else {}
-        pred = self.model_prediction(x_t, t, **model_kwargs)
+        pred = self.model_prediction(x_t, t, model_kwargs=model_kwargs)
         pred_x_start = pred.pred_x_start
         var_factor = pred.pred_var_factor
 
@@ -400,7 +401,7 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         x_t: Tensor,
         t: int,  # int, scalar, not a batched tensor.
         clip_denoised: bool = False,
-        model_kwargs: None | dict = None,
+        model_kwargs: None | dict = {},
         noise: None | Tensor = None,
     ) -> Tensor:
         """Apply p_model(x_{t-1} | x_t) to sample x_{t-1} from x_t.
@@ -445,7 +446,7 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         shape: torch.Size,  # 'b l d'
         noise: None | Tensor = None,
         clip_denoised: bool = False,
-        model_kwargs: None | dict = None,
+        model_kwargs: None | dict = {},
     ) -> Iterator[dict[str, Tensor]]:
         """Creates a generator that progressively samples from the diffusion \
             process from x_T to x_0.
@@ -507,7 +508,7 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         shape: torch.Size,  # 'b l d'
         noise: None | Tensor = None,
         clip_denoised: bool = False,
-        model_kwargs: None | dict = None,
+        model_kwargs: None | dict = {},
     ) -> Tensor:
         "return the final x_0"
         for sample_out in self.p_sample_loop_progressive(
@@ -527,7 +528,7 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         x_start: Tensor,  # true x_0
         t: Tensor,  # timestep
         noise: None | Tensor = None,  # noise
-        model_kwargs: None | dict = None,  # kwargs for model_prediction
+        model_kwargs: None | dict = {},  # kwargs for model_prediction
     ) -> dict[str, Tensor]:
         """return batched loss. not yet averaged over batch.
 
@@ -602,6 +603,7 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         self,
         x_start: Tensor,  # true x_0
         noise: None | Tensor = None,  # noise
+        model_kwargs: None | dict = {},  # kwargs for model_prediction
     ) -> dict[str, Tensor]:
         "return scalar loss. averaged over batch already."
         B, L, D = x_start.shape
@@ -610,7 +612,7 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
             raise ValueError(f"Dimension mismatch: {D} != {self.dim_in}")
 
         t = torch.randint(0, self.num_timestep, (B,), device=device)
-        loss_terms = self.train_losses(x_start, t, noise)
+        loss_terms = self.train_losses(x_start, t, noise, model_kwargs)
 
         for k, v in loss_terms.items():
             loss_terms[k] = v.mean()
@@ -677,8 +679,9 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
         batch_size: int,
         step: int,
         shape: tuple[int, int],
-        # conditioning: torch.Tensor|None,
-        # cfg_scale: float,
+        conditioning: dict[torch.Tensor] = {},
+        unconditional_conditioning: torch.Tensor|None = None,
+        cfg_scale: float = 1.0,
         clip_denoised: bool = False,
     ) -> torch.Tensor:
         if step < 15:
@@ -699,7 +702,17 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
                 list_batch_size.append(num_sample % batch_size)
 
         list_sample = []
+        batch_start = 0
         for idx, batch_size in enumerate(list_batch_size):
+            batch_end = min(batch_start + batch_size, num_sample)
+            batch_conditioning = {}
+            for key in conditioning.keys():
+                batch_conditioning[key] = conditioning[key][batch_start:batch_end]
+            batch_unconditional_conditioning = (
+                unconditional_conditioning[batch_start:batch_end]
+                if unconditional_conditioning is not None
+                else None
+            )
             print(
                 f"sampling batch {idx + 1}/{len(list_batch_size)}, \
                     batch size {batch_size}. "
@@ -708,10 +721,12 @@ class GaussianDiffusion1D(nn.Module, DiffusionBase):
                 S=step,
                 batch_size=batch_size,
                 shape=shape,
-                # conditioning = conditioning,
-                # cfg_scale = cfg_scale,
+                conditioning = batch_conditioning,
+                unconditional_conditioning = batch_unconditional_conditioning,
+                cfg_scale = cfg_scale,
             )
             list_sample.append(sample_batch)
+            batch_start = batch_end
 
         all_sample = torch.cat(list_sample, dim=0)
 
@@ -744,6 +759,7 @@ class PLDiffusion1D(pl.LightningModule):
         ema_update_every: int = 5,
         ema_decay: float = 0.9999,
         disable_init_proj: bool = False,
+        condition: list = [],
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -774,6 +790,8 @@ class PLDiffusion1D(pl.LightningModule):
         self.lr = lr
         self.ema_update_every = ema_update_every
         self.ema_decay = ema_decay
+        self.condition = condition
+
 
     # setup function
     def setup(self, stage: str) -> None:
@@ -786,7 +804,8 @@ class PLDiffusion1D(pl.LightningModule):
     ):
         kwh_data = batch["kwh"]  # shape: (batch, sequence)
         kwh_data = kwh_data.unsqueeze(-1)  # shape: (batch, sequence, 1)
-        return kwh_data
+        features = batch["features"]
+        return kwh_data, features
 
     # training step
     def training_step(
@@ -794,7 +813,10 @@ class PLDiffusion1D(pl.LightningModule):
         batch: Tensor,
         batch_idx: int,  # -> step counter
     ) -> Tensor:
-        loss_terms = self.diffusion_model(x_start=batch)
+        model_kwargs = {}
+        for key in self.condition:
+            model_kwargs[key] = torch.tensor(batch[1][key])
+        loss_terms = self.diffusion_model(x_start=batch[0], model_kwargs=model_kwargs)
         loss = loss_terms["loss"]
         mse = loss_terms["mse"].item() if "mse" in loss_terms else 0.0
         self.log(
@@ -821,7 +843,10 @@ class PLDiffusion1D(pl.LightningModule):
     # validation step
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        loss_terms = self.diffusion_model(x_start=batch)
+        model_kwargs = {}
+        for key in self.condition:
+            model_kwargs[key] = torch.tensor(batch[1][key])
+        loss_terms = self.diffusion_model(x_start=batch[0], model_kwargs=model_kwargs)
         loss = loss_terms["loss"]
         mse = loss_terms["mse"].item() if "mse" in loss_terms else 0.0
         self.log(
